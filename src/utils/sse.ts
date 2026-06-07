@@ -2,11 +2,14 @@ import { getToken } from '@/utils/auth';
 import { ElNotification } from 'element-plus';
 import { useNoticeStore } from '@/store/modules/notice';
 
+let initialized = false;
+
 // 初始化
 export const initSSE = (url: any) => {
-  if (import.meta.env.VITE_APP_SSE === 'false') {
+  if (import.meta.env.VITE_APP_SSE === 'false' || initialized) {
     return;
   }
+  initialized = true;
 
   url = url + '?Authorization=Bearer ' + getToken() + '&clientid=' + import.meta.env.VITE_APP_CLIENT_ID;
   const { data, error } = useEventSource(url, [], {

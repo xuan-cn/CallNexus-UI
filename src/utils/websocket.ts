@@ -2,11 +2,20 @@ import { getToken } from '@/utils/auth';
 import { ElNotification } from 'element-plus';
 import { useNoticeStore } from '@/store/modules/notice';
 
+let initialized = false;
+const callEventSubscribers = new Set<(event: Record<string, unknown>) => void>();
+
+export const subscribeCallEvents = (subscriber: (event: Record<string, unknown>) => void) => {
+  callEventSubscribers.add(subscriber);
+  return () => callEventSubscribers.delete(subscriber);
+};
+
 // 初始化socket
 export const initWebSocket = (url: any) => {
-  if (import.meta.env.VITE_APP_WEBSOCKET === 'false') {
+  if (import.meta.env.VITE_APP_WEBSOCKET === 'false' || initialized) {
     return;
   }
+  initialized = true;
   url = url + '?Authorization=Bearer ' + getToken() + '&clientid=' + import.meta.env.VITE_APP_CLIENT_ID;
   useWebSocket(url, {
     autoReconnect: {
@@ -34,6 +43,15 @@ export const initWebSocket = (url: any) => {
     onMessage: (_, e) => {
       if (e.data.indexOf('ping') > 0) {
         return;
+      }
+      try {
+        const event = JSON.parse(e.data) as Record<string, unknown>;
+        if (typeof event.type === 'string' && event.type.startsWith('CALL_')) {
+          callEventSubscribers.forEach((subscriber) => subscriber(event));
+          return;
+        }
+      } catch {
+        // Non-JSON messages continue through the normal notice flow.
       }
       useNoticeStore().addNotice({
         message: e.data,

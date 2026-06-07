@@ -1,25 +1,22 @@
 <template>
   <div class="agent-phone-shell">
-    <button
-      v-if="!panelOpen"
-      type="button"
-      class="toolbar-trigger"
-      :class="{ calling: callActive, incoming: incomingCall }"
-      @click="handleTriggerClick"
-    >
-      <span class="trigger-icon" :class="{ incoming: incomingCall }">
+    <button v-if="!panelOpen" type="button" class="toolbar-trigger" :class="{ calling: callActive }" @click="handleTriggerClick">
+      <span class="trigger-icon">
         <el-icon><PhoneFilled /></el-icon>
       </span>
       <div>
-        <strong>{{ incomingCall ? '来电: ' + incomingNumber : callActive ? dialNumber : '坐席电话' }}</strong>
-        <small>{{ incomingCall ? '点击接听' : callActive ? `通话中 · ${callDuration}` : signedIn ? statusLabels[agentStatus] : '未签入' }}</small>
+        <strong>{{ callActive ? dialNumber : currentAgent.agentName || '坐席电话' }}</strong>
+        <small>{{ callActive ? `呼叫中 · ${callDuration}` : agentSummary }}</small>
       </div>
       <i :class="statusClass"></i>
     </button>
 
     <aside v-else class="agent-panel">
       <div class="panel-heading">
-        <div><strong>坐席电话</strong><small>分机 1001</small></div>
+        <div>
+          <strong>{{ currentAgent.agentName || '坐席电话' }}</strong
+          ><small>{{ extensionSummary }} · {{ registrationSummary }}</small>
+        </div>
         <div class="heading-actions">
           <el-dropdown trigger="click" @command="changeStatus">
             <button type="button" class="agent-status" :class="statusClass">
@@ -46,15 +43,15 @@
       <template v-if="!callActive">
         <div class="dial-input">
           <el-icon><Phone /></el-icon>
-          <input v-model="dialNumber" :disabled="!signedIn" maxlength="20" placeholder="输入号码在线拨打" @keyup.enter="makeCall" />
+          <input v-model="dialNumber" :disabled="!phoneRegistered" maxlength="20" placeholder="输入号码在线拨打" @keyup.enter="makeCall" />
           <button v-if="dialNumber" type="button" class="clear-number" @click="dialNumber = ''">
             <el-icon><CloseBold /></el-icon>
           </button>
         </div>
         <div class="dial-pad">
-          <button v-for="key in dialKeys" :key="key" type="button" :disabled="!signedIn" @click="appendNumber(key)">{{ key }}</button>
+          <button v-for="key in dialKeys" :key="key" type="button" :disabled="!phoneRegistered" @click="appendNumber(key)">{{ key }}</button>
         </div>
-        <button type="button" class="call-button" :disabled="!signedIn || !dialNumber" @click="makeCall">
+        <button type="button" class="call-button" :disabled="!phoneRegistered || !dialNumber" @click="makeCall">
           <el-icon><PhoneFilled /></el-icon>拨打电话
         </button>
       </template>
@@ -64,7 +61,7 @@
           <span class="call-pulse"
             ><el-icon><PhoneFilled /></el-icon
           ></span>
-          <small>正在通话</small><strong>{{ dialNumber }}</strong
+          <small>软电话正在呼叫</small><strong>{{ dialNumber }}</strong
           ><span>{{ callDuration }}</span>
         </div>
         <div class="call-actions">
@@ -80,12 +77,19 @@
         </button>
       </template>
     </aside>
+    <dynamic-business-form-dialog v-model="customerDialogVisible" business-type="CUSTOMER" :phone-number="dialNumber" :call-id="activeCallId" />
+    <dynamic-business-form-dialog v-model="ticketDialogVisible" business-type="TICKET" :phone-number="dialNumber" :call-id="activeCallId" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ArrowDown, CloseBold, Phone, PhoneFilled, Tickets, User } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
+import { changeCurrentAgentStatus, getCurrentAgent, signInCurrentAgent, signOutCurrentAgent } from '@/api/callcenter/agent';
+import { AgentPresenceStatus, CurrentAgentVO } from '@/api/callcenter/agent/types';
+import { hangupCall, originateCall } from '@/api/callcenter/call';
+import { subscribeCallEvents } from '@/utils/websocket';
+import DynamicBusinessFormDialog from './DynamicBusinessFormDialog.vue';
 
 type AgentStatus = 'idle' | 'busy' | 'afterCall';
 type StatusCommand = AgentStatus | 'signIn' | 'signOut';
@@ -93,15 +97,30 @@ type StatusCommand = AgentStatus | 'signIn' | 'signOut';
 const panelOpen = ref(false);
 const signedIn = ref(false);
 const agentStatus = ref<AgentStatus>('idle');
+const currentAgent = ref<CurrentAgentVO>({ configured: false, status: 'OFFLINE' });
 const dialNumber = ref('');
 const callActive = ref(false);
+const activeCallId = ref('');
 const callSeconds = ref(0);
-const incomingCall = ref(false);
-const incomingNumber = ref('');
+const customerDialogVisible = ref(false);
+const ticketDialogVisible = ref(false);
+const phoneRegistered = computed(() => signedIn.value && Boolean(currentAgent.value.extension));
+const registrationSummary = computed(() => {
+  if (!signedIn.value) return '未签入';
+  return currentAgent.value.extension ? '外置软电话' : '未绑定分机';
+});
 let callTimer: ReturnType<typeof setInterval> | undefined;
+let unsubscribeCallEvents: (() => void) | undefined;
 
 const dialKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
 const statusLabels: Record<AgentStatus, string> = { idle: '示闲', busy: '示忙', afterCall: '话后处理' };
+const statusToApi: Record<AgentStatus, AgentPresenceStatus> = { idle: 'IDLE', busy: 'BUSY', afterCall: 'AFTER_CALL' };
+const statusFromApi: Record<Exclude<AgentPresenceStatus, 'OFFLINE'>, AgentStatus> = { IDLE: 'idle', BUSY: 'busy', AFTER_CALL: 'afterCall' };
+const extensionSummary = computed(() => (currentAgent.value.extension ? `分机 ${currentAgent.value.extension}` : '未绑定分机'));
+const agentSummary = computed(() => {
+  if (!currentAgent.value.configured) return '未配置坐席';
+  return signedIn.value ? statusLabels[agentStatus.value] : '未签入';
+});
 const statusClass = computed(() => ({
   offline: !signedIn.value,
   idle: signedIn.value && agentStatus.value === 'idle',
@@ -116,73 +135,116 @@ const callDuration = computed(() => {
   return `${minutes}:${seconds}`;
 });
 
-const changeStatus = (command: StatusCommand) => {
+const applyCurrentAgent = (agent: CurrentAgentVO) => {
+  currentAgent.value = agent;
+  signedIn.value = agent.status !== 'OFFLINE';
+  if (agent.status !== 'OFFLINE') agentStatus.value = statusFromApi[agent.status];
+};
+const loadCurrentAgent = async () => {
+  const res = await getCurrentAgent();
+  applyCurrentAgent(res.data);
+};
+const changeStatus = async (command: StatusCommand) => {
   if (command === 'signIn') {
-    signedIn.value = true;
-    agentStatus.value = 'idle';
-    ElMessage.success('坐席签入成功');
+    try {
+      const res = await signInCurrentAgent();
+      applyCurrentAgent(res.data);
+      ElMessage.success('坐席签入成功，请保持外置软电话在线');
+    } catch (error) {
+      ElMessage.error(error instanceof Error ? error.message : '坐席签入失败');
+    }
     return;
   }
   if (command === 'signOut') {
-    signedIn.value = false;
+    if (callActive.value) await hangup();
+    await signOutCurrentAgent();
+    applyCurrentAgent({ ...currentAgent.value, status: 'OFFLINE' });
     dialNumber.value = '';
     ElMessage.success('坐席已签出');
     return;
   }
-  agentStatus.value = command;
+  const res = await changeCurrentAgentStatus(statusToApi[command]);
+  applyCurrentAgent(res.data);
   ElMessage.success(`坐席状态已切换为${statusLabels[command]}`);
 };
 const appendNumber = (value: string) => {
   if (dialNumber.value.length < 20) dialNumber.value += value;
 };
-const makeCall = () => {
-  if (!signedIn.value || !dialNumber.value) return;
-  callActive.value = true;
-  callSeconds.value = 0;
-  callTimer = setInterval(() => callSeconds.value++, 1000);
-  ElMessage.info(`正在呼叫 ${dialNumber.value}，接入 SIP/WebRTC 后将发起真实呼叫`);
-};
-const hangup = () => {
-  if (callTimer) clearInterval(callTimer);
-  callTimer = undefined;
-  callActive.value = false;
-  agentStatus.value = 'afterCall';
-  ElMessage.success('通话已结束，坐席进入话后处理');
-};
-const createCustomer = () => ElMessage.info('客户模块接入后，将携带当前通话号码打开新建客户页面');
-const createTicket = () => ElMessage.info('工单模块接入后，将携带当前通话信息打开新建工单页面');
-
-// 来电处理
-const handleTriggerClick = () => {
-  if (incomingCall.value) {
-    acceptCall();
-  } else {
-    panelOpen.value = true;
+const makeCall = async () => {
+  if (!phoneRegistered.value || !dialNumber.value) return;
+  try {
+    const response = await originateCall({ destination: dialNumber.value });
+    activeCallId.value = response.data.callId;
+    callActive.value = true;
+    startCallTimer();
+    const current = await getCurrentAgent();
+    applyCurrentAgent(current.data);
+    ElMessage.success('外呼命令已发送，请在软电话接听');
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '呼叫失败');
   }
 };
-const acceptCall = () => {
-  incomingCall.value = false;
-  callActive.value = true;
-  dialNumber.value = incomingNumber.value;
-  callSeconds.value = 0;
-  callTimer = setInterval(() => callSeconds.value++, 1000);
-  ElMessage.success('已接听来电');
+const hangup = async () => {
+  if (!activeCallId.value) return;
+  try {
+    await hangupCall(activeCallId.value);
+    callActive.value = false;
+    activeCallId.value = '';
+    stopCallTimer();
+    const current = await getCurrentAgent();
+    applyCurrentAgent(current.data);
+  } catch {
+    ElMessage.error('挂断失败');
+  }
 };
-const rejectCall = () => {
-  incomingCall.value = false;
-  ElMessage.info('已拒接来电');
+const createCustomer = () => {
+  customerDialogVisible.value = true;
 };
-const simulateIncomingCall = () => {
-  if (callActive.value || incomingCall.value) return;
-  incomingCall.value = true;
-  incomingNumber.value = '138' + Math.floor(Math.random() * 100000000).toString().padStart(8, '0');
-  panelOpen.value = false;
-  ElMessage.info('模拟来电：' + incomingNumber.value);
+const createTicket = () => {
+  ticketDialogVisible.value = true;
 };
 
-// 暴露方法供外部调用
-defineExpose({ simulateIncomingCall, acceptCall, rejectCall });
-onBeforeUnmount(() => callTimer && clearInterval(callTimer));
+const handleTriggerClick = () => {
+  panelOpen.value = true;
+};
+const startCallTimer = () => {
+  if (callTimer) return;
+  callSeconds.value = 0;
+  callTimer = setInterval(() => callSeconds.value++, 1000);
+};
+const stopCallTimer = () => {
+  if (callTimer) clearInterval(callTimer);
+  callTimer = undefined;
+};
+const handleCallEvent = (event: Record<string, unknown>) => {
+  const type = String(event.type || '');
+  const agentExtension = String(event.agentExtension || '');
+  if (agentExtension !== currentAgent.value.extension) return;
+  if (type === 'CALL_CREATE' || type === 'CALL_PROGRESS' || type === 'CALL_PROGRESS_MEDIA' || type === 'CALL_ANSWER' || type === 'CALL_BRIDGE') {
+    if (!activeCallId.value) activeCallId.value = String(event.callId || '');
+    dialNumber.value =
+      String(event.callerNumber || '') === currentAgent.value.extension ? String(event.calledNumber || '') : String(event.callerNumber || '');
+    callActive.value = true;
+    panelOpen.value = true;
+    startCallTimer();
+    return;
+  }
+  if (type === 'CALL_HANGUP_COMPLETE') {
+    callActive.value = false;
+    activeCallId.value = '';
+    stopCallTimer();
+    panelOpen.value = false;
+    void loadCurrentAgent();
+  }
+};
+onMounted(async () => {
+  unsubscribeCallEvents = subscribeCallEvents(handleCallEvent);
+  await loadCurrentAgent();
+});
+onBeforeUnmount(() => {
+  unsubscribeCallEvents?.();
+  stopCallTimer();
+});
 </script>
 
 <style lang="scss" scoped>
@@ -252,7 +314,9 @@ button {
 .toolbar-trigger.incoming {
   border-color: #22c55e;
   background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-  animation: incoming-pulse 1s ease-in-out infinite, incoming-shake 0.5s ease-in-out infinite;
+  animation:
+    incoming-pulse 1s ease-in-out infinite,
+    incoming-shake 0.5s ease-in-out infinite;
 }
 @keyframes incoming-pulse {
   0%,
@@ -512,6 +576,19 @@ button {
     border-radius: 7px;
     background: #fff;
   }
+}
+.call-actions .accept-button {
+  color: #087e60;
+  border-color: #b8eadb;
+  background: #effbf7;
+}
+.call-actions .reject-button {
+  color: #c73e4c;
+  border-color: #f2c7cc;
+  background: #fff5f6;
+}
+.incoming-card {
+  background: #f0fdf4;
 }
 .hangup-button {
   background: #df4d5b;
