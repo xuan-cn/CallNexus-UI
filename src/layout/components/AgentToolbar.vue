@@ -111,6 +111,7 @@ const registrationSummary = computed(() => {
 });
 let callTimer: ReturnType<typeof setInterval> | undefined;
 let unsubscribeCallEvents: (() => void) | undefined;
+let syncingCallPresence = false;
 
 const dialKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
 const statusLabels: Record<AgentStatus, string> = { idle: '示闲', busy: '示忙', afterCall: '话后处理' };
@@ -210,7 +211,10 @@ const handleTriggerClick = () => {
 const startCallTimer = () => {
   if (callTimer) return;
   callSeconds.value = 0;
-  callTimer = setInterval(() => callSeconds.value++, 1000);
+  callTimer = setInterval(() => {
+    callSeconds.value++;
+    if (callSeconds.value % 3 === 0) void syncActiveCallPresence();
+  }, 1000);
 };
 const stopCallTimer = () => {
   if (callTimer) clearInterval(callTimer);
@@ -219,7 +223,22 @@ const stopCallTimer = () => {
 const handleCallEvent = (event: Record<string, unknown>) => {
   const type = String(event.type || '');
   const agentExtension = String(event.agentExtension || '');
-  if (agentExtension !== currentAgent.value.extension) return;
+  const callerNumber = String(event.callerNumber || '');
+  const calledNumber = String(event.calledNumber || '');
+  const eventCallId = String(event.callId || '');
+  const relatedToCurrentAgent =
+    agentExtension === currentAgent.value.extension || callerNumber === currentAgent.value.extension || calledNumber === currentAgent.value.extension;
+  if (type === 'CALL_HANGUP_COMPLETE') {
+    const relatedToCurrentCall = !activeCallId.value || eventCallId === activeCallId.value || relatedToCurrentAgent;
+    if (!relatedToCurrentCall) return;
+    callActive.value = false;
+    activeCallId.value = '';
+    stopCallTimer();
+    panelOpen.value = false;
+    void loadCurrentAgent();
+    return;
+  }
+  if (!relatedToCurrentAgent) return;
   if (type === 'CALL_CREATE' || type === 'CALL_PROGRESS' || type === 'CALL_PROGRESS_MEDIA' || type === 'CALL_ANSWER' || type === 'CALL_BRIDGE') {
     if (!activeCallId.value) activeCallId.value = String(event.callId || '');
     dialNumber.value =
@@ -229,12 +248,24 @@ const handleCallEvent = (event: Record<string, unknown>) => {
     startCallTimer();
     return;
   }
-  if (type === 'CALL_HANGUP_COMPLETE') {
-    callActive.value = false;
-    activeCallId.value = '';
-    stopCallTimer();
-    panelOpen.value = false;
-    void loadCurrentAgent();
+};
+const clearActiveCallState = () => {
+  callActive.value = false;
+  activeCallId.value = '';
+  stopCallTimer();
+  panelOpen.value = false;
+};
+const syncActiveCallPresence = async () => {
+  if (!callActive.value || syncingCallPresence) return;
+  syncingCallPresence = true;
+  try {
+    const current = await getCurrentAgent();
+    applyCurrentAgent(current.data);
+    if (current.data.status !== 'BUSY') {
+      clearActiveCallState();
+    }
+  } finally {
+    syncingCallPresence = false;
   }
 };
 onMounted(async () => {
