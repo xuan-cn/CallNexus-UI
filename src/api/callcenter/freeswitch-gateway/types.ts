@@ -14,6 +14,7 @@ export interface FreeSwitchGatewayVO {
   registerEnabled: boolean;
   transport: GatewayTransport;
   callerIdNumber?: string;
+  ping: number;
   enabled: boolean;
   version: number;
   createTime: string;
@@ -32,6 +33,7 @@ export interface FreeSwitchGatewayForm {
   registerEnabled: boolean;
   transport: GatewayTransport;
   callerIdNumber?: string;
+  ping: number;
   enabled: boolean;
   version?: number;
 }

@@ -6,6 +6,15 @@ export default {
   },
   // 登录页面国际化
   login: {
+    title: '智能云呼叫中心 + CRM 一体化平台',
+    subtitle: '为多租户企业提供坐席管理、SIP 调度、客户与工单全流程服务',
+    feature1: '多租户隔离与统一管控',
+    feature2: '全渠道呼叫与坐席协同',
+    feature3: '客户工单一体化运营',
+    welcome: '欢迎登录',
+    forgotPassword: '忘记密码？',
+    noAccount: '还没有账号？',
+    otherLogin: '其他登录方式',
     selectPlaceholder: '请选择/输入公司名称',
     username: '用户名',
     password: '密码',

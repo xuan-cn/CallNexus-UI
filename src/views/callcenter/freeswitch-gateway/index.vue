@@ -50,6 +50,9 @@
           </template>
         </el-table-column>
         <el-table-column label="传输" prop="transport" width="90" />
+        <el-table-column label="探测" width="100">
+          <template #default="{ row }">{{ row.ping ? `${row.ping}s` : '关闭' }}</template>
+        </el-table-column>
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
             <el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag>
@@ -127,6 +130,12 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
+            <el-form-item label="探测间隔" prop="ping">
+              <el-input-number v-model="form.ping" :min="0" :max="3600" :step="30" style="width: 100%" />
+              <div class="text-xs text-gray-400 mt-1">单位秒，0 表示关闭 OPTIONS ping</div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
             <el-form-item label="注册到网关" prop="registerEnabled">
               <el-switch v-model="form.registerEnabled" active-text="是" inactive-text="否" />
             </el-form-item>
@@ -183,6 +192,7 @@ const initialForm: FreeSwitchGatewayForm = {
   registerEnabled: false,
   transport: 'UDP',
   callerIdNumber: '',
+  ping: 0,
   enabled: true
 };
 const data = reactive<PageData<FreeSwitchGatewayForm, FreeSwitchGatewayQuery>>({
@@ -194,7 +204,8 @@ const data = reactive<PageData<FreeSwitchGatewayForm, FreeSwitchGatewayQuery>>({
     gatewayName: [{ required: true, message: '网关名称不能为空', trigger: 'blur' }],
     direction: [{ required: true, message: '请选择网关方向', trigger: 'change' }],
     proxy: [{ required: true, message: 'SIP服务器不能为空', trigger: 'blur' }],
-    transport: [{ required: true, message: '请选择传输协议', trigger: 'change' }]
+    transport: [{ required: true, message: '请选择传输协议', trigger: 'change' }],
+    ping: [{ required: true, message: '请输入探测间隔', trigger: 'blur' }]
   }
 });
 const { form, queryParams, rules } = toRefs(data);

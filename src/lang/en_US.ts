@@ -6,6 +6,15 @@ export default {
   },
   // 登录页面国际化
   login: {
+    title: 'Intelligent Cloud Call Center + CRM Platform',
+    subtitle: 'Multi-tenant agent management, SIP scheduling, customer & ticket workflow',
+    feature1: 'Multi-tenant isolation & unified control',
+    feature2: 'Omnichannel calling & agent collaboration',
+    feature3: 'Customer & ticket integrated operations',
+    welcome: 'Welcome Back',
+    forgotPassword: 'Forgot password?',
+    noAccount: "Don't have an account?",
+    otherLogin: 'Other login methods',
     selectPlaceholder: 'Please select/enter a company name',
     username: 'Username',
     password: 'Password',
