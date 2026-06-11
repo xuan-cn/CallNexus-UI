@@ -38,6 +38,8 @@ export interface CurrentAgentVO {
   sipDisplayName?: string;
   sipDomain?: string;
   wssUrl?: string;
+  activeCallId?: string;
+  activeCallNumber?: string;
   status: AgentPresenceStatus;
   signedInAt?: string;
   updatedAt?: string;

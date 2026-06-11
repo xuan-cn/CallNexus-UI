@@ -147,17 +147,4 @@ const setLayout = () => {
 .mobile .fixed-header {
   width: 100%;
 }
-
-.global-agent-toolbar {
-  position: fixed;
-  top: 50%;
-  right: 18px;
-  z-index: 1001;
-  transform: translateY(-50%);
-  filter: drop-shadow(0 10px 20px rgba(26, 48, 82, 0.18));
-}
-
-.global-agent-toolbar:hover {
-  transform: translateY(-50%) translateX(-3px);
-}
 </style>

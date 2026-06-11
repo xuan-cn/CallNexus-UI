@@ -59,7 +59,23 @@
               <el-empty v-else description="工单跟进记录功能待接入" :image-size="70" />
             </el-tab-pane>
             <el-tab-pane label="通话记录" name="calls">
-              <el-empty description="通话记录功能待接入" :image-size="70" />
+              <div v-if="callRecords.length" class="call-record-list">
+                <el-card v-for="item in callRecords" :key="String(item.id)" class="call-record-item" shadow="never">
+                  <div class="call-record-header">
+                    <el-tag :type="item.direction === 'INBOUND' ? 'success' : item.direction === 'OUTBOUND' ? 'primary' : 'info'">
+                      {{ directionLabel(item.direction) }}
+                    </el-tag>
+                    <span>{{ item.startedAt || '-' }}</span>
+                  </div>
+                  <div class="call-record-number">{{ item.callerNumber || '-' }} → {{ item.calledNumber || '-' }}</div>
+                  <div class="call-record-meta">
+                    <span>坐席分机：{{ item.agentExtension || '-' }}</span>
+                    <span>通话时长：{{ formatDuration(item.billableSeconds) }}</span>
+                    <span>挂断原因：{{ item.hangupCause || '-' }}</span>
+                  </div>
+                </el-card>
+              </div>
+              <el-empty v-else description="暂无通话记录" :image-size="70" />
             </el-tab-pane>
           </el-tabs>
         </div>
@@ -74,6 +90,8 @@ import { ElMessage } from 'element-plus';
 import { listFormTemplates } from '@/api/callcenter/form-template';
 import { FormBusinessType, FormField, FormTemplate } from '@/api/callcenter/form-template/types';
 import { getTicket, TicketVO } from '@/api/callcenter/ticket';
+import { listCallRecords } from '@/api/callcenter/call-record';
+import { CallDirection, CallRecordVO } from '@/api/callcenter/call-record/types';
 
 const props = defineProps<{ businessType: FormBusinessType; businessId?: string | number }>();
 const visible = defineModel<boolean>({ default: false });
@@ -83,6 +101,7 @@ const template = ref<FormTemplate>();
 const followUps = ref<CustomerFollowUpVO[]>([]);
 const followUpContent = ref('');
 const followUpSubmitting = ref(false);
+const callRecords = ref<CallRecordVO[]>([]);
 const activeTab = ref('followUp');
 const leftPanelRef = ref<HTMLElement>();
 const rightPanelHeight = ref('');
@@ -111,13 +130,29 @@ const loadFollowUps = async () => {
   if (props.businessType !== 'CUSTOMER' || !props.businessId) return;
   followUps.value = (await listCustomerFollowUps(props.businessId)).data;
 };
+const loadCallRecords = async () => {
+  const participantNumber = customerDetail.value?.primaryPhone || ticketDetail.value?.callerNumber;
+  if (!participantNumber) {
+    callRecords.value = [];
+    return;
+  }
+  callRecords.value = (await listCallRecords({ pageNum: 1, pageSize: 100, participantNumber })).rows;
+};
+const directionLabel = (direction: CallDirection) =>
+  ({ INBOUND: '呼入', OUTBOUND: '呼出', INTERNAL: '内部通话', UNKNOWN: '未知' })[direction] || direction;
+const formatDuration = (seconds?: number) => {
+  const value = Math.max(0, seconds || 0);
+  const minutes = Math.floor(value / 60);
+  const remainSeconds = value % 60;
+  return minutes > 0 ? `${minutes}分${remainSeconds}秒` : `${remainSeconds}秒`;
+};
 const submitFollowUp = async () => {
   if (!props.businessId || !followUpContent.value.trim()) return;
   followUpSubmitting.value = true;
   try {
     await addCustomerFollowUp(props.businessId, followUpContent.value.trim());
     followUpContent.value = '';
-    await loadFollowUps();
+    await Promise.all([loadFollowUps(), loadCallRecords()]);
     ElMessage.success('跟进记录已添加');
   } finally {
     followUpSubmitting.value = false;
@@ -266,7 +301,29 @@ onBeforeUnmount(() => {
   font-size: 12px;
   color: #909399;
 }
-.el-timeline.is-start{
+.call-record-item {
+  margin-bottom: 12px;
+}
+.call-record-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #909399;
+  font-size: 12px;
+}
+.call-record-number {
+  margin: 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.call-record-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #606266;
+  font-size: 13px;
+}
+.el-timeline.is-start {
   padding-left: 20px;
   padding-right: 20px;
 }

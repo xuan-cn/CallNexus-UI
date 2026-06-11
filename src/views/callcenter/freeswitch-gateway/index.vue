@@ -53,6 +53,9 @@
         <el-table-column label="探测" width="100">
           <template #default="{ row }">{{ row.ping ? `${row.ping}s` : '关闭' }}</template>
         </el-table-column>
+        <el-table-column label="注册续期" width="100">
+          <template #default="{ row }">{{ row.registerEnabled ? `${row.expireSeconds}s` : '-' }}</template>
+        </el-table-column>
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
             <el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag>
@@ -68,8 +71,16 @@
       <pagination v-show="total > 0" v-model:page="queryParams.pageNum" v-model:limit="queryParams.pageSize" :total="total" @pagination="getList" />
     </el-card>
 
-    <el-dialog v-model="dialog.visible" :title="dialog.title" width="720px" append-to-body>
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="110px">
+    <el-dialog
+      v-model="dialog.visible"
+      :title="dialog.title"
+      width="860px"
+      append-to-body
+      :close-on-click-modal="!submitting"
+      :close-on-press-escape="!submitting"
+      :show-close="!submitting"
+    >
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="110px" :disabled="submitting">
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="所属节点" prop="nodeId">
@@ -130,12 +141,6 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="探测间隔" prop="ping">
-              <el-input-number v-model="form.ping" :min="0" :max="3600" :step="30" style="width: 100%" />
-              <div class="text-xs text-gray-400 mt-1">单位秒，0 表示关闭 OPTIONS ping</div>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
             <el-form-item label="注册到网关" prop="registerEnabled">
               <el-switch v-model="form.registerEnabled" active-text="是" inactive-text="否" />
             </el-form-item>
@@ -145,11 +150,109 @@
               <el-switch v-model="form.enabled" active-text="启用" inactive-text="停用" />
             </el-form-item>
           </el-col>
+          <el-col :span="24">
+            <el-collapse v-model="expandedSections" class="gateway-options">
+              <el-collapse-item name="keepalive">
+                <template #title>
+                  <span class="font-medium">注册与保活</span>
+                  <span class="ml-2 text-xs text-gray-400">REGISTER 续期、重试与 OPTIONS 探测</span>
+                </template>
+                <el-row :gutter="16">
+                  <el-col :span="12">
+                    <el-form-item label="探测间隔" prop="ping">
+                      <el-input-number v-model="form.ping" :min="0" :max="3600" :step="30" style="width: 100%" />
+                      <div class="text-xs text-gray-400 mt-1">单位秒，0 表示关闭 OPTIONS ping</div>
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="12">
+                    <el-form-item label="注册续期间隔" prop="expireSeconds">
+                      <el-input-number
+                        v-model="form.expireSeconds"
+                        :disabled="!form.registerEnabled"
+                        :min="10"
+                        :max="86400"
+                        :step="10"
+                        style="width: 100%"
+                      />
+                      <div class="text-xs text-gray-400 mt-1">
+                        {{ form.registerEnabled ? '单位秒，NAT 环境建议 60-120' : '启用“注册到网关”后生效' }}
+                      </div>
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="12">
+                    <el-form-item label="注册重试间隔" prop="retrySeconds">
+                      <el-input-number
+                        v-model="form.retrySeconds"
+                        :disabled="!form.registerEnabled"
+                        :min="1"
+                        :max="3600"
+                        :step="5"
+                        style="width: 100%"
+                      />
+                    </el-form-item>
+                  </el-col>
+                  <el-col v-if="form.ping > 0" :span="12">
+                    <el-form-item label="Ping 失败阈值" prop="pingMax">
+                      <el-input-number v-model="form.pingMax" :min="1" :max="100" style="width: 100%" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col v-if="form.ping > 0" :span="12">
+                    <el-form-item label="Ping 恢复阈值" prop="pingMin">
+                      <el-input-number v-model="form.pingMin" :min="1" :max="100" style="width: 100%" />
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+              </el-collapse-item>
+              <el-collapse-item name="advanced">
+                <template #title>
+                  <span class="font-medium">高级配置</span>
+                  <span class="ml-2 text-xs text-gray-400">SIP From、Contact 与呼入路由参数</span>
+                </template>
+                <el-row :gutter="16">
+                  <el-col :span="12">
+                    <el-form-item label="呼入 Context" prop="dialplanContext">
+                      <el-input v-model="form.dialplanContext" placeholder="public" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="12">
+                    <el-form-item label="呼入 Extension" prop="extension">
+                      <el-input v-model="form.extension" placeholder="auto_to_user" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="12">
+                    <el-form-item label="From 用户" prop="fromUser">
+                      <el-input v-model="form.fromUser" placeholder="为空时使用主叫号码或认证用户" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="12">
+                    <el-form-item label="From 域" prop="fromDomain">
+                      <el-input v-model="form.fromDomain" placeholder="为空时使用 SIP 域" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="12">
+                    <el-form-item label="主叫放入 From" prop="callerIdInFrom">
+                      <el-switch v-model="form.callerIdInFrom" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="12">
+                    <el-form-item label="Contact 参数" prop="contactParams">
+                      <el-input v-model="form.contactParams" placeholder="例如 transport=udp" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="24">
+                    <el-form-item label="备注" prop="description">
+                      <el-input v-model="form.description" type="textarea" :rows="2" maxlength="255" show-word-limit />
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+              </el-collapse-item>
+            </el-collapse>
+          </el-col>
         </el-row>
       </el-form>
       <template #footer>
-        <el-button @click="dialog.visible = false">取消</el-button>
-        <el-button type="primary" @click="submitForm">确定</el-button>
+        <el-button :disabled="submitting" @click="dialog.visible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="submitForm">{{ submitting ? '同步中' : '确定' }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -169,6 +272,8 @@ import { FreeSwitchNodeVO } from '@/api/callcenter/freeswitch-node/types';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const loading = ref(false);
+const submitting = ref(false);
+const expandedSections = ref<string[]>([]);
 const total = ref(0);
 const gatewayList = ref<FreeSwitchGatewayVO[]>([]);
 const nodeOptions = ref<FreeSwitchNodeVO[]>([]);
@@ -193,6 +298,17 @@ const initialForm: FreeSwitchGatewayForm = {
   transport: 'UDP',
   callerIdNumber: '',
   ping: 0,
+  expireSeconds: 60,
+  retrySeconds: 30,
+  pingMax: 3,
+  pingMin: 1,
+  callerIdInFrom: true,
+  fromUser: '',
+  fromDomain: '',
+  contactParams: '',
+  dialplanContext: 'public',
+  extension: 'auto_to_user',
+  description: '',
   enabled: true
 };
 const data = reactive<PageData<FreeSwitchGatewayForm, FreeSwitchGatewayQuery>>({
@@ -205,7 +321,11 @@ const data = reactive<PageData<FreeSwitchGatewayForm, FreeSwitchGatewayQuery>>({
     direction: [{ required: true, message: '请选择网关方向', trigger: 'change' }],
     proxy: [{ required: true, message: 'SIP服务器不能为空', trigger: 'blur' }],
     transport: [{ required: true, message: '请选择传输协议', trigger: 'change' }],
-    ping: [{ required: true, message: '请输入探测间隔', trigger: 'blur' }]
+    ping: [{ required: true, message: '请输入探测间隔', trigger: 'blur' }],
+    expireSeconds: [{ required: true, message: '请输入注册续期间隔', trigger: 'blur' }],
+    retrySeconds: [{ required: true, message: '请输入注册重试间隔', trigger: 'blur' }],
+    dialplanContext: [{ required: true, message: '请输入呼入 Context', trigger: 'blur' }],
+    extension: [{ required: true, message: '请输入呼入 Extension', trigger: 'blur' }]
   }
 });
 const { form, queryParams, rules } = toRefs(data);
@@ -235,6 +355,7 @@ const resetQuery = () => {
 };
 const reset = () => {
   form.value = { ...initialForm };
+  expandedSections.value = [];
   formRef.value?.resetFields();
 };
 const handleAdd = () => {
@@ -250,14 +371,21 @@ const handleUpdate = async (row: FreeSwitchGatewayVO) => {
   dialog.title = '修改 FreeSWITCH 网关';
   dialog.visible = true;
 };
-const submitForm = () =>
+const submitForm = () => {
+  if (submitting.value) return;
   formRef.value?.validate(async (valid) => {
     if (!valid) return;
-    form.value.id ? await updateFreeSwitchGateway(form.value) : await createFreeSwitchGateway(form.value);
-    proxy?.$modal.msgSuccess('操作成功');
-    dialog.visible = false;
-    await getList();
+    submitting.value = true;
+    try {
+      form.value.id ? await updateFreeSwitchGateway(form.value) : await createFreeSwitchGateway(form.value);
+      proxy?.$modal.msgSuccess('操作成功');
+      dialog.visible = false;
+      await getList();
+    } finally {
+      submitting.value = false;
+    }
   });
+};
 const handleDelete = async (row: FreeSwitchGatewayVO) => {
   await proxy?.$modal.confirm(`确认删除网关 ${row.gatewayName} 吗？`);
   await deleteFreeSwitchGateway(row.id);

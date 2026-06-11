@@ -15,6 +15,17 @@ export interface FreeSwitchGatewayVO {
   transport: GatewayTransport;
   callerIdNumber?: string;
   ping: number;
+  expireSeconds: number;
+  retrySeconds: number;
+  pingMax: number;
+  pingMin: number;
+  callerIdInFrom: boolean;
+  fromUser?: string;
+  fromDomain?: string;
+  contactParams?: string;
+  dialplanContext: string;
+  extension: string;
+  description?: string;
   enabled: boolean;
   version: number;
   createTime: string;
@@ -34,6 +45,17 @@ export interface FreeSwitchGatewayForm {
   transport: GatewayTransport;
   callerIdNumber?: string;
   ping: number;
+  expireSeconds: number;
+  retrySeconds: number;
+  pingMax: number;
+  pingMin: number;
+  callerIdInFrom: boolean;
+  fromUser?: string;
+  fromDomain?: string;
+  contactParams?: string;
+  dialplanContext: string;
+  extension: string;
+  description?: string;
   enabled: boolean;
   version?: number;
 }

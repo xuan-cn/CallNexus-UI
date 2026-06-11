@@ -1,5 +1,5 @@
 <template>
-  <div class="agent-phone-shell">
+  <div ref="phoneShellRef" class="agent-phone-shell" :style="phonePositionStyle">
     <button v-if="!panelOpen" type="button" class="toolbar-trigger" :class="{ calling: callActive }" @click="handleTriggerClick">
       <span class="trigger-icon">
         <el-icon><PhoneFilled /></el-icon>
@@ -12,7 +12,7 @@
     </button>
 
     <aside v-else class="agent-panel">
-      <div class="panel-heading">
+      <div class="panel-heading" @pointerdown="startDrag">
         <div>
           <strong>{{ currentAgent.agentName || '坐席电话' }}</strong
           ><small>{{ extensionSummary }} · {{ registrationSummary }}</small>
@@ -95,6 +95,8 @@ type AgentStatus = 'idle' | 'busy' | 'afterCall';
 type StatusCommand = AgentStatus | 'signIn' | 'signOut';
 
 const panelOpen = ref(false);
+const phoneShellRef = ref<HTMLElement>();
+const phonePosition = reactive({ left: 0, top: 0 });
 const signedIn = ref(false);
 const agentStatus = ref<AgentStatus>('idle');
 const currentAgent = ref<CurrentAgentVO>({ configured: false, status: 'OFFLINE' });
@@ -110,8 +112,14 @@ const registrationSummary = computed(() => {
   return currentAgent.value.extension ? '外置软电话' : '未绑定分机';
 });
 let callTimer: ReturnType<typeof setInterval> | undefined;
+let presenceTimer: ReturnType<typeof setInterval> | undefined;
 let unsubscribeCallEvents: (() => void) | undefined;
 let syncingCallPresence = false;
+let dragging = false;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
+
+const phonePositionStyle = computed(() => ({ left: `${phonePosition.left}px`, top: `${phonePosition.top}px` }));
 
 const dialKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
 const statusLabels: Record<AgentStatus, string> = { idle: '示闲', busy: '示忙', afterCall: '话后处理' };
@@ -137,9 +145,20 @@ const callDuration = computed(() => {
 });
 
 const applyCurrentAgent = (agent: CurrentAgentVO) => {
+  const wasActive = callActive.value;
   currentAgent.value = agent;
   signedIn.value = agent.status !== 'OFFLINE';
   if (agent.status !== 'OFFLINE') agentStatus.value = statusFromApi[agent.status];
+  if (agent.activeCallId) {
+    activeCallId.value = agent.activeCallId;
+    dialNumber.value = agent.activeCallNumber || dialNumber.value;
+    callActive.value = true;
+    if (!wasActive) panelOpen.value = true;
+    startCallTimer();
+    nextTick(constrainPosition);
+  } else if (callActive.value) {
+    clearActiveCallState();
+  }
 };
 const loadCurrentAgent = async () => {
   const res = await getCurrentAgent();
@@ -207,6 +226,49 @@ const createTicket = () => {
 
 const handleTriggerClick = () => {
   panelOpen.value = true;
+  nextTick(constrainPosition);
+};
+const startDrag = (event: PointerEvent) => {
+  if ((event.target as HTMLElement).closest('button, .el-dropdown')) return;
+  dragging = true;
+  dragOffsetX = event.clientX - phonePosition.left;
+  dragOffsetY = event.clientY - phonePosition.top;
+  window.addEventListener('pointermove', handleDrag);
+  window.addEventListener('pointerup', stopDrag, { once: true });
+};
+const handleDrag = (event: PointerEvent) => {
+  if (!dragging) return;
+  phonePosition.left = event.clientX - dragOffsetX;
+  phonePosition.top = event.clientY - dragOffsetY;
+  constrainPosition();
+};
+const stopDrag = () => {
+  dragging = false;
+  window.removeEventListener('pointermove', handleDrag);
+  sessionStorage.setItem('callnexus-agent-phone-position', JSON.stringify(phonePosition));
+};
+const constrainPosition = () => {
+  const rect = phoneShellRef.value?.getBoundingClientRect();
+  const width = rect?.width || 140;
+  const height = rect?.height || 46;
+  phonePosition.left = Math.min(Math.max(8, phonePosition.left), Math.max(8, window.innerWidth - width - 8));
+  phonePosition.top = Math.min(Math.max(8, phonePosition.top), Math.max(8, window.innerHeight - height - 8));
+};
+const initializePosition = () => {
+  const saved = sessionStorage.getItem('callnexus-agent-phone-position');
+  if (saved) {
+    try {
+      Object.assign(phonePosition, JSON.parse(saved));
+      constrainPosition();
+      return;
+    } catch {
+      sessionStorage.removeItem('callnexus-agent-phone-position');
+    }
+  }
+  const width = phoneShellRef.value?.offsetWidth || 140;
+  const height = phoneShellRef.value?.offsetHeight || 46;
+  phonePosition.left = window.innerWidth - width - 18;
+  phonePosition.top = (window.innerHeight - height) / 2;
 };
 const startCallTimer = () => {
   if (callTimer) return;
@@ -246,6 +308,7 @@ const handleCallEvent = (event: Record<string, unknown>) => {
     callActive.value = true;
     panelOpen.value = true;
     startCallTimer();
+    nextTick(constrainPosition);
     return;
   }
 };
@@ -256,14 +319,11 @@ const clearActiveCallState = () => {
   panelOpen.value = false;
 };
 const syncActiveCallPresence = async () => {
-  if (!callActive.value || syncingCallPresence) return;
+  if (!signedIn.value || syncingCallPresence) return;
   syncingCallPresence = true;
   try {
     const current = await getCurrentAgent();
     applyCurrentAgent(current.data);
-    if (current.data.status !== 'BUSY') {
-      clearActiveCallState();
-    }
   } finally {
     syncingCallPresence = false;
   }
@@ -271,10 +331,17 @@ const syncActiveCallPresence = async () => {
 onMounted(async () => {
   unsubscribeCallEvents = subscribeCallEvents(handleCallEvent);
   await loadCurrentAgent();
+  await nextTick();
+  initializePosition();
+  presenceTimer = setInterval(() => void syncActiveCallPresence(), 3000);
+  window.addEventListener('resize', constrainPosition);
 });
 onBeforeUnmount(() => {
   unsubscribeCallEvents?.();
   stopCallTimer();
+  if (presenceTimer) clearInterval(presenceTimer);
+  window.removeEventListener('resize', constrainPosition);
+  window.removeEventListener('pointermove', handleDrag);
 });
 </script>
 
@@ -402,7 +469,10 @@ button {
   }
 }
 .agent-phone-shell {
+  position: fixed;
+  z-index: 1001;
   width: max-content;
+  filter: drop-shadow(0 10px 20px rgba(26, 48, 82, 0.18));
 }
 .agent-panel {
   display: grid;
@@ -420,6 +490,8 @@ button {
   justify-content: space-between;
   padding-bottom: 11px;
   border-bottom: 1px solid #edf1f6;
+  cursor: move;
+  user-select: none;
   > div {
     display: grid;
     gap: 2px;
