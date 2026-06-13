@@ -51,7 +51,7 @@
         <el-table-column label="呼入路由" min-width="170">
           <template #default="{ row }">
             <span>{{ routeTypeLabel(row.routeType) }}</span>
-            <span v-if="row.routeTarget">：{{ row.routeTarget }}</span>
+            <span v-if="row.routeTarget">：{{ routeTargetLabel(row) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="默认主叫" width="100">
@@ -110,7 +110,7 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="呼入路由" prop="routeType">
-              <el-select v-model="form.routeType" style="width: 100%">
+              <el-select v-model="form.routeType" style="width: 100%" @change="handleRouteTypeChange">
                 <el-option v-for="item in routeTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
               </el-select>
             </el-form-item>
@@ -118,6 +118,13 @@
           <el-col v-if="form.routeType === 'EXTENSION'" :span="12">
             <el-form-item label="目标分机" prop="routeTarget">
               <el-input v-model="form.routeTarget" placeholder="例如 1001" />
+            </el-form-item>
+          </el-col>
+          <el-col v-if="form.routeType === 'IVR'" :span="12">
+            <el-form-item label="目标 IVR" prop="routeTarget">
+              <el-select v-model="form.routeTarget" filterable style="width: 100%" placeholder="请选择已发布 IVR">
+                <el-option v-for="flow in availableIvrOptions" :key="flow.id" :label="flow.flowName" :value="String(flow.id)" />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -147,6 +154,8 @@ import { listFreeSwitchNodes } from '@/api/callcenter/freeswitch-node';
 import { FreeSwitchNodeVO } from '@/api/callcenter/freeswitch-node/types';
 import { listFreeSwitchGateways } from '@/api/callcenter/freeswitch-gateway';
 import { FreeSwitchGatewayVO } from '@/api/callcenter/freeswitch-gateway/types';
+import { listIvrFlows } from '@/api/callcenter/ivr-flow';
+import { IvrFlowVO } from '@/api/callcenter/ivr-flow/types';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const loading = ref(false);
@@ -154,6 +163,7 @@ const total = ref(0);
 const phoneNumberList = ref<PhoneNumberVO[]>([]);
 const nodeOptions = ref<FreeSwitchNodeVO[]>([]);
 const gatewayOptions = ref<FreeSwitchGatewayVO[]>([]);
+const ivrOptions = ref<IvrFlowVO[]>([]);
 const queryFormRef = ref<ElFormInstance>();
 const formRef = ref<ElFormInstance>();
 const dialog = reactive<DialogOption>({ visible: false, title: '' });
@@ -164,7 +174,8 @@ const numberTypeOptions: Array<{ label: string; value: PhoneNumberType }> = [
 ];
 const routeTypeOptions: Array<{ label: string; value: PhoneRouteType }> = [
   { label: '不路由', value: 'NONE' },
-  { label: '固定分机', value: 'EXTENSION' }
+  { label: '固定分机', value: 'EXTENSION' },
+  { label: 'IVR 流程', value: 'IVR' }
 ];
 const initialForm: PhoneNumberForm = {
   number: '',
@@ -195,22 +206,28 @@ const data = reactive<PageData<PhoneNumberForm, PhoneNumberQuery>>({
     number: [{ required: true, pattern: /^[0-9+*#-]{1,32}$/, message: '请输入合法号码', trigger: 'blur' }],
     numberName: [{ required: true, message: '号码名称不能为空', trigger: 'blur' }],
     numberType: [{ required: true, message: '请选择号码类型', trigger: 'change' }],
-    routeType: [{ required: true, message: '请选择呼入路由', trigger: 'change' }],
-    routeTarget: [{ required: true, message: '请输入目标分机', trigger: 'blur' }]
+    routeType: [{ required: true, message: '请选择呼入路由', trigger: 'change' }]
   }
 });
 const { form, queryParams, rules } = toRefs(data);
 
 const filteredGatewayOptions = computed(() => gatewayOptions.value.filter((gateway) => !form.value.nodeId || gateway.nodeId === form.value.nodeId));
+const availableIvrOptions = computed(() => ivrOptions.value.filter((flow) =>
+  flow.publishStatus === 'PUBLISHED' && flow.enabled && (flow.nodeIds || []).some((id) => String(id) === String(form.value.nodeId))));
 const numberTypeLabel = (value: PhoneNumberType) => numberTypeOptions.find((item) => item.value === value)?.label || value;
 const routeTypeLabel = (value: PhoneRouteType) => routeTypeOptions.find((item) => item.value === value)?.label || value;
+const routeTargetLabel = (row: PhoneNumberVO) => row.routeType === 'IVR'
+  ? ivrOptions.value.find((flow) => String(flow.id) === String(row.routeTarget))?.flowName || row.routeTarget
+  : row.routeTarget;
 const loadOptions = async () => {
-  const [nodeRes, gatewayRes] = await Promise.all([
+  const [nodeRes, gatewayRes, ivrRes] = await Promise.all([
     listFreeSwitchNodes({ pageNum: 1, pageSize: 200, enabled: true }),
-    listFreeSwitchGateways({ pageNum: 1, pageSize: 200, enabled: true })
+    listFreeSwitchGateways({ pageNum: 1, pageSize: 200, enabled: true }),
+    listIvrFlows()
   ]);
   nodeOptions.value = nodeRes.rows;
   gatewayOptions.value = gatewayRes.rows;
+  ivrOptions.value = ivrRes.data;
 };
 const getList = async () => {
   loading.value = true;
@@ -239,6 +256,9 @@ const handleNodeChange = () => {
     form.value.gatewayId = undefined;
   }
 };
+const handleRouteTypeChange = () => {
+  form.value.routeTarget = '';
+};
 const handleAdd = () => {
   reset();
   if (!form.value.nodeId && nodeOptions.value.length === 1) form.value.nodeId = nodeOptions.value[0].id;
@@ -255,6 +275,10 @@ const handleUpdate = async (row: PhoneNumberVO) => {
 const submitForm = () =>
   formRef.value?.validate(async (valid) => {
     if (!valid) return;
+    if (form.value.routeType !== 'NONE' && !form.value.routeTarget) {
+      proxy?.$modal.msgError('请选择或输入呼入路由目标');
+      return;
+    }
     if (form.value.routeType === 'NONE') form.value.routeTarget = '';
     form.value.id ? await updatePhoneNumber(form.value) : await createPhoneNumber(form.value);
     proxy?.$modal.msgSuccess('操作成功');

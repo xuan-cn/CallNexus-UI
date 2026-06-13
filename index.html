@@ -34,168 +34,192 @@
         left: 0;
         width: 100%;
         height: 100%;
+        background: linear-gradient(160deg, #0a1628 0%, #122a4e 40%, #0f2039 70%, #0a1628 100%);
         z-index: 999999;
-      }
-
-      #loader {
-        display: block;
-        position: relative;
-        left: 50%;
-        top: 50%;
-        width: 150px;
-        height: 150px;
-        margin: -75px 0 0 -75px;
-        border-radius: 50%;
-        border: 3px solid transparent;
-        border-top-color: #fff;
-        -webkit-animation: spin 2s linear infinite;
-        -ms-animation: spin 2s linear infinite;
-        -moz-animation: spin 2s linear infinite;
-        -o-animation: spin 2s linear infinite;
-        animation: spin 2s linear infinite;
-        z-index: 1001;
-      }
-
-      #loader:before {
-        content: '';
-        position: absolute;
-        top: 5px;
-        left: 5px;
-        right: 5px;
-        bottom: 5px;
-        border-radius: 50%;
-        border: 3px solid transparent;
-        border-top-color: #fff;
-        -webkit-animation: spin 3s linear infinite;
-        -moz-animation: spin 3s linear infinite;
-        -o-animation: spin 3s linear infinite;
-        -ms-animation: spin 3s linear infinite;
-        animation: spin 3s linear infinite;
-      }
-
-      #loader:after {
-        content: '';
-        position: absolute;
-        top: 15px;
-        left: 15px;
-        right: 15px;
-        bottom: 15px;
-        border-radius: 50%;
-        border: 3px solid transparent;
-        border-top-color: #fff;
-        -moz-animation: spin 1.5s linear infinite;
-        -o-animation: spin 1.5s linear infinite;
-        -ms-animation: spin 1.5s linear infinite;
-        -webkit-animation: spin 1.5s linear infinite;
-        animation: spin 1.5s linear infinite;
-      }
-
-      @-webkit-keyframes spin {
-        0% {
-          -webkit-transform: rotate(0deg);
-          -ms-transform: rotate(0deg);
-          transform: rotate(0deg);
-        }
-
-        100% {
-          -webkit-transform: rotate(360deg);
-          -ms-transform: rotate(360deg);
-          transform: rotate(360deg);
-        }
-      }
-
-      @keyframes spin {
-        0% {
-          -webkit-transform: rotate(0deg);
-          -ms-transform: rotate(0deg);
-          transform: rotate(0deg);
-        }
-
-        100% {
-          -webkit-transform: rotate(360deg);
-          -ms-transform: rotate(360deg);
-          transform: rotate(360deg);
-        }
-      }
-
-      #loader-wrapper .loader-section {
-        position: fixed;
-        top: 0;
-        width: 51%;
-        height: 100%;
-        background: #7171c6;
-        z-index: 1000;
-        -webkit-transform: translateX(0);
-        -ms-transform: translateX(0);
-        transform: translateX(0);
-      }
-
-      #loader-wrapper .loader-section.section-left {
-        left: 0;
-      }
-
-      #loader-wrapper .loader-section.section-right {
-        right: 0;
-      }
-
-      .loaded #loader-wrapper .loader-section.section-left {
-        -webkit-transform: translateX(-100%);
-        -ms-transform: translateX(-100%);
-        transform: translateX(-100%);
-        -webkit-transition: all 0.7s 0.3s cubic-bezier(0.645, 0.045, 0.355, 1);
-        transition: all 0.7s 0.3s cubic-bezier(0.645, 0.045, 0.355, 1);
-      }
-
-      .loaded #loader-wrapper .loader-section.section-right {
-        -webkit-transform: translateX(100%);
-        -ms-transform: translateX(100%);
-        transform: translateX(100%);
-        -webkit-transition: all 0.7s 0.3s cubic-bezier(0.645, 0.045, 0.355, 1);
-        transition: all 0.7s 0.3s cubic-bezier(0.645, 0.045, 0.355, 1);
-      }
-
-      .loaded #loader {
-        opacity: 0;
-        -webkit-transition: all 0.3s ease-out;
-        transition: all 0.3s ease-out;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        transition: opacity 0.6s ease, visibility 0.6s ease;
       }
 
       .loaded #loader-wrapper {
+        opacity: 0;
         visibility: hidden;
-        -webkit-transform: translateY(-100%);
-        -ms-transform: translateY(-100%);
-        transform: translateY(-100%);
-        -webkit-transition: all 0.3s 1s ease-out;
-        transition: all 0.3s 1s ease-out;
       }
 
-      .no-js #loader-wrapper {
-        display: none;
-      }
-
-      .no-js h1 {
-        color: #222222;
-      }
-
-      #loader-wrapper .load_title {
-        font-family: 'Open Sans';
-        color: #fff;
-        font-size: 19px;
-        width: 100%;
-        text-align: center;
-        z-index: 9999999999999;
+      /* 背景网格装饰 */
+      #loader-wrapper::before {
+        content: '';
         position: absolute;
-        top: 60%;
-        opacity: 1;
-        line-height: 30px;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-image:
+          radial-gradient(circle at 20% 30%, rgba(64, 158, 255, 0.03) 0%, transparent 50%),
+          radial-gradient(circle at 80% 70%, rgba(64, 158, 255, 0.05) 0%, transparent 50%);
+        pointer-events: none;
       }
 
-      #loader-wrapper .load_title span {
-        font-weight: normal;
-        font-style: italic;
-        font-size: 13px;
-        color: #fff;
-        opacity: 0.5;
+      /* 浮动粒子 */
+      .loader-particles {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+
+      .loader-particle {
+        position: absolute;
+        width: 4px;
+        height: 4px;
+        background: rgba(64, 158, 255, 0.3);
+        border-radius: 50%;
+        animation: float 6s ease-in-out infinite;
+      }
+
+      .loader-particle:nth-child(1) { top: 15%; left: 10%; animation-delay: 0s; }
+      .loader-particle:nth-child(2) { top: 25%; left: 85%; animation-delay: 1s; width: 6px; height: 6px; }
+      .loader-particle:nth-child(3) { top: 70%; left: 15%; animation-delay: 2s; }
+      .loader-particle:nth-child(4) { top: 80%; left: 75%; animation-delay: 3s; width: 5px; height: 5px; }
+      .loader-particle:nth-child(5) { top: 45%; left: 90%; animation-delay: 1.5s; }
+      .loader-particle:nth-child(6) { top: 60%; left: 5%; animation-delay: 4s; width: 3px; height: 3px; }
+
+      @keyframes float {
+        0%, 100% { transform: translateY(0) scale(1); opacity: 0.3; }
+        50% { transform: translateY(-20px) scale(1.5); opacity: 0.8; }
+      }
+
+      /* 中心图标区域 */
+      .loader-logo {
+        position: relative;
+        width: 140px;
+        height: 140px;
+        margin-bottom: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .loader-logo svg {
+        width: 56px;
+        height: 56px;
+        position: relative;
+        z-index: 2;
+        filter: drop-shadow(0 0 20px rgba(64, 158, 255, 0.5));
+      }
+
+      /* 脉冲波纹 - 大气扩散 */
+      .loader-ripple {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 140px;
+        height: 140px;
+        margin: -70px 0 0 -70px;
+        border-radius: 50%;
+        border: 1.5px solid rgba(64, 158, 255, 0.5);
+        animation: ripple 3s ease-out infinite;
+      }
+
+      .loader-ripple:nth-child(2) {
+        animation-delay: 0.8s;
+      }
+
+      .loader-ripple:nth-child(3) {
+        animation-delay: 1.6s;
+      }
+
+      @keyframes ripple {
+        0% {
+          transform: scale(1);
+          opacity: 0.8;
+        }
+        100% {
+          transform: scale(3);
+          opacity: 0;
+        }
+      }
+
+      /* 旋转光环 */
+      .loader-ring {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 140px;
+        height: 140px;
+        margin: -70px 0 0 -70px;
+        border-radius: 50%;
+        border: 2px solid transparent;
+        border-top-color: rgba(64, 158, 255, 0.6);
+        border-right-color: rgba(64, 158, 255, 0.2);
+        animation: spin 3s linear infinite;
+      }
+
+      .loader-ring:nth-child(5) {
+        width: 170px;
+        height: 170px;
+        margin: -85px 0 0 -85px;
+        border-top-color: rgba(64, 158, 255, 0.3);
+        border-right-color: transparent;
+        border-bottom-color: rgba(64, 158, 255, 0.1);
+        animation: spin-reverse 4s linear infinite;
+      }
+
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+
+      @keyframes spin-reverse {
+        0% { transform: rotate(360deg); }
+        100% { transform: rotate(0deg); }
+      }
+
+      /* 标题 */
+      .loader-title {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        color: #ffffff;
+        font-size: 32px;
+        font-weight: 700;
+        letter-spacing: 3px;
+        margin-bottom: 12px;
+        text-shadow: 0 0 30px rgba(64, 158, 255, 0.3);
+      }
+
+      .loader-subtitle {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        color: rgba(255, 255, 255, 0.45);
+        font-size: 15px;
+        letter-spacing: 2px;
+      }
+
+      /* 进度条 */
+      .loader-progress {
+        margin-top: 48px;
+        width: 280px;
+        height: 3px;
+        background: rgba(255, 255, 255, 0.06);
+        border-radius: 3px;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .loader-progress-bar {
+        height: 100%;
+        width: 40%;
+        background: linear-gradient(90deg, transparent, #409eff, #79bbff, transparent);
+        border-radius: 3px;
+        animation: progress 2s ease-in-out infinite;
+      }
+
+      @keyframes progress {
+        0% { transform: translateX(-150%); }
+        100% { transform: translateX(350%); }
       }
     </style>
   </head>
@@ -203,10 +227,29 @@
   <body>
     <div id="app">
       <div id="loader-wrapper">
-        <div id="loader"></div>
-        <div class="loader-section section-left"></div>
-        <div class="loader-section section-right"></div>
-        <div class="load_title">正在加载系统资源，请耐心等待</div>
+        <div class="loader-particles">
+          <div class="loader-particle"></div>
+          <div class="loader-particle"></div>
+          <div class="loader-particle"></div>
+          <div class="loader-particle"></div>
+          <div class="loader-particle"></div>
+          <div class="loader-particle"></div>
+        </div>
+        <div class="loader-logo">
+          <div class="loader-ripple"></div>
+          <div class="loader-ripple"></div>
+          <div class="loader-ripple"></div>
+          <div class="loader-ring"></div>
+          <div class="loader-ring"></div>
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M6.62 10.79a15.053 15.053 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.46.57 3.58a1 1 0 0 1-.24 1.01l-2.2 2.2z" fill="#409eff"/>
+          </svg>
+        </div>
+        <div class="loader-title">CallNexus</div>
+        <div class="loader-subtitle">系统加载中，请耐心等待</div>
+        <div class="loader-progress">
+          <div class="loader-progress-bar"></div>
+        </div>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

@@ -28,13 +28,21 @@
         <el-table-column label="ESL 地址" min-width="170"
           ><template #default="{ row }">{{ row.eslHost }}:{{ row.eslPort }}</template></el-table-column
         >
+        <el-table-column label="媒体 Agent" width="130">
+          <template #default="{ row }">
+            <el-tag :type="row.agentEnabled ? (row.agentLastHeartbeat ? 'success' : 'warning') : 'info'">
+              {{ row.agentEnabled ? (row.agentLastHeartbeat ? '已连接' : '待连接') : '未启用' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="状态" width="90"
           ><template #default="{ row }"
             ><el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag></template
           ></el-table-column
         >
-        <el-table-column label="操作" width="130" align="center">
+        <el-table-column label="操作" width="180" align="center">
           <template #default="{ row }">
+            <el-button v-hasPermi="['callcenter:freeswitch-node:agent-token']" link type="primary" icon="Key" @click="handleAgentToken(row)" />
             <el-button v-hasPermi="['callcenter:freeswitch-node:update']" link type="primary" icon="Edit" @click="handleUpdate(row)" />
             <el-button v-hasPermi="['callcenter:freeswitch-node:delete']" link type="danger" icon="Delete" @click="handleDelete(row)" />
           </template>
@@ -56,6 +64,8 @@
         <el-form-item :label="form.id ? '新ESL密码' : 'ESL密码'" prop="eslPassword">
           <el-input v-model="form.eslPassword" type="password" show-password :placeholder="form.id ? '留空表示不修改' : '请输入ESL密码'" />
         </el-form-item>
+        <el-form-item v-if="form.id" label="媒体 Agent"><el-switch v-model="form.agentEnabled" active-text="启用" inactive-text="停用" /></el-form-item>
+        <el-form-item v-if="form.id" label="媒体根目录"><el-input v-model="form.mediaRootPath" /></el-form-item>
         <el-form-item v-if="form.id" label="状态"><el-switch v-model="form.enabled" active-text="启用" inactive-text="停用" /></el-form-item>
       </el-form>
       <template #footer
@@ -71,6 +81,7 @@ import {
   deleteFreeSwitchNode,
   getFreeSwitchNode,
   listFreeSwitchNodes,
+  resetFreeSwitchNodeAgentToken,
   updateFreeSwitchNode
 } from '@/api/callcenter/freeswitch-node';
 import { FreeSwitchNodeForm, FreeSwitchNodeQuery, FreeSwitchNodeVO } from '@/api/callcenter/freeswitch-node/types';
@@ -90,6 +101,8 @@ const initialForm: FreeSwitchNodeForm = {
   eslHost: '',
   eslPort: 8021,
   eslPassword: '',
+  agentEnabled: false,
+  mediaRootPath: '/var/lib/freeswitch/sounds/callnexus',
   enabled: true
 };
 const data = reactive<PageData<FreeSwitchNodeForm, FreeSwitchNodeQuery>>({
@@ -158,6 +171,12 @@ const handleDelete = async (row: FreeSwitchNodeVO) => {
   await proxy?.$modal.confirm(`确认删除节点 ${row.nodeName} 吗？`);
   await deleteFreeSwitchNode(row.id);
   proxy?.$modal.msgSuccess('删除成功');
+  await getList();
+};
+const handleAgentToken = async (row: FreeSwitchNodeVO) => {
+  await proxy?.$modal.confirm(`确认生成或重置节点 ${row.nodeName} 的 Agent Token 吗？旧 Token 将立即失效。`);
+  const res = await resetFreeSwitchNodeAgentToken(row.id);
+  await proxy?.$modal.alert(`请立即保存，该 Token 仅展示一次：\n${res.data}`);
   await getList();
 };
 onMounted(getList);

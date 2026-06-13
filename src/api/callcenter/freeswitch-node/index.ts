@@ -15,3 +15,5 @@ export const updateFreeSwitchNode = (data: FreeSwitchNodeForm) =>
   request({ url: `/api/v1/freeswitch-nodes/${data.id}`, method: 'put', data, headers: { isEncrypt: 'true' } });
 
 export const deleteFreeSwitchNode = (id: string | number) => request({ url: `/api/v1/freeswitch-nodes/${id}`, method: 'delete' });
+export const resetFreeSwitchNodeAgentToken = (id: string | number): AxiosPromise<string> =>
+  request({ url: `/api/v1/freeswitch-nodes/${id}/agent-token`, method: 'post' });

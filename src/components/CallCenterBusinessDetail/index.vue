@@ -71,8 +71,9 @@
                   <div class="call-record-meta">
                     <span>坐席分机：{{ item.agentExtension || '-' }}</span>
                     <span>通话时长：{{ formatDuration(item.billableSeconds) }}</span>
-                    <span>挂断原因：{{ item.hangupCause || '-' }}</span>
+                    <span>挂断原因：{{ hangupCauseLabel(item.hangupCause) }}</span>
                   </div>
+                  <audio v-if="item.recordingUrl" class="call-record-audio" :src="item.recordingUrl" controls preload="none" />
                 </el-card>
               </div>
               <el-empty v-else description="暂无通话记录" :image-size="70" />
@@ -91,6 +92,7 @@ import { listFormTemplates } from '@/api/callcenter/form-template';
 import { FormBusinessType, FormField, FormTemplate } from '@/api/callcenter/form-template/types';
 import { getTicket, TicketVO } from '@/api/callcenter/ticket';
 import { listCallRecords } from '@/api/callcenter/call-record';
+import { hangupCauseLabel } from '@/api/callcenter/call-record/display';
 import { CallDirection, CallRecordVO } from '@/api/callcenter/call-record/types';
 
 const props = defineProps<{ businessType: FormBusinessType; businessId?: string | number }>();
@@ -131,12 +133,18 @@ const loadFollowUps = async () => {
   followUps.value = (await listCustomerFollowUps(props.businessId)).data;
 };
 const loadCallRecords = async () => {
-  const participantNumber = customerDetail.value?.primaryPhone || ticketDetail.value?.callerNumber;
-  if (!participantNumber) {
+  if (!props.businessId) {
     callRecords.value = [];
     return;
   }
-  callRecords.value = (await listCallRecords({ pageNum: 1, pageSize: 100, participantNumber })).rows;
+  const explicitQuery =
+    props.businessType === 'CUSTOMER'
+      ? { pageNum: 1, pageSize: 100, customerId: props.businessId }
+      : { pageNum: 1, pageSize: 100, ticketId: props.businessId };
+  callRecords.value = (await listCallRecords(explicitQuery)).rows;
+  if (callRecords.value.length) return;
+  const participantNumber = customerDetail.value?.primaryPhone || ticketDetail.value?.callerNumber;
+  if (participantNumber) callRecords.value = (await listCallRecords({ pageNum: 1, pageSize: 100, participantNumber })).rows;
 };
 const directionLabel = (direction: CallDirection) =>
   ({ INBOUND: '呼入', OUTBOUND: '呼出', INTERNAL: '内部通话', UNKNOWN: '未知' })[direction] || direction;
@@ -168,7 +176,7 @@ watch(visible, async (opened) => {
     template.value = templates.find((item) => String(item.id) === String(detail.value?.templateId));
     followUpContent.value = '';
     activeTab.value = 'followUp';
-    await loadFollowUps();
+    await Promise.all([loadFollowUps(), loadCallRecords()]);
     await nextTick();
     updateRightPanelHeight();
   } finally {
@@ -322,6 +330,11 @@ onBeforeUnmount(() => {
   gap: 6px;
   color: #606266;
   font-size: 13px;
+}
+.call-record-audio {
+  width: 100%;
+  height: 34px;
+  margin-top: 12px;
 }
 .el-timeline.is-start {
   padding-left: 20px;

@@ -368,7 +368,7 @@ const handleUpdate = async (row: FreeSwitchGatewayVO) => {
   reset();
   const res = await getFreeSwitchGateway(row.id);
   Object.assign(form.value, res.data, { password: '' });
-  dialog.title = '修改 FreeSWITCH 网关';
+  dialog.title = '修改网关';
   dialog.visible = true;
 };
 const submitForm = () => {

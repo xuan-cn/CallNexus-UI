@@ -7,6 +7,10 @@ export interface FreeSwitchNodeVO {
   eslHost: string;
   eslPort: number;
   enabled: boolean;
+  agentEnabled: boolean;
+  agentLastHeartbeat?: string;
+  agentVersion?: string;
+  mediaRootPath: string;
   version: number;
   createTime: string;
 }
@@ -21,6 +25,8 @@ export interface FreeSwitchNodeForm {
   eslPort: number;
   eslPassword?: string;
   enabled: boolean;
+  agentEnabled: boolean;
+  mediaRootPath: string;
   version?: number;
 }
 
