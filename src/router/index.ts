@@ -44,7 +44,7 @@ export const constantRoutes: RouteRecordRaw[] = [
   },
   {
     path: '/login',
-    component: () => import('@/views/login.vue'),
+    component: () => import('@/views/login-callops.vue'),
     hidden: true
   },
   {
