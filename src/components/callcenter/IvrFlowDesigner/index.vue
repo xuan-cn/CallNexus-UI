@@ -1,6 +1,6 @@
 <template>
-  <div class="ivr-designer">
-    <aside class="palette">
+  <div class="ivr-designer" :class="{ 'is-readonly': readonly }">
+    <aside v-if="!readonly" class="palette">
       <h4>流程节点</h4>
       <div v-for="item in ivrPaletteDefinitions" :key="item.type" class="palette-item" @mousedown="startDrag(item)">
         <span class="node-dot" :style="{ background: item.color }" />
@@ -26,7 +26,7 @@
       <div ref="containerRef" class="logicflow-canvas" />
     </main>
 
-    <aside class="properties">
+    <aside v-if="!readonly" class="properties">
       <template v-if="selectedNode">
         <div class="property-title">节点配置</div>
         <el-tag :color="selectedDefinition.color" effect="dark">{{ selectedDefinition.label }}</el-tag>
@@ -46,6 +46,7 @@
               v-if="getIvrPropertyEditor(property.component)"
               :model-value="selectedNode.config[property.key]"
               :media-options="mediaOptions"
+              :queue-options="queueOptions"
               :placeholder="property.placeholder"
               @update:model-value="updateNodeProperty(property.key, $event)"
             />
@@ -79,10 +80,17 @@ import LogicFlow, { RectNode, RectNodeModel } from '@logicflow/core';
 import '@logicflow/core/lib/index.css';
 import { IvrEdge, IvrGraph, IvrNode, IvrNodeType } from '@/api/callcenter/ivr-flow/types';
 import { MediaAssetVO } from '@/api/callcenter/media-asset/types';
+import { CallQueueVO } from '@/api/callcenter/call-queue/types';
 import { getIvrNodeDefinition, IvrNodeDefinition, ivrPaletteDefinitions } from './nodeRegistry';
 import { getIvrPropertyEditor } from './propertyEditors';
 
-const props = defineProps<{ modelValue: IvrGraph; mediaOptions: MediaAssetVO[] }>();
+const props = withDefaults(
+  defineProps<{ modelValue: IvrGraph; mediaOptions: MediaAssetVO[]; queueOptions?: CallQueueVO[]; readonly?: boolean }>(),
+  {
+    queueOptions: () => [],
+    readonly: false
+  }
+);
 const emit = defineEmits<{ (e: 'update:modelValue', value: IvrGraph): void }>();
 const containerRef = ref<HTMLElement>();
 const selectedNode = ref<IvrNode>();
@@ -95,7 +103,7 @@ class IvrCardModel extends RectNodeModel {
     this.height = 74;
     this.radius = 8;
     this.sourceRules.push({
-      message: '转接分机和挂断节点不能连接下一节点',
+      message: '转接分机、转接队列和挂断节点不能连接下一节点',
       validate: () => !getIvrNodeDefinition(this.properties.ivrType as IvrNodeType).terminal
     });
     this.targetRules.push({
@@ -211,6 +219,7 @@ const removeSelection = () => {
   syncGraph();
 };
 const startDrag = (definition: IvrNodeDefinition) => {
+  if (props.readonly) return;
   lf?.dnd.startDrag({
     type: 'ivr-card',
     text: definition.label,
@@ -232,6 +241,9 @@ const initialize = async () => {
     stopZoomGraph: false,
     stopMoveGraph: false
   });
+  if (props.readonly) {
+    lf.updateEditConfig({ isSilentMode: true });
+  }
   lf.register({ type: 'ivr-card', view: RectNode, model: IvrCardModel });
   lf.setTheme({
     polyline: { stroke: '#91a4bd', strokeWidth: 2 },
@@ -270,6 +282,9 @@ onBeforeUnmount(() => lf?.destroy());
   height: calc(100vh - 120px);
   user-select: none;
   -webkit-user-select: none;
+}
+.ivr-designer.is-readonly {
+  grid-template-columns: 1fr;
 }
 .palette,
 .properties {

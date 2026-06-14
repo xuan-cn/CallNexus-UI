@@ -1,4 +1,4 @@
-export type IvrNodeType = 'START' | 'PLAYBACK' | 'DTMF' | 'EXTENSION' | 'HANGUP';
+export type IvrNodeType = 'START' | 'PLAYBACK' | 'DTMF' | 'EXTENSION' | 'QUEUE' | 'HANGUP';
 
 export interface IvrNode {
   id: string;
@@ -10,6 +10,7 @@ export interface IvrNode {
     [key: string]: string | number | boolean | undefined;
     mediaId?: string | number;
     extension?: string;
+    queueId?: string | number;
   };
 }
 
@@ -50,4 +51,17 @@ export interface IvrFlowForm {
   enabled: boolean;
   remark?: string;
   version?: number;
+}
+
+export interface IvrFlowVersionVO {
+  id: string | number;
+  flowId: string | number;
+  versionNo: number;
+  graphJson?: string;
+  status: string;
+  publishedAt: string;
+  nodeCount: number;
+  edgeCount: number;
+  nodeTypeCounts: Partial<Record<IvrNodeType, number>>;
+  currentVersion: boolean;
 }

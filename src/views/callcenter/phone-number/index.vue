@@ -127,6 +127,13 @@
               </el-select>
             </el-form-item>
           </el-col>
+          <el-col v-if="form.routeType === 'QUEUE'" :span="12">
+            <el-form-item label="目标队列" prop="routeTarget">
+              <el-select v-model="form.routeTarget" filterable style="width: 100%" placeholder="请选择已同步的呼叫队列">
+                <el-option v-for="queue in availableQueueOptions" :key="queue.id" :label="queue.queueName" :value="String(queue.id)" />
+              </el-select>
+            </el-form-item>
+          </el-col>
           <el-col :span="12">
             <el-form-item label="默认主叫" prop="outboundDefault">
               <el-switch v-model="form.outboundDefault" active-text="是" inactive-text="否" />
@@ -156,6 +163,8 @@ import { listFreeSwitchGateways } from '@/api/callcenter/freeswitch-gateway';
 import { FreeSwitchGatewayVO } from '@/api/callcenter/freeswitch-gateway/types';
 import { listIvrFlows } from '@/api/callcenter/ivr-flow';
 import { IvrFlowVO } from '@/api/callcenter/ivr-flow/types';
+import { listCallQueues } from '@/api/callcenter/call-queue';
+import { CallQueueVO } from '@/api/callcenter/call-queue/types';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const loading = ref(false);
@@ -164,6 +173,7 @@ const phoneNumberList = ref<PhoneNumberVO[]>([]);
 const nodeOptions = ref<FreeSwitchNodeVO[]>([]);
 const gatewayOptions = ref<FreeSwitchGatewayVO[]>([]);
 const ivrOptions = ref<IvrFlowVO[]>([]);
+const queueOptions = ref<CallQueueVO[]>([]);
 const queryFormRef = ref<ElFormInstance>();
 const formRef = ref<ElFormInstance>();
 const dialog = reactive<DialogOption>({ visible: false, title: '' });
@@ -175,7 +185,8 @@ const numberTypeOptions: Array<{ label: string; value: PhoneNumberType }> = [
 const routeTypeOptions: Array<{ label: string; value: PhoneRouteType }> = [
   { label: '不路由', value: 'NONE' },
   { label: '固定分机', value: 'EXTENSION' },
-  { label: 'IVR 流程', value: 'IVR' }
+  { label: 'IVR 流程', value: 'IVR' },
+  { label: '呼叫队列', value: 'QUEUE' }
 ];
 const initialForm: PhoneNumberForm = {
   number: '',
@@ -214,20 +225,27 @@ const { form, queryParams, rules } = toRefs(data);
 const filteredGatewayOptions = computed(() => gatewayOptions.value.filter((gateway) => !form.value.nodeId || gateway.nodeId === form.value.nodeId));
 const availableIvrOptions = computed(() => ivrOptions.value.filter((flow) =>
   flow.publishStatus === 'PUBLISHED' && flow.enabled && (flow.nodeIds || []).some((id) => String(id) === String(form.value.nodeId))));
+const availableQueueOptions = computed(() => queueOptions.value.filter((queue) =>
+  queue.enabled && queue.syncStatus === 'SYNCED'
+  && (queue.nodeIds || []).some((id) => String(id) === String(form.value.nodeId))));
 const numberTypeLabel = (value: PhoneNumberType) => numberTypeOptions.find((item) => item.value === value)?.label || value;
 const routeTypeLabel = (value: PhoneRouteType) => routeTypeOptions.find((item) => item.value === value)?.label || value;
-const routeTargetLabel = (row: PhoneNumberVO) => row.routeType === 'IVR'
-  ? ivrOptions.value.find((flow) => String(flow.id) === String(row.routeTarget))?.flowName || row.routeTarget
-  : row.routeTarget;
+const routeTargetLabel = (row: PhoneNumberVO) => {
+  if (row.routeType === 'IVR') return ivrOptions.value.find((flow) => String(flow.id) === String(row.routeTarget))?.flowName || row.routeTarget;
+  if (row.routeType === 'QUEUE') return queueOptions.value.find((queue) => String(queue.id) === String(row.routeTarget))?.queueName || row.routeTarget;
+  return row.routeTarget;
+};
 const loadOptions = async () => {
-  const [nodeRes, gatewayRes, ivrRes] = await Promise.all([
+  const [nodeRes, gatewayRes, ivrRes, queueRes] = await Promise.all([
     listFreeSwitchNodes({ pageNum: 1, pageSize: 200, enabled: true }),
     listFreeSwitchGateways({ pageNum: 1, pageSize: 200, enabled: true }),
-    listIvrFlows()
+    listIvrFlows(),
+    listCallQueues()
   ]);
   nodeOptions.value = nodeRes.rows;
   gatewayOptions.value = gatewayRes.rows;
   ivrOptions.value = ivrRes.data;
+  queueOptions.value = queueRes.data;
 };
 const getList = async () => {
   loading.value = true;
@@ -254,6 +272,14 @@ const reset = () => {
 const handleNodeChange = () => {
   if (!filteredGatewayOptions.value.some((gateway) => gateway.id === form.value.gatewayId)) {
     form.value.gatewayId = undefined;
+  }
+  if (form.value.routeType === 'IVR'
+    && !availableIvrOptions.value.some((flow) => String(flow.id) === String(form.value.routeTarget))) {
+    form.value.routeTarget = '';
+  }
+  if (form.value.routeType === 'QUEUE'
+    && !availableQueueOptions.value.some((queue) => String(queue.id) === String(form.value.routeTarget))) {
+    form.value.routeTarget = '';
   }
 };
 const handleRouteTypeChange = () => {

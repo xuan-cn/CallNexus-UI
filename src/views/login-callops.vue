@@ -412,7 +412,7 @@ $muted: #757682;
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 500wpx;
+  max-width: 500px;
   padding: 24px 32px 20px;
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(8px);

@@ -1,5 +1,5 @@
 export type PhoneNumberType = 'DID' | 'CALLER_ID' | 'BOTH';
-export type PhoneRouteType = 'NONE' | 'EXTENSION' | 'IVR';
+export type PhoneRouteType = 'NONE' | 'EXTENSION' | 'IVR' | 'QUEUE';
 
 export interface PhoneNumberVO {
   id: string | number;

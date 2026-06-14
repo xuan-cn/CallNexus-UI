@@ -150,6 +150,7 @@ const detail = ref<CallRecordVO>();
 const detailTab = ref('basic');
 const recordList = ref<CallRecordVO[]>([]);
 const queryFormRef = ref<ElFormInstance>();
+let recordingPollTimer: ReturnType<typeof setTimeout> | undefined;
 const directionOptions: Array<{ label: string; value: CallDirection }> = [
   { label: '呼入', value: 'INBOUND' },
   { label: '呼出', value: 'OUTBOUND' },
@@ -238,13 +239,28 @@ const resetQuery = () => {
   queryFormRef.value?.resetFields();
   handleQuery();
 };
-const handleDetail = async (row: CallRecordVO) => {
-  const res = await getCallRecord(row.id);
+const stopRecordingPoll = () => {
+  if (recordingPollTimer) clearTimeout(recordingPollTimer);
+  recordingPollTimer = undefined;
+};
+const loadDetail = async (id: string | number) => {
+  const res = await getCallRecord(id);
   detail.value = res.data;
+  stopRecordingPoll();
+  if (detailVisible.value && detail.value.recordingStatus === 'PENDING') {
+    recordingPollTimer = setTimeout(() => loadDetail(id), 3000);
+  }
+};
+const handleDetail = async (row: CallRecordVO) => {
   detailTab.value = 'basic';
   detailVisible.value = true;
+  await loadDetail(row.id);
 };
+watch(detailVisible, (visible) => {
+  if (!visible) stopRecordingPoll();
+});
 onMounted(getList);
+onBeforeUnmount(stopRecordingPoll);
 </script>
 
 <style scoped>

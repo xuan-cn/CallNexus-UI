@@ -23,10 +23,21 @@
             ><el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag></template
           >
         </el-table-column>
-        <el-table-column label="操作" width="220" align="center">
+        <el-table-column label="操作" width="350" align="center">
           <template #default="{ row }">
             <el-button v-hasPermi="['callcenter:ivr-flow:update']" link type="primary" icon="Share" @click="openDesigner(row)">设计</el-button>
+            <el-button v-hasPermi="['callcenter:ivr-flow:query']" link type="primary" icon="Clock" @click="openVersions(row)">版本</el-button>
             <el-button v-hasPermi="['callcenter:ivr-flow:publish']" link type="success" icon="Promotion" @click="handlePublish(row)">发布</el-button>
+            <el-button
+              v-if="row.publishStatus === 'PUBLISHED'"
+              v-hasPermi="['callcenter:ivr-flow:publish']"
+              link
+              type="warning"
+              icon="SwitchButton"
+              @click="handleUnpublish(row)"
+            >
+              取消发布
+            </el-button>
             <el-button
               v-hasPermi="['callcenter:ivr-flow:delete']"
               link
@@ -73,18 +84,72 @@
           >
         </div>
       </div>
-      <IvrFlowDesigner ref="designerRef" v-model="graph" :media-options="mediaOptions" />
+      <IvrFlowDesigner ref="designerRef" v-model="graph" :media-options="mediaOptions" :queue-options="availableQueueOptions" />
+    </el-dialog>
+
+    <el-drawer v-model="versionDrawerVisible" title="IVR 发布版本历史" size="960px" append-to-body>
+      <div class="version-header">
+        <strong>{{ versionFlow.flowName }}</strong>
+        <span class="text-gray-500">当前最新版本：v{{ versionFlow.latestVersionNo || 0 }}</span>
+      </div>
+      <el-table v-loading="versionLoading" :data="versions">
+        <el-table-column label="版本" width="90">
+          <template #default="{ row }">
+            <el-tag :type="row.currentVersion ? 'success' : 'info'">v{{ row.versionNo }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="发布时间" prop="publishedAt" min-width="170" />
+        <el-table-column label="节点" prop="nodeCount" width="70" />
+        <el-table-column label="连线" prop="edgeCount" width="70" />
+        <el-table-column label="节点类型" min-width="210">
+          <template #default="{ row }">{{ nodeTypeSummary(row) }}</template>
+        </el-table-column>
+        <el-table-column label="与最新版本差异" min-width="280">
+          <template #default="{ row }">{{ versionDifference(row) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="140" align="center">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="previewVersion(row)">预览</el-button>
+            <el-button
+              v-if="!row.currentVersion"
+              v-hasPermi="['callcenter:ivr-flow:publish']"
+              link
+              type="warning"
+              @click="rollbackVersion(row)"
+            >
+              回滚
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-drawer>
+
+    <el-dialog v-model="previewVisible" :title="`IVR 版本预览：v${previewVersionNo}`" fullscreen append-to-body destroy-on-close>
+      <IvrFlowDesigner v-model="previewGraph" :media-options="mediaOptions" :queue-options="queueOptions" readonly />
     </el-dialog>
   </div>
 </template>
 
 <script setup name="IvrFlow" lang="ts">
-import { createIvrFlow, deleteIvrFlow, getIvrFlow, listIvrFlows, publishIvrFlow, updateIvrFlow } from '@/api/callcenter/ivr-flow';
-import { IvrFlowForm, IvrFlowVO, IvrGraph } from '@/api/callcenter/ivr-flow/types';
+import {
+  createIvrFlow,
+  deleteIvrFlow,
+  getIvrFlow,
+  getIvrFlowVersion,
+  listIvrFlows,
+  listIvrFlowVersions,
+  publishIvrFlow,
+  rollbackIvrFlowVersion,
+  unpublishIvrFlow,
+  updateIvrFlow
+} from '@/api/callcenter/ivr-flow';
+import { IvrFlowForm, IvrFlowVersionVO, IvrFlowVO, IvrGraph, IvrNodeType } from '@/api/callcenter/ivr-flow/types';
 import { listNodeGroups } from '@/api/callcenter/freeswitch-node-group';
 import { NodeGroupVO } from '@/api/callcenter/freeswitch-node-group/types';
 import { listMediaAssets } from '@/api/callcenter/media-asset';
 import { MediaAssetVO } from '@/api/callcenter/media-asset/types';
+import { listCallQueues } from '@/api/callcenter/call-queue';
+import { CallQueueVO } from '@/api/callcenter/call-queue/types';
 import IvrFlowDesigner from '@/components/callcenter/IvrFlowDesigner/index.vue';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
@@ -93,13 +158,36 @@ const saving = ref(false);
 const publishing = ref(false);
 const createDialog = ref(false);
 const designerVisible = ref(false);
+const versionDrawerVisible = ref(false);
+const versionLoading = ref(false);
+const previewVisible = ref(false);
+const previewVersionNo = ref(0);
 const createFormRef = ref<ElFormInstance>();
 const designerRef = ref<InstanceType<typeof IvrFlowDesigner>>();
 const flows = ref<IvrFlowVO[]>([]);
 const groups = ref<NodeGroupVO[]>([]);
 const mediaOptions = ref<MediaAssetVO[]>([]);
+const queueOptions = ref<CallQueueVO[]>([]);
 const editing = reactive<Partial<IvrFlowVO>>({});
 const graph = ref<IvrGraph>({ nodes: [], edges: [] });
+const previewGraph = ref<IvrGraph>({ nodes: [], edges: [] });
+const versions = ref<IvrFlowVersionVO[]>([]);
+const versionFlow = reactive<Partial<IvrFlowVO>>({});
+const nodeTypeLabels: Record<IvrNodeType, string> = {
+  START: '开始',
+  PLAYBACK: '播放',
+  DTMF: '按键',
+  EXTENSION: '分机',
+  QUEUE: '队列',
+  HANGUP: '挂断'
+};
+const availableQueueOptions = computed(() => {
+  const flowNodeIds = (editing.nodeIds || []).map(String);
+  return queueOptions.value.filter((queue) => {
+    const queueNodeIds = (queue.nodeIds || []).map(String);
+    return flowNodeIds.length > 0 && flowNodeIds.every((nodeId) => queueNodeIds.includes(nodeId));
+  });
+});
 const rules = {
   flowCode: [{ required: true, pattern: /^[A-Za-z0-9_-]{2,32}$/, message: '请输入合法流程编码', trigger: 'blur' }],
   flowName: [{ required: true, message: '请输入流程名称', trigger: 'blur' }],
@@ -116,14 +204,16 @@ const defaultGraph = (): IvrGraph => ({
 const load = async () => {
   loading.value = true;
   try {
-    const [flowRes, groupRes, mediaRes] = await Promise.all([
+    const [flowRes, groupRes, mediaRes, queueRes] = await Promise.all([
       listIvrFlows(),
       listNodeGroups(),
-      listMediaAssets({ pageNum: 1, pageSize: 1000, category: 'IVR_PROMPT', enabled: true })
+      listMediaAssets({ pageNum: 1, pageSize: 1000, category: 'IVR_PROMPT', enabled: true }),
+      listCallQueues()
     ]);
     flows.value = flowRes.data;
     groups.value = groupRes.data.filter((item) => item.enabled);
     mediaOptions.value = mediaRes.rows.filter((item) => item.publishStatus === 'PUBLISHED');
+    queueOptions.value = queueRes.data.filter((item) => item.enabled && item.syncStatus === 'SYNCED');
   } finally {
     loading.value = false;
   }
@@ -182,6 +272,64 @@ const handlePublish = async (row: IvrFlowVO) => {
   proxy?.$modal.msgSuccess('发布成功');
   await load();
 };
+const loadVersions = async () => {
+  if (!versionFlow.id) return;
+  versionLoading.value = true;
+  try {
+    versions.value = (await listIvrFlowVersions(versionFlow.id)).data;
+  } finally {
+    versionLoading.value = false;
+  }
+};
+const openVersions = async (row: IvrFlowVO) => {
+  Object.assign(versionFlow, row);
+  versionDrawerVisible.value = true;
+  await loadVersions();
+};
+const nodeTypeSummary = (version: IvrFlowVersionVO) =>
+  Object.entries(version.nodeTypeCounts || {})
+    .map(([type, count]) => `${nodeTypeLabels[type as IvrNodeType] || type} ${count}`)
+    .join('、');
+const versionDifference = (version: IvrFlowVersionVO) => {
+  const latest = versions.value.find((item) => item.versionNo === versionFlow.latestVersionNo);
+  if (!latest || latest.versionNo === version.versionNo) {
+    return '当前最新版本';
+  }
+  const signed = (value: number) => (value > 0 ? `+${value}` : String(value));
+  const typeChanges = Object.keys({ ...latest.nodeTypeCounts, ...version.nodeTypeCounts })
+    .map((type) => {
+      const difference = (version.nodeTypeCounts[type as IvrNodeType] || 0) - (latest.nodeTypeCounts[type as IvrNodeType] || 0);
+      return difference === 0 ? '' : `${nodeTypeLabels[type as IvrNodeType] || type} ${signed(difference)}`;
+    })
+    .filter(Boolean)
+    .join('、');
+  const summary = `节点 ${signed(version.nodeCount - latest.nodeCount)}，连线 ${signed(version.edgeCount - latest.edgeCount)}`;
+  return typeChanges ? `${summary}；${typeChanges}` : summary;
+};
+const previewVersion = async (version: IvrFlowVersionVO) => {
+  const detail = (await getIvrFlowVersion(version.flowId, version.versionNo)).data;
+  if (!detail.graphJson) {
+    proxy?.$modal.msgError('版本流程数据不存在');
+    return;
+  }
+  previewVersionNo.value = detail.versionNo;
+  previewGraph.value = JSON.parse(detail.graphJson) as IvrGraph;
+  previewVisible.value = true;
+};
+const rollbackVersion = async (version: IvrFlowVersionVO) => {
+  await proxy?.$modal.confirm(`确认将流程回滚到 v${version.versionNo} 吗？系统将创建一个新的发布版本，不会覆盖历史记录。`);
+  await rollbackIvrFlowVersion(version.flowId, version.versionNo);
+  proxy?.$modal.msgSuccess(`已基于 v${version.versionNo} 创建新的发布版本`);
+  await load();
+  Object.assign(versionFlow, flows.value.find((flow) => String(flow.id) === String(version.flowId)) || versionFlow);
+  await loadVersions();
+};
+const handleUnpublish = async (row: IvrFlowVO) => {
+  await proxy?.$modal.confirm(`确认取消发布 IVR 流程“${row.flowName}”吗？历史发布版本将继续保留。`);
+  await unpublishIvrFlow(row.id);
+  proxy?.$modal.msgSuccess('已取消发布');
+  await load();
+};
 const publishFromDesigner = async () => {
   publishing.value = true;
   try {
@@ -210,5 +358,10 @@ onMounted(load);
   justify-content: space-between;
   padding: 0 16px;
   border-bottom: 1px solid #e5e7eb;
+}
+.version-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16px;
 }
 </style>

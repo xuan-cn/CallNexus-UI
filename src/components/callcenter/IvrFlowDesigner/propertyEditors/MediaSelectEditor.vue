@@ -11,10 +11,13 @@
 
 <script setup lang="ts">
 import type { MediaAssetVO } from '@/api/callcenter/media-asset/types';
+import type { CallQueueVO } from '@/api/callcenter/call-queue/types';
 
 defineProps<{
   modelValue?: string | number;
   mediaOptions: MediaAssetVO[];
+  queueOptions?: CallQueueVO[];
+  placeholder?: string;
 }>();
 
 const emit = defineEmits<{

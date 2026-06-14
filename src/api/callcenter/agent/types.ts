@@ -41,6 +41,7 @@ export interface CurrentAgentVO {
   activeCallId?: string;
   activeCallNumber?: string;
   status: AgentPresenceStatus;
+  afterCallRemainingSeconds?: number;
   signedInAt?: string;
   updatedAt?: string;
 }

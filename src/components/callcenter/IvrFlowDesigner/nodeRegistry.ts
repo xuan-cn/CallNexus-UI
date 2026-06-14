@@ -1,6 +1,6 @@
 import type { IvrNodeType } from '@/api/callcenter/ivr-flow/types';
 
-export type IvrPropertyEditorType = 'MEDIA_SELECT' | 'EXTENSION_INPUT';
+export type IvrPropertyEditorType = 'MEDIA_SELECT' | 'EXTENSION_INPUT' | 'QUEUE_SELECT';
 export type IvrEdgeEditorType = 'DTMF_DIGIT';
 
 export interface IvrPropertyDefinition {
@@ -69,6 +69,21 @@ const definitions: IvrNodeDefinition[] = [
         component: 'EXTENSION_INPUT',
         required: true,
         placeholder: '例如 1001'
+      }
+    ]
+  },
+  {
+    type: 'QUEUE',
+    label: '转接队列',
+    color: '#7c3aed',
+    description: '将来电转入指定呼叫队列',
+    terminal: true,
+    propertySchema: [
+      {
+        key: 'queueId',
+        label: '目标队列',
+        component: 'QUEUE_SELECT',
+        required: true
       }
     ]
   },
