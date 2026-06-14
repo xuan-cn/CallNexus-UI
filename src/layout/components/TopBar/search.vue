@@ -16,7 +16,7 @@
           </template>
           <template #default="{ item }">
             <div>
-              <svg-icon :icon-class="item.icon" class="mr5" />
+              <menu-icon :icon-class="item.icon" class="mr5" />
               {{ item.title }}
             </div>
           </template>

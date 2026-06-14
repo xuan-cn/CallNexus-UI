@@ -35,6 +35,12 @@
         <el-table-column label="主叫号码" prop="callerNumber" min-width="130" />
         <el-table-column label="被叫号码" prop="calledNumber" min-width="130" />
         <el-table-column label="坐席分机" prop="agentExtension" width="110" />
+        <el-table-column label="接听队列" prop="handlingQueueName" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            <el-tag v-if="row.handlingQueueName" type="info" size="small">{{ row.handlingQueueName }}</el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">{{ statusLabel(row.callStatus) }}</template>
         </el-table-column>
@@ -68,6 +74,10 @@
             <el-descriptions-item label="主叫号码">{{ detail.callerNumber || '-' }}</el-descriptions-item>
             <el-descriptions-item label="被叫号码">{{ detail.calledNumber || '-' }}</el-descriptions-item>
             <el-descriptions-item label="挂断原因">{{ hangupCauseLabel(detail.hangupCause) }}</el-descriptions-item>
+            <el-descriptions-item label="接听队列">
+              <el-tag v-if="detail.handlingQueueName" type="info" size="small">{{ detail.handlingQueueName }}</el-tag>
+              <span v-else>-</span>
+            </el-descriptions-item>
             <el-descriptions-item label="关联客户ID">{{ detail.customerId || '-' }}</el-descriptions-item>
             <el-descriptions-item label="关联工单ID">{{ detail.ticketId || '-' }}</el-descriptions-item>
             <el-descriptions-item label="开始时间">{{ detail.startedAt || '-' }}</el-descriptions-item>
@@ -189,7 +199,14 @@ const eventLabel = (eventType: string) =>
     UNBRIDGED: '解除桥接',
     HELD: '通话保持',
     UNHELD: '恢复通话',
-    CALL_LEG_ENDED: '结束通话环节'
+    CALL_LEG_ENDED: '结束通话环节',
+    QUEUE_IN: '进入队列',
+    QUEUE_WAIT: '排队等待',
+    AGENT_RING: '坐席振铃',
+    AGENT_ANSWER: '坐席接听',
+    AGENT_NO_ANSWER: '坐席未接',
+    QUEUE_TIMEOUT: '队列超时',
+    ABANDON: '主叫放弃'
   })[eventType] || eventType;
 const formatDuration = (seconds?: number) => {
   const value = Math.max(0, seconds || 0);
@@ -201,24 +218,32 @@ const secondsBetween = (start?: string, end?: string) => {
   if (!start || !end) return 0;
   return Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 1000));
 };
+const queueWaitSeconds = computed(() => {
+  const events = detail.value?.events || [];
+  const queueIn = events.find((event) => event.eventType === 'QUEUE_IN');
+  const agentAnswer = events.find((event) => event.eventType === 'AGENT_ANSWER');
+  if (!queueIn || !agentAnswer) return 0;
+  return secondsBetween(queueIn.occurredAt, agentAnswer.occurredAt);
+});
 const summaryMetrics = computed(() => [
   { label: '通话总时长', value: formatDuration(detail.value?.durationSeconds) },
   { label: '振铃时长', value: formatDuration(secondsBetween(detail.value?.ringingAt, detail.value?.answeredAt || detail.value?.endedAt)) },
   { label: '接通时长', value: formatDuration(detail.value?.billableSeconds) },
   { label: '等待时长', value: formatDuration(secondsBetween(detail.value?.startedAt, detail.value?.answeredAt || detail.value?.endedAt)) },
+  { label: '队列等待', value: queueWaitSeconds.value > 0 ? formatDuration(queueWaitSeconds.value) : '-' },
   { label: '挂断原因', value: hangupCauseLabel(detail.value?.hangupCause) }
 ]);
 const timelineEvents = computed(() => detail.value?.events || []);
 const flowEvents = computed(() =>
   timelineEvents.value.filter((event) =>
-    ['CALL_LEG_CREATED', 'RINGING', 'ANSWERED', 'BRIDGED', 'TRANSFERRED', 'CALL_LEG_ENDED'].includes(event.eventType)
+    ['CALL_LEG_CREATED', 'RINGING', 'ANSWERED', 'BRIDGED', 'TRANSFERRED', 'CALL_LEG_ENDED', 'QUEUE_IN', 'AGENT_ANSWER'].includes(event.eventType)
   )
 );
 const formatClock = (value?: string) => value?.split(' ')[1] || value || '-';
 const eventTone = (eventType: string) => {
-  if (eventType === 'ANSWERED' || eventType === 'BRIDGED') return 'success';
-  if (eventType === 'CALL_LEG_ENDED') return 'danger';
-  if (eventType === 'RINGING') return 'warning';
+  if (['ANSWERED', 'BRIDGED', 'AGENT_ANSWER'].includes(eventType)) return 'success';
+  if (['CALL_LEG_ENDED', 'QUEUE_TIMEOUT', 'ABANDON', 'AGENT_NO_ANSWER'].includes(eventType)) return 'danger';
+  if (['RINGING', 'AGENT_RING', 'QUEUE_IN'].includes(eventType)) return 'warning';
   return 'primary';
 };
 const getList = async () => {
@@ -269,7 +294,7 @@ onBeforeUnmount(stopRecordingPoll);
 }
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 12px;
   padding: 16px;
   margin-top: 16px;

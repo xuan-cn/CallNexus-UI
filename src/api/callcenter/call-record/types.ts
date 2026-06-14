@@ -12,6 +12,8 @@ export interface CallRecordVO {
   calledNumber?: string;
   agentId?: string | number;
   agentExtension?: string;
+  handlingQueueId?: string | number;
+  handlingQueueName?: string;
   customerId?: string | number;
   ticketId?: string | number;
   callStatus: CallStatus;
