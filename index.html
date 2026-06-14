@@ -28,179 +28,102 @@
         padding: 0.2em 0;
       }
 
+      /* ===== 加载遮罩层：独立于 #app，避免 Vue mount 时被直接移除 ===== */
       #loader-wrapper {
         position: fixed;
         top: 0;
         left: 0;
         width: 100%;
         height: 100%;
-        background: linear-gradient(160deg, #0a1628 0%, #122a4e 40%, #0f2039 70%, #0a1628 100%);
+        background: #0d1f3c;
         z-index: 999999;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         overflow: hidden;
-        transition: opacity 0.6s ease, visibility 0.6s ease;
+        opacity: 1;
+        visibility: visible;
+        transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.8s cubic-bezier(0.4, 0, 0.2, 1);
       }
 
-      .loaded #loader-wrapper {
+      #loader-wrapper.fade-out {
         opacity: 0;
         visibility: hidden;
       }
 
-      /* 背景网格装饰 */
-      #loader-wrapper::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-image:
-          radial-gradient(circle at 20% 30%, rgba(64, 158, 255, 0.03) 0%, transparent 50%),
-          radial-gradient(circle at 80% 70%, rgba(64, 158, 255, 0.05) 0%, transparent 50%);
-        pointer-events: none;
-      }
-
-      /* 浮动粒子 */
-      .loader-particles {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-      }
-
-      .loader-particle {
-        position: absolute;
-        width: 4px;
-        height: 4px;
-        background: rgba(64, 158, 255, 0.3);
-        border-radius: 50%;
-        animation: float 6s ease-in-out infinite;
-      }
-
-      .loader-particle:nth-child(1) { top: 15%; left: 10%; animation-delay: 0s; }
-      .loader-particle:nth-child(2) { top: 25%; left: 85%; animation-delay: 1s; width: 6px; height: 6px; }
-      .loader-particle:nth-child(3) { top: 70%; left: 15%; animation-delay: 2s; }
-      .loader-particle:nth-child(4) { top: 80%; left: 75%; animation-delay: 3s; width: 5px; height: 5px; }
-      .loader-particle:nth-child(5) { top: 45%; left: 90%; animation-delay: 1.5s; }
-      .loader-particle:nth-child(6) { top: 60%; left: 5%; animation-delay: 4s; width: 3px; height: 3px; }
-
-      @keyframes float {
-        0%, 100% { transform: translateY(0) scale(1); opacity: 0.3; }
-        50% { transform: translateY(-20px) scale(1.5); opacity: 0.8; }
-      }
-
-      /* 中心图标区域 */
-      .loader-logo {
-        position: relative;
-        width: 140px;
-        height: 140px;
-        margin-bottom: 48px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .loader-logo svg {
-        width: 56px;
-        height: 56px;
-        position: relative;
-        z-index: 2;
-        filter: drop-shadow(0 0 20px rgba(64, 158, 255, 0.5));
-      }
-
-      /* 脉冲波纹 - 大气扩散 */
-      .loader-ripple {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 140px;
-        height: 140px;
-        margin: -70px 0 0 -70px;
-        border-radius: 50%;
-        border: 1.5px solid rgba(64, 158, 255, 0.5);
-        animation: ripple 3s ease-out infinite;
-      }
-
-      .loader-ripple:nth-child(2) {
-        animation-delay: 0.8s;
-      }
-
-      .loader-ripple:nth-child(3) {
-        animation-delay: 1.6s;
-      }
-
-      @keyframes ripple {
-        0% {
-          transform: scale(1);
-          opacity: 0.8;
-        }
-        100% {
-          transform: scale(3);
-          opacity: 0;
-        }
-      }
-
-      /* 旋转光环 */
-      .loader-ring {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 140px;
-        height: 140px;
-        margin: -70px 0 0 -70px;
-        border-radius: 50%;
-        border: 2px solid transparent;
-        border-top-color: rgba(64, 158, 255, 0.6);
-        border-right-color: rgba(64, 158, 255, 0.2);
-        animation: spin 3s linear infinite;
-      }
-
-      .loader-ring:nth-child(5) {
-        width: 170px;
-        height: 170px;
-        margin: -85px 0 0 -85px;
-        border-top-color: rgba(64, 158, 255, 0.3);
-        border-right-color: transparent;
-        border-bottom-color: rgba(64, 158, 255, 0.1);
-        animation: spin-reverse 4s linear infinite;
-      }
-
-      @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-      }
-
-      @keyframes spin-reverse {
-        0% { transform: rotate(360deg); }
-        100% { transform: rotate(0deg); }
-      }
-
-      /* 标题 */
+      /* ===== CallNexus 文字动画 ===== */
       .loader-title {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        color: #ffffff;
-        font-size: 32px;
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 38px;
         font-weight: 700;
         letter-spacing: 3px;
         margin-bottom: 12px;
-        text-shadow: 0 0 30px rgba(64, 158, 255, 0.3);
+        opacity: 0;
+        transform: translateY(8px);
+        animation: titleIn 0.8s 0.2s ease forwards;
       }
 
-      .loader-subtitle {
+      @keyframes titleIn {
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      /* ===== 分阶段状态提示：图标 + 文案 ===== */
+      .loader-status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 24px;
+        margin-bottom: 40px;
+      }
+
+      .loader-status-icon {
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(64, 158, 255, 0.3);
+        border-top-color: #409eff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      .loader-status-icon.done {
+        border: none;
+        background: #409eff;
+        animation: none;
+        /* ✓ 对勾：用伪元素绘制 */
+        position: relative;
+      }
+      .loader-status-icon.done::before,
+      .loader-status-icon.done::after {
+        content: '';
+        position: absolute;
+        top: 3px;
+        left: 2px;
+        width: 3px;
+        height: 7px;
+        background: #fff;
+        border-radius: 1px;
+      }
+      .loader-status-icon.done::before {
+        transform: rotate(45deg);
+      }
+      .loader-status-icon.done::after {
+        top: 6px;
+        left: 5px;
+        height: 4px;
+        transform: rotate(-45deg);
+      }
+
+      .loader-status-text {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        color: rgba(255, 255, 255, 0.45);
-        font-size: 15px;
-        letter-spacing: 2px;
+        color: rgba(255, 255, 255, 0.55);
+        font-size: 14px;
+        letter-spacing: 1px;
       }
 
       /* 进度条 */
       .loader-progress {
-        margin-top: 48px;
         width: 280px;
         height: 3px;
         background: rgba(255, 255, 255, 0.06);
@@ -217,41 +140,102 @@
         animation: progress 2s ease-in-out infinite;
       }
 
+      /* 进度条：加载完成后填满 */
+      #loader-wrapper.fade-out .loader-progress-bar {
+        width: 100%;
+        background: #409eff;
+        animation: none;
+        transition: width 0.6s ease;
+      }
+
       @keyframes progress {
         0% { transform: translateX(-150%); }
         100% { transform: translateX(350%); }
+      }
+
+      /* 状态文案切换动画 */
+      .loader-status-text {
+        transition: opacity 0.3s ease;
+      }
+      .loader-status-text.switching {
+        opacity: 0;
+      }
+
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
       }
     </style>
   </head>
 
   <body>
-    <div id="app">
-      <div id="loader-wrapper">
-        <div class="loader-particles">
-          <div class="loader-particle"></div>
-          <div class="loader-particle"></div>
-          <div class="loader-particle"></div>
-          <div class="loader-particle"></div>
-          <div class="loader-particle"></div>
-          <div class="loader-particle"></div>
-        </div>
-        <div class="loader-logo">
-          <div class="loader-ripple"></div>
-          <div class="loader-ripple"></div>
-          <div class="loader-ripple"></div>
-          <div class="loader-ring"></div>
-          <div class="loader-ring"></div>
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M6.62 10.79a15.053 15.053 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.46.57 3.58a1 1 0 0 1-.24 1.01l-2.2 2.2z" fill="#409eff"/>
-          </svg>
-        </div>
-        <div class="loader-title">CallNexus</div>
-        <div class="loader-subtitle">系统加载中，请耐心等待</div>
-        <div class="loader-progress">
-          <div class="loader-progress-bar"></div>
-        </div>
+    <div id="app"></div>
+
+    <!-- 加载遮罩：放在 #app 外部，Vue mount 不会移除它 -->
+    <div id="loader-wrapper">
+      <div class="loader-title">CallNexus</div>
+      <div class="loader-status">
+        <div id="loader-status-icon" class="loader-status-icon"></div>
+        <span id="loader-status-text" class="loader-status-text">正在加载应用资源…</span>
+      </div>
+      <div class="loader-progress">
+        <div class="loader-progress-bar"></div>
       </div>
     </div>
+
+    <!-- 分阶段状态管理：可在 Vue 应用启动各阶段调用 window.__setLoaderStatus(text) 更新文案 -->
+    <script>
+      (function () {
+        let loaded = false;
+        const stages = [];
+        let currentStage = -1;
+        const textEl = document.getElementById('loader-status-text');
+        const iconEl = document.getElementById('loader-status-icon');
+
+        /** 更新加载状态文案 */
+        window.__setLoaderStatus = function (text, done) {
+          if (!textEl || !iconEl || loaded) return;
+          if (text) {
+            textEl.classList.add('switching');
+            setTimeout(function () {
+              if (textEl) textEl.textContent = text;
+              textEl && textEl.classList.remove('switching');
+            }, 150);
+          }
+          if (done) {
+            iconEl.classList.add('done');
+          }
+          currentStage++;
+          stages.push({ iconEl: iconEl, done: !!done });
+        };
+
+        /** 应用加载完成：标记状态完成 → 文案切换 → 淡出遮罩层 → 移除 DOM */
+        window.__appLoaded = function () {
+          if (loaded) return;
+          loaded = true;
+          if (!iconEl) return;
+          iconEl.classList.add('done');
+          if (textEl) {
+            textEl.classList.add('switching');
+            setTimeout(function () {
+              textEl.textContent = '加载完成，即将进入系统';
+              textEl.classList.remove('switching');
+            }, 150);
+          }
+          setTimeout(function () {
+            var wrapper = document.getElementById('loader-wrapper');
+            if (wrapper) {
+              wrapper.classList.add('fade-out');
+              wrapper.addEventListener('transitionend', function (e) {
+                if (e.target === wrapper) wrapper.remove();
+              });
+              setTimeout(function () { wrapper.remove(); }, 5000);
+            }
+          }, 600);
+        };
+      })();
+    </script>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

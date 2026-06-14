@@ -379,7 +379,7 @@ $muted: #757682;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px 24px;
+  padding: 10px 24px;
   position: relative;
 }
 
@@ -412,11 +412,11 @@ $muted: #757682;
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 500px;
-  padding: 24px 32px 20px;
+  max-width: 420px;
+  padding: 14px 24px 12px;
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(8px);
-  border-radius: 16px;
+  border-radius: 14px;
   border: 1px solid rgba(197, 197, 211, 0.3);
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04);
 }
@@ -426,30 +426,30 @@ $muted: #757682;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  margin-bottom: 16px;
+  gap: 2px;
+  margin-bottom: 8px;
 }
 
 .header-icon {
-  width: 52px;
-  height: 52px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   background: $primary;
   color: $on-primary;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   box-shadow: 0 6px 16px rgba(30, 58, 138, 0.25);
 
   .material-symbols-outlined {
-    font-size: 26px;
+    font-size: 20px;
     font-variation-settings: 'FILL' 1;
   }
 }
 
 .card-title {
-  font-size: 22px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: $on-surface;
@@ -457,7 +457,7 @@ $muted: #757682;
 }
 
 .card-desc {
-  font-size: 13px;
+  font-size: 12px;
   color: $on-surface-variant;
   margin: 0;
 }
@@ -469,7 +469,7 @@ $muted: #757682;
 }
 
 .login-form :deep(.el-form-item) {
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 .login-form :deep(.el-form-item__error) {
   color: #ba1a1a;
@@ -527,7 +527,7 @@ $muted: #757682;
   border: 1px solid $outline;
   border-radius: 8px;
   box-shadow: none;
-  height: 40px;
+  height: 32px;
   padding: 0 12px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
@@ -562,14 +562,14 @@ $muted: #757682;
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px;
+  padding: 3px;
   background: $surface-soft;
   border: 1px solid $outline;
   border-radius: 8px;
-  height: 40px;
+  height: 32px;
 }
 .captcha-img {
-  height: 28px;
+  height: 24px;
   width: auto;
   border-radius: 4px;
   cursor: pointer;
@@ -594,9 +594,9 @@ $muted: #757682;
 
 /* ========== 记住我 ========== */
 .remember-row {
-  margin: 2px 0 12px;
+  margin: 0 0 6px;
   :deep(.el-checkbox__label) {
-    font-size: 13px;
+    font-size: 12px;
     color: $on-surface-variant;
   }
   :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
@@ -612,8 +612,8 @@ $muted: #757682;
 /* ========== 提交按钮 ========== */
 .submit-btn {
   width: 100%;
-  height: 42px;
-  font-size: 14px;
+  height: 34px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.01em;
   border-radius: 8px;
@@ -638,7 +638,7 @@ $muted: #757682;
   }
 
   .btn-arrow {
-    font-size: 18px;
+    font-size: 16px;
     transition: transform 0.2s ease;
   }
   &:hover .btn-arrow { transform: translateX(2px); }
@@ -646,11 +646,11 @@ $muted: #757682;
 
 /* ========== 卡内底部链接 ========== */
 .card-footer {
-  margin-top: 14px;
-  padding-top: 12px;
+  margin-top: 8px;
+  padding-top: 6px;
   border-top: 1px solid $outline-soft;
   text-align: center;
-  font-size: 13px;
+  font-size: 12px;
   color: $on-surface-variant;
 
   .footer-link {
@@ -669,8 +669,8 @@ $muted: #757682;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 16px 24px;
+  gap: 6px;
+  padding: 10px 24px;
   background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(12px);
   border-top: 1px solid $outline-soft;

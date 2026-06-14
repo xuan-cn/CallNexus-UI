@@ -30,6 +30,7 @@ router.beforeEach(async (to, from, next) => {
     } else {
       if (useUserStore().roles.length === 0) {
         isRelogin.show = true;
+        window.__setLoaderStatus?.('正在获取用户信息…');
         // 判断当前用户是否已拉取完user_info信息
         const [err] = await tos(useUserStore().getInfo());
         if (err) {
@@ -38,13 +39,15 @@ router.beforeEach(async (to, from, next) => {
           next({ path: '/' });
         } else {
           isRelogin.show = false;
+          window.__setLoaderStatus?.('正在加载菜单权限…');
           const accessRoutes = await usePermissionStore().generateRoutes();
           // 根据roles权限生成可访问的路由表
           accessRoutes.forEach((route) => {
             if (!isHttp(route.path)) {
-              router.addRoute(route); // 动态添加可访问路由表
+              router.addRoute(route); // 动态添加可访问的路由表
             }
           });
+          window.__appLoaded?.();
           // @ts-expect-error hack方法 确保addRoutes已完成
           next({ path: to.path, replace: true, params: to.params, query: to.query, hash: to.hash, name: to.name as string }); // hack方法 确保addRoutes已完成
         }
@@ -67,4 +70,6 @@ router.beforeEach(async (to, from, next) => {
 
 router.afterEach(() => {
   NProgress.done();
+  // 白名单/登录页等不走 beforeEach 完整流程，这里确保加载器也能淡出
+  window.__appLoaded?.();
 });

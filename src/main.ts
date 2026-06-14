@@ -42,6 +42,14 @@ VXETable.setConfig({
 import { ElDialog } from 'element-plus';
 ElDialog.props.closeOnClickModal.default = false;
 
+// 全局类型声明：index.html 中注入的加载器控制函数
+declare global {
+  interface Window {
+    __setLoaderStatus: (text?: string, done?: boolean) => void;
+    __appLoaded: () => void;
+  }
+}
+
 const app = createApp(App);
 
 app.use(HighLight);
@@ -55,3 +63,6 @@ app.use(plugins);
 directive(app);
 
 app.mount('#app');
+
+// 应用资源加载完成，更新加载状态
+window.__setLoaderStatus?.('正在验证登录状态…');
