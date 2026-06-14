@@ -49,7 +49,7 @@
                 <el-timeline v-if="followUps.length">
                   <el-timeline-item v-for="item in followUps" :key="String(item.id)" :timestamp="item.followUpTime" placement="top">
                     <el-card shadow="never">
-                      <div>{{ item.content }}</div>
+                      <div class="follow-up-content">{{ item.content }}</div>
                       <div class="follow-up-user">跟进人：{{ item.followUpByName || item.followUpBy || '-' }}</div>
                     </el-card>
                   </el-timeline-item>
@@ -303,6 +303,11 @@ onBeforeUnmount(() => {
 .follow-up-actions {
   margin: 10px 0 18px;
   text-align: right;
+}
+.follow-up-content {
+  white-space: pre-line;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
 }
 .follow-up-user {
   margin-top: 8px;
