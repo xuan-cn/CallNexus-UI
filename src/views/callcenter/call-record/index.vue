@@ -78,7 +78,12 @@
               <el-tag v-if="detail.handlingQueueName" type="info" size="small">{{ detail.handlingQueueName }}</el-tag>
               <span v-else>-</span>
             </el-descriptions-item>
-            <el-descriptions-item label="关联客户ID">{{ detail.customerId || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="关联客户ID">
+              <el-button v-if="detail.customerId" link type="primary" class="id-link" @click="openCustomerDetail(detail.customerId)">
+                {{ detail.customerId }}
+              </el-button>
+              <span v-else>-</span>
+            </el-descriptions-item>
             <el-descriptions-item label="关联工单ID">{{ detail.ticketId || '-' }}</el-descriptions-item>
             <el-descriptions-item label="开始时间">{{ detail.startedAt || '-' }}</el-descriptions-item>
             <el-descriptions-item label="振铃时间">{{ detail.ringingAt || '-' }}</el-descriptions-item>
@@ -112,9 +117,22 @@
             </div>
             <div class="flow-panel">
               <h4>通话流程图</h4>
-              <div v-for="event in flowEvents" :key="`flow-${String(event.id)}`" class="flow-step" :class="eventTone(event.eventType)">
-                <strong>{{ eventLabel(event.eventType) }}</strong>
-                <span>{{ event.fromTarget || '-' }} → {{ event.toTarget || '-' }}</span>
+              <div class="flow-track">
+                <template v-for="(node, index) in flowNodes" :key="`flow-${index}`">
+                  <div v-if="node.gapLabel" class="flow-gap" :class="node.gapTone">
+                    <span>{{ node.gapLabel }}</span>
+                  </div>
+                  <div class="flow-node" :class="node.tone">
+                    <div class="flow-node-marker">
+                      <el-icon :size="16"><component :is="node.icon" /></el-icon>
+                    </div>
+                    <div class="flow-node-body">
+                      <strong>{{ node.label }}</strong>
+                      <span v-if="node.detail">{{ node.detail }}</span>
+                    </div>
+                  </div>
+                </template>
+                <el-empty v-if="!flowNodes.length" description="暂无可绘制的主链路事件" :image-size="60" />
               </div>
             </div>
           </div>
@@ -145,13 +163,26 @@
         </el-tab-pane>
       </el-tabs>
     </el-dialog>
+
+    <CallCenterBusinessDetail v-model="customerDetailVisible" business-type="CUSTOMER" :business-id="customerDetailId" />
   </div>
 </template>
 
 <script setup name="CallRecord" lang="ts">
 import { getCallRecord, listCallRecords } from '@/api/callcenter/call-record';
 import { hangupCauseLabel } from '@/api/callcenter/call-record/display';
+import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/index.vue';
 import { CallDirection, CallRecordQuery, CallRecordVO, CallStatus } from '@/api/callcenter/call-record/types';
+import {
+  Connection,
+  Bell,
+  CircleCheck,
+  SwitchButton,
+  Download,
+  Upload,
+  Warning,
+  CircleClose
+} from '@element-plus/icons-vue';
 
 const loading = ref(false);
 const total = ref(0);
@@ -160,6 +191,9 @@ const detail = ref<CallRecordVO>();
 const detailTab = ref('basic');
 const recordList = ref<CallRecordVO[]>([]);
 const queryFormRef = ref<ElFormInstance>();
+// 客户详情弹窗：点击「关联客户ID」后展示客户详细资料
+const customerDetailVisible = ref(false);
+const customerDetailId = ref<string | number>();
 let recordingPollTimer: ReturnType<typeof setTimeout> | undefined;
 const directionOptions: Array<{ label: string; value: CallDirection }> = [
   { label: '呼入', value: 'INBOUND' },
@@ -234,11 +268,87 @@ const summaryMetrics = computed(() => [
   { label: '挂断原因', value: hangupCauseLabel(detail.value?.hangupCause) }
 ]);
 const timelineEvents = computed(() => detail.value?.events || []);
-const flowEvents = computed(() =>
-  timelineEvents.value.filter((event) =>
-    ['CALL_LEG_CREATED', 'RINGING', 'ANSWERED', 'BRIDGED', 'TRANSFERRED', 'CALL_LEG_ENDED', 'QUEUE_IN', 'AGENT_ANSWER'].includes(event.eventType)
-  )
-);
+// 流程图节点定义：主链路事件类型 → 节点图标、色调、文案映射。
+// 顺序即展示顺序，多个 AGENT_RING 在组装阶段合并为一个节点。
+const FLOW_NODE_META: Record<string, { icon: any; tone: string; label: string }> = {
+  CALL_LEG_CREATED: { icon: Connection, tone: 'primary', label: '呼入开始' },
+  QUEUE_IN: { icon: Download, tone: 'warning', label: '进入队列' },
+  AGENT_RING: { icon: Bell, tone: 'warning', label: '坐席振铃' },
+  AGENT_ANSWER: { icon: CircleCheck, tone: 'success', label: '坐席接听' },
+  ANSWERED: { icon: CircleCheck, tone: 'success', label: '接听通话' },
+  BRIDGED: { icon: CircleCheck, tone: 'success', label: '桥接通话' },
+  TRANSFERRED: { icon: Upload, tone: 'primary', label: '转接通话' },
+  QUEUE_TIMEOUT: { icon: Warning, tone: 'danger', label: '队列超时' },
+  ABANDON: { icon: CircleClose, tone: 'danger', label: '主叫放弃' },
+  CALL_LEG_ENDED: { icon: SwitchButton, tone: 'danger', label: '通话结束' }
+};
+// 耗时药丸文案：相邻两种事件类型之间的耗时展示文案。
+const GAP_LABELS: Array<{ from: string; to: string; label: string; tone: string }> = [
+  { from: 'CALL_LEG_CREATED', to: 'QUEUE_IN', label: '进队前', tone: 'muted' },
+  { from: 'QUEUE_IN', to: 'AGENT_RING', label: '排队等待', tone: 'warning' },
+  { from: 'QUEUE_IN', to: 'AGENT_ANSWER', label: '队列总等待', tone: 'warning' },
+  { from: 'AGENT_RING', to: 'AGENT_ANSWER', label: '振铃', tone: 'warning' },
+  { from: 'AGENT_ANSWER', to: 'CALL_LEG_ENDED', label: '通话', tone: 'success' },
+  { from: 'ANSWERED', to: 'CALL_LEG_ENDED', label: '通话', tone: 'success' },
+  { from: 'BRIDGED', to: 'CALL_LEG_ENDED', label: '通话', tone: 'success' }
+];
+const flowNodes = computed(() => {
+  const events = timelineEvents.value;
+  if (!events.length) return [] as Array<{ label: string; detail?: string; tone: string; icon: any; gapLabel?: string; gapTone?: string }>;
+  // 选取主链路事件（带节点元数据的），保留原始顺序
+  const mainEvents = events.filter((event) => FLOW_NODE_META[event.eventType]);
+  if (!mainEvents.length) return [];
+  // 合并连续的相同主链路事件：
+  // - AGENT_RING：多次振铃不同坐席，汇总坐席列表
+  // - 其他类型（CALL_LEG_ENDED/ANSWERED/BRIDGED 等）：多腿会产生重复，只保留首个
+  const merged: Array<{ eventType: string; occurredAt: string; details: string[] }> = [];
+  for (const event of mainEvents) {
+    const last = merged[merged.length - 1];
+    if (event.eventType === 'AGENT_RING' && last && last.eventType === 'AGENT_RING') {
+      if (event.toTarget) last.details.push(event.toTarget);
+    } else if (last && last.eventType === event.eventType) {
+      // 同类型连续重复（多腿挂断/接听等），跳过，避免流程图出现重复节点
+      continue;
+    } else {
+      merged.push({
+        eventType: event.eventType,
+        occurredAt: event.occurredAt,
+        details: event.eventType === 'AGENT_RING' ? (event.toTarget ? [event.toTarget] : []) : []
+      });
+    }
+  }
+  // 组装节点和耗时药丸
+  const nodes: Array<{ label: string; detail?: string; tone: string; icon: any; gapLabel?: string; gapTone?: string }> = [];
+  for (let i = 0; i < merged.length; i++) {
+    const current = merged[i];
+    const meta = FLOW_NODE_META[current.eventType];
+    if (!meta) continue;
+    // 计算与前一节点之间的耗时药丸
+    if (i > 0) {
+      const prev = merged[i - 1];
+      const gap = GAP_LABELS.find((item) => item.from === prev.eventType && item.to === current.eventType);
+      if (gap) {
+        const seconds = secondsBetween(prev.occurredAt, current.occurredAt);
+        nodes.push({ label: '', icon: Connection, tone: '', gapLabel: `${gap.label} ${formatDuration(seconds)}`, gapTone: gap.tone });
+      }
+    }
+    // 节点详情：振铃节点展示合并后的坐席列表，其它节点展示 from→to
+    let detail: string | undefined;
+    if (current.eventType === 'AGENT_RING') {
+      detail = current.details.length ? current.details.join('、') : undefined;
+    } else {
+      const sourceEvent = mainEvents.find((event) => event.eventType === current.eventType && event.occurredAt === current.occurredAt);
+      if (sourceEvent) {
+        const parts: string[] = [];
+        if (sourceEvent.fromTarget) parts.push(sourceEvent.fromTarget);
+        if (sourceEvent.toTarget) parts.push(sourceEvent.toTarget);
+        detail = parts.length ? parts.join(' → ') : undefined;
+      }
+    }
+    nodes.push({ label: meta.label, detail, tone: meta.tone, icon: meta.icon });
+  }
+  return nodes;
+});
 const formatClock = (value?: string) => value?.split(' ')[1] || value || '-';
 const eventTone = (eventType: string) => {
   if (['ANSWERED', 'BRIDGED', 'AGENT_ANSWER'].includes(eventType)) return 'success';
@@ -280,6 +390,11 @@ const handleDetail = async (row: CallRecordVO) => {
   detailTab.value = 'basic';
   detailVisible.value = true;
   await loadDetail(row.id);
+};
+// 打开客户详情弹窗：先赋 ID 再置 visible，保证组件 watch 触发时 businessId 已是新值
+const openCustomerDetail = (id: string | number) => {
+  customerDetailId.value = id;
+  customerDetailVisible.value = true;
 };
 watch(detailVisible, (visible) => {
   if (!visible) stopRecordingPoll();
@@ -359,8 +474,7 @@ onBeforeUnmount(stopRecordingPoll);
   flex-direction: column;
   gap: 8px;
 }
-.timeline-content span,
-.flow-step span {
+.timeline-content span {
   color: #606266;
   font-size: 13px;
 }
@@ -370,37 +484,131 @@ onBeforeUnmount(stopRecordingPoll);
 .flow-panel h4 {
   margin: 0 0 16px;
 }
-.flow-step {
+.flow-track {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+/* 节点：左侧圆形图标 + 右侧文案 */
+.flow-node {
   position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  margin-top: 18px;
+  border-radius: 10px;
+  background: #f5f9ff;
+  border: 1px solid #d6e4ff;
+}
+/* 第一个节点不留顶部间距 */
+.flow-node:first-child {
+  margin-top: 0;
+}
+.flow-node-marker {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #409eff;
+  color: #fff;
+}
+.flow-node-body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 12px;
-  margin-bottom: 24px;
-  border: 1px solid #b7d2ff;
-  border-radius: 6px;
-  background: #f5f9ff;
-  text-align: center;
+  padding-top: 6px;
+  min-width: 0;
 }
-.flow-step:not(:last-child)::after {
+.flow-node-body strong {
+  font-size: 14px;
+  color: #303133;
+}
+.flow-node-body span {
+  color: #606266;
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+/* 节点色调 */
+.flow-node.success {
+  background: #f0fbf6;
+  border-color: #a8e5c8;
+}
+.flow-node.success .flow-node-marker {
+  background: #20b26b;
+}
+.flow-node.warning {
+  background: #fffaf0;
+  border-color: #f5d49b;
+}
+.flow-node.warning .flow-node-marker {
+  background: #e6a23c;
+}
+.flow-node.danger {
+  background: #fff5f5;
+  border-color: #f7b2b2;
+}
+.flow-node.danger .flow-node-marker {
+  background: #f56c6c;
+}
+.flow-node.primary .flow-node-marker {
+  background: #409eff;
+}
+/* 节点之间的连接线：圆心对齐 */
+.flow-node:not(:first-child)::before {
+  content: '';
   position: absolute;
-  bottom: -20px;
-  left: 50%;
+  top: -18px;
+  left: 30px;
+  width: 2px;
+  height: 18px;
+  background: #d6e4ff;
+}
+/* 耗时药丸：穿插在节点之间 */
+.flow-gap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 14px 0 0 49px;
+  padding: 4px 14px;
+  align-self: flex-start;
+  border-radius: 12px;
+  background: #f4f4f5;
   color: #909399;
-  content: '↓';
+  font-size: 12px;
+  position: relative;
+}
+/* 药丸上方与节点的连接线 */
+.flow-gap::before {
+  content: '';
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  width: 2px;
+  height: 14px;
+  background: #d6e4ff;
   transform: translateX(-50%);
 }
-.flow-step.success {
-  border-color: #a8e5c8;
+.flow-gap.warning {
+  background: #fdf6ec;
+  color: #e6a23c;
+}
+.flow-gap.success {
   background: #f0fbf6;
+  color: #20b26b;
 }
-.flow-step.warning {
-  border-color: #f5d49b;
-  background: #fffaf0;
+.flow-gap.danger {
+  background: #fef0f0;
+  color: #f56c6c;
 }
-.flow-step.danger {
-  border-color: #f7b2b2;
-  background: #fff5f5;
+.flow-gap.muted {
+  background: #f4f4f5;
+  color: #909399;
 }
 .timeline-metrics {
   margin-top: 16px;
@@ -412,5 +620,12 @@ onBeforeUnmount(stopRecordingPoll);
   margin-top: 12px;
   color: #606266;
   font-size: 13px;
+}
+/* 描述项内的可点击 ID 链接：去除 button 默认内边距，贴合单元格 */
+.id-link {
+  padding: 0;
+  height: auto;
+  vertical-align: baseline;
+  font-weight: inherit;
 }
 </style>

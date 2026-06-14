@@ -73,7 +73,7 @@
                     <span>通话时长：{{ formatDuration(item.billableSeconds) }}</span>
                     <span>挂断原因：{{ hangupCauseLabel(item.hangupCause) }}</span>
                   </div>
-                  <audio v-if="item.recordingUrl" class="call-record-audio" :src="item.recordingUrl" controls preload="none" />
+                  <audio v-if="item.recordingUrl" class="call-record-audio" :src="item.recordingUrl" controls preload="metadata" />
                 </el-card>
               </div>
               <el-empty v-else description="暂无通话记录" :image-size="70" />
