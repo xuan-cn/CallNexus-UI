@@ -1,5 +1,5 @@
 export type OutboundTaskStatus = 'DRAFT' | 'RUNNING' | 'PAUSED' | 'COMPLETED';
-export type OutboundMemberStatus = 'PENDING' | 'CLAIMED' | 'DIALING' | 'COMPLETED' | 'RETRY' | 'SKIPPED';
+export type OutboundMemberStatus = 'PENDING' | 'CLAIMED' | 'DIALING' | 'COMPLETED' | 'RETRY' | 'SKIPPED' | 'BLOCKED';
 
 export interface OutboundTaskVO {
   id: string | number;
@@ -49,6 +49,9 @@ export interface OutboundMemberVO {
   nextFollowUpAt?: string;
   completedAt?: string;
   completionReason?: 'MANUAL' | 'SYSTEM' | 'RETRY_LIMIT_REACHED';
+  blockedReason?: string;
+  blockedAt?: string;
+  blockedBlacklistId?: string | number;
 }
 
 export interface OutboundImportRowVO {
@@ -57,7 +60,7 @@ export interface OutboundImportRowVO {
   customerName?: string;
   originalPhone?: string;
   normalizedPhone?: string;
-  status: 'VALID' | 'INVALID' | 'DUPLICATE_FILE' | 'DUPLICATE_TASK';
+  status: 'VALID' | 'INVALID' | 'DUPLICATE_FILE' | 'DUPLICATE_TASK' | 'BLACKLISTED';
   errorMessage?: string;
   customerId?: string | number;
 }
@@ -71,6 +74,7 @@ export interface OutboundImportBatchVO {
   validCount: number;
   invalidCount: number;
   duplicateCount: number;
+  blacklistedCount: number;
   importedCount: number;
   rows: OutboundImportRowVO[];
 }
@@ -85,6 +89,7 @@ export interface OutboundTaskStatisticsVO {
   retryCount: number;
   waitingRetryCount: number;
   retryLimitReachedCount: number;
+  blockedCount: number;
   dialedCount: number;
   connectedCount: number;
   totalAttemptCount: number;
@@ -93,6 +98,12 @@ export interface OutboundTaskStatisticsVO {
   connectionRate: number;
   attemptConnectionRate: number;
   resultDistribution: Record<string, number>;
+}
+
+export interface AddOutboundMembersResult {
+  addedCount: number;
+  duplicateCount: number;
+  blocked: Array<{ customerId: string | number; customerName?: string; phoneNumber: string; reason?: string; blacklistId: string | number }>;
 }
 
 export interface OutboundAttemptVO {

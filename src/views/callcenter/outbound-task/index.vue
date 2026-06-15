@@ -82,6 +82,8 @@
         <el-table-column label="结果备注" prop="resultRemark" min-width="180" show-overflow-tooltip />
         <el-table-column label="下次重呼" prop="nextFollowUpAt" min-width="170" />
         <el-table-column label="结束原因" width="130"><template #default="{ row }">{{ completionReasonLabel(row.completionReason) }}</template></el-table-column>
+        <el-table-column label="拦截原因" prop="blockedReason" min-width="180" show-overflow-tooltip />
+        <el-table-column label="拦截时间" prop="blockedAt" min-width="170" />
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="showAttempts(row)">拨打明细</el-button>
@@ -109,7 +111,7 @@
         </el-upload>
         <el-button class="import-action-button" plain icon="Download" @click="downloadImportTemplate">下载导入模板</el-button>
         <el-button
-          v-if="importDialog.batch && importDialog.batch.invalidCount + importDialog.batch.duplicateCount > 0"
+          v-if="importDialog.batch && importDialog.batch.invalidCount + importDialog.batch.duplicateCount + (importDialog.batch.blacklistedCount || 0) > 0"
           class="import-action-button"
           type="danger"
           plain
@@ -124,6 +126,7 @@
           <el-tag type="success">有效 {{ importDialog.batch.validCount }}</el-tag>
           <el-tag type="warning">重复 {{ importDialog.batch.duplicateCount }}</el-tag>
           <el-tag type="danger">无效 {{ importDialog.batch.invalidCount }}</el-tag>
+          <el-tag type="danger">黑名单 {{ importDialog.batch.blacklistedCount || 0 }}</el-tag>
         </div>
         <el-table :data="importDialog.batch.rows" max-height="420">
           <el-table-column label="行号" prop="rowNumber" width="70" />
@@ -312,9 +315,9 @@ const resultOptions = [
 ];
 const statusLabel = (value: OutboundTaskStatus) => ({ DRAFT: '草稿', RUNNING: '执行中', PAUSED: '已暂停', COMPLETED: '已完成' })[value];
 const statusTag = (value: OutboundTaskStatus) => value === 'RUNNING' ? 'success' : value === 'PAUSED' ? 'warning' : 'info';
-const memberStatusLabel = (value: string) => ({ PENDING: '待领取', CLAIMED: '已领取', DIALING: '拨打中', COMPLETED: '已完成', RETRY: '待重呼', SKIPPED: '已跳过' })[value] || value;
+const memberStatusLabel = (value: string) => ({ PENDING: '待领取', CLAIMED: '已领取', DIALING: '拨打中', COMPLETED: '已完成', RETRY: '待重呼', SKIPPED: '已跳过', BLOCKED: '黑名单拦截' })[value] || value;
 const completionReasonLabel = (value?: string) => ({ MANUAL: '人工确认', SYSTEM: '系统自动完成', RETRY_LIMIT_REACHED: '达到重呼上限' })[value || ''] || '-';
-const importStatusLabel = (value: string) => ({ VALID: '有效', INVALID: '无效', DUPLICATE_FILE: '文件内重复', DUPLICATE_TASK: '任务内重复' })[value] || value;
+const importStatusLabel = (value: string) => ({ VALID: '有效', INVALID: '无效', DUPLICATE_FILE: '文件内重复', DUPLICATE_TASK: '任务内重复', BLACKLISTED: '黑名单拦截' })[value] || value;
 const importStatusTag = (value: string) => value === 'VALID' ? 'success' : value === 'INVALID' ? 'danger' : 'warning';
 const resultLabel = (value?: string) => resultOptions.find((item) => item.value === value)?.label || '-';
 const statisticsCards = computed(() => {
@@ -333,6 +336,7 @@ const statisticsCards = computed(() => {
     { label: '待重呼', value: data.retryCount },
     { label: '等待重呼', value: data.waitingRetryCount },
     { label: '达到重呼上限', value: data.retryLimitReachedCount },
+    { label: '已拦截', value: data.blockedCount },
     { label: '完成率', value: `${data.completionRate}%` },
     { label: '名单接通率', value: `${data.connectionRate}%` },
     { label: '尝试接通率', value: `${data.attemptConnectionRate}%` }
@@ -393,7 +397,15 @@ const recoverExpired = async (row: OutboundTaskVO) => {
 };
 const openCustomerDialog = async () => { customerDialog.visible = true; await loadCustomers(); };
 const loadCustomers = async () => { customers.value = (await listCustomers(customerQuery)).rows; };
-const addCustomers = async () => { if (!memberDrawer.task || !selectedCustomers.value.length) return proxy?.$modal.msgWarning('请选择客户'); await addOutboundCustomers(memberDrawer.task.id, selectedCustomers.value.map((item) => item.id)); customerDialog.visible = false; await showMembers(memberDrawer.task); await load(); };
+const addCustomers = async () => {
+  if (!memberDrawer.task || !selectedCustomers.value.length) return proxy?.$modal.msgWarning('请选择客户');
+  const result = (await addOutboundCustomers(memberDrawer.task.id, selectedCustomers.value.map((item) => item.id))).data;
+  const blockedText = result.blocked.length ? `，黑名单拦截 ${result.blocked.length} 条：${result.blocked.map(item => `${item.phoneNumber}${item.reason ? `（${item.reason}）` : ''}`).join('、')}` : '';
+  proxy?.$modal.msgSuccess(`成功添加 ${result.addedCount} 条，重复跳过 ${result.duplicateCount} 条${blockedText}`);
+  customerDialog.visible = false;
+  await showMembers(memberDrawer.task);
+  await load();
+};
 const openImportDialog = () => {
   importFile.value = undefined;
   importDialog.batch = undefined;
