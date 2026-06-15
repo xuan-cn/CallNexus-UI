@@ -1,5 +1,5 @@
 import request from '@/utils/request';
-import { CompleteOutboundMemberForm, OutboundMemberVO, OutboundTaskForm, OutboundTaskStatisticsVO, OutboundTaskVO } from './types';
+import { CompleteOutboundMemberForm, OutboundAttemptQuery, OutboundAttemptVO, OutboundImportBatchVO, OutboundMemberVO, OutboundTaskForm, OutboundTaskStatisticsVO, OutboundTaskVO } from './types';
 
 export const listOutboundTasks = () => request<OutboundTaskVO[]>({ url: '/api/v1/outbound-tasks', method: 'get' });
 export const getOutboundTask = (id: string | number) => request<OutboundTaskVO>({ url: `/api/v1/outbound-tasks/${id}`, method: 'get' });
@@ -11,6 +11,19 @@ export const pauseOutboundTask = (id: string | number) => request({ url: `/api/v
 export const addOutboundCustomers = (id: string | number, customerIds: Array<string | number>) =>
   request({ url: `/api/v1/outbound-tasks/${id}/members`, method: 'post', data: { customerIds } });
 export const listOutboundMembers = (id: string | number) => request<OutboundMemberVO[]>({ url: `/api/v1/outbound-tasks/${id}/members`, method: 'get' });
+export const previewOutboundMemberImport = (id: string | number, file: File) => {
+  const data = new FormData();
+  data.append('file', file);
+  return request<OutboundImportBatchVO>({ url: `/api/v1/outbound-tasks/${id}/members/import-preview`, method: 'post', data });
+};
+export const confirmOutboundMemberImport = (id: string | number, batchId: string | number, autoCreateCustomer: boolean) =>
+  request<OutboundImportBatchVO>({
+    url: `/api/v1/outbound-tasks/${id}/members/import-batches/${batchId}/confirm`,
+    method: 'post',
+    data: { autoCreateCustomer }
+  });
+export const listOutboundAttempts = (memberId: string | number) => request<OutboundAttemptVO[]>({ url: `/api/v1/outbound-tasks/members/${memberId}/attempts`, method: 'get' });
+export const pageOutboundAttempts = (query: OutboundAttemptQuery) => request<OutboundAttemptVO[]>({ url: '/api/v1/outbound-tasks/attempts/page', method: 'get', params: query });
 export const getOutboundTaskStatistics = (id: string | number) => request<OutboundTaskStatisticsVO>({ url: `/api/v1/outbound-tasks/${id}/statistics`, method: 'get' });
 export const recoverExpiredOutboundMembers = (id: string | number) => request<number>({ url: `/api/v1/outbound-tasks/${id}/recover-expired`, method: 'post' });
 export const claimNextOutboundMember = (id: string | number) => request<OutboundMemberVO>({ url: `/api/v1/outbound-tasks/${id}/claim-next`, method: 'post' });

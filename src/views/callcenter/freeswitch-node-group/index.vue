@@ -66,8 +66,8 @@ const load = async () => {
   } finally { loading.value = false; }
 };
 const reset = () => Object.assign(form, { id: undefined, groupCode: '', groupName: '', nodeIds: [], enabled: true, remark: '', version: undefined });
-const handleAdd = () => { reset(); dialog.title = '新增 FreeSWITCH 节点组'; dialog.visible = true; };
-const handleUpdate = async (row: NodeGroupVO) => { reset(); Object.assign(form, (await getNodeGroup(row.id)).data); dialog.title = '修改 FreeSWITCH 节点组'; dialog.visible = true; };
+const handleAdd = () => { reset(); dialog.title = '新增话务服务节点组'; dialog.visible = true; };
+const handleUpdate = async (row: NodeGroupVO) => { reset(); Object.assign(form, (await getNodeGroup(row.id)).data); dialog.title = '修改话务服务节点组'; dialog.visible = true; };
 const submit = () => formRef.value?.validate(async (valid) => {
   if (!valid) return;
   form.id ? await updateNodeGroup(form) : await createNodeGroup(form);

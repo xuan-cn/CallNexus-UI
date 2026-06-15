@@ -149,14 +149,14 @@ const reset = () => {
 };
 const handleAdd = () => {
   reset();
-  dialog.title = '新增 FreeSWITCH 节点';
+  dialog.title = '新增话务服务节点';
   dialog.visible = true;
 };
 const handleUpdate = async (row: FreeSwitchNodeVO) => {
   reset();
   const res = await getFreeSwitchNode(row.id);
   Object.assign(form.value, res.data, { eslPassword: '' });
-  dialog.title = '修改 FreeSWITCH 节点';
+  dialog.title = '修改话务服务节点';
   dialog.visible = true;
 };
 const submitForm = () =>

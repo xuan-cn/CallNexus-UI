@@ -29,7 +29,8 @@ export default defineConfig(({ mode, command }) => {
           ws: true,
           rewrite: (path) => path.replace(new RegExp('^' + env.VITE_APP_BASE_API), '')
         }
-      }
+      },
+      allowedHosts: ['frp-boy.com', '.frp-boy.com']
     },
     css: {
       preprocessorOptions: {
