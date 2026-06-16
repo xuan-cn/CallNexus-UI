@@ -134,6 +134,68 @@
               </el-select>
             </el-form-item>
           </el-col>
+          <el-col v-if="form.routeType === 'VOICEMAIL'" :span="12">
+            <el-form-item label="目标留言箱" prop="routeTarget">
+              <el-select v-model="form.routeTarget" filterable style="width: 100%" placeholder="请选择语音留言箱">
+                <el-option v-for="box in voicemailOptions" :key="box.id" :label="box.boxName" :value="String(box.id)" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col v-if="form.routeType === 'BUSINESS_HOURS'" :span="24">
+            <el-card shadow="never">
+              <el-form-item label="工作时间方案" required>
+                <el-select v-model="form.businessHoursRoute.planId" style="width: 100%">
+                  <el-option v-for="plan in businessHoursPlans" :key="plan.id" :label="plan.planName" :value="plan.id" />
+                </el-select>
+              </el-form-item>
+              <el-row :gutter="16">
+                <el-col :span="12">
+                  <el-form-item label="时间内类型">
+                    <el-select v-model="form.businessHoursRoute.inHoursTargetType" style="width: 100%" @change="handleBusinessTargetTypeChange('in')">
+                      <el-option v-for="item in businessTargetOptions" :key="item.value" :label="item.label" :value="item.value" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="时间内目标">
+                    <el-input v-if="form.businessHoursRoute.inHoursTargetType === 'EXTENSION'" v-model="form.businessHoursRoute.inHoursTarget" placeholder="例如 1001" />
+                    <el-select v-else-if="form.businessHoursRoute.inHoursTargetType === 'IVR'" v-model="form.businessHoursRoute.inHoursTarget" filterable style="width: 100%" placeholder="请选择已发布 IVR">
+                      <el-option v-for="flow in availableIvrOptions" :key="flow.id" :label="flow.flowName" :value="String(flow.id)" />
+                    </el-select>
+                    <el-select v-else-if="form.businessHoursRoute.inHoursTargetType === 'QUEUE'" v-model="form.businessHoursRoute.inHoursTarget" filterable style="width: 100%" placeholder="请选择已同步的呼叫队列">
+                      <el-option v-for="queue in availableQueueOptions" :key="queue.id" :label="queue.queueName" :value="String(queue.id)" />
+                    </el-select>
+                    <el-select v-else-if="form.businessHoursRoute.inHoursTargetType === 'VOICEMAIL'" v-model="form.businessHoursRoute.inHoursTarget" filterable style="width: 100%" placeholder="请选择语音留言箱">
+                      <el-option v-for="box in voicemailOptions" :key="box.id" :label="box.boxName" :value="String(box.id)" />
+                    </el-select>
+                    <el-input v-else disabled placeholder="挂断不需要配置目标" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="时间外类型">
+                    <el-select v-model="form.businessHoursRoute.outHoursTargetType" style="width: 100%" @change="handleBusinessTargetTypeChange('out')">
+                      <el-option v-for="item in businessTargetOptions" :key="item.value" :label="item.label" :value="item.value" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="时间外目标">
+                    <el-input v-if="form.businessHoursRoute.outHoursTargetType === 'EXTENSION'" v-model="form.businessHoursRoute.outHoursTarget" placeholder="例如 1001" />
+                    <el-select v-else-if="form.businessHoursRoute.outHoursTargetType === 'IVR'" v-model="form.businessHoursRoute.outHoursTarget" filterable style="width: 100%" placeholder="请选择已发布 IVR">
+                      <el-option v-for="flow in availableIvrOptions" :key="flow.id" :label="flow.flowName" :value="String(flow.id)" />
+                    </el-select>
+                    <el-select v-else-if="form.businessHoursRoute.outHoursTargetType === 'QUEUE'" v-model="form.businessHoursRoute.outHoursTarget" filterable style="width: 100%" placeholder="请选择已同步的呼叫队列">
+                      <el-option v-for="queue in availableQueueOptions" :key="queue.id" :label="queue.queueName" :value="String(queue.id)" />
+                    </el-select>
+                    <el-select v-else-if="form.businessHoursRoute.outHoursTargetType === 'VOICEMAIL'" v-model="form.businessHoursRoute.outHoursTarget" filterable style="width: 100%" placeholder="请选择语音留言箱">
+                      <el-option v-for="box in voicemailOptions" :key="box.id" :label="box.boxName" :value="String(box.id)" />
+                    </el-select>
+                    <el-input v-else disabled placeholder="挂断不需要配置目标" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+            </el-card>
+          </el-col>
           <el-col :span="12">
             <el-form-item label="默认主叫" prop="outboundDefault">
               <el-switch v-model="form.outboundDefault" active-text="是" inactive-text="否" />
@@ -165,6 +227,10 @@ import { listIvrFlows } from '@/api/callcenter/ivr-flow';
 import { IvrFlowVO } from '@/api/callcenter/ivr-flow/types';
 import { listCallQueues } from '@/api/callcenter/call-queue';
 import { CallQueueVO } from '@/api/callcenter/call-queue/types';
+import { listBusinessHoursPlans } from '@/api/callcenter/business-hours';
+import type { BusinessHoursPlan } from '@/api/callcenter/business-hours/types';
+import { listVoiceMailBoxes } from '@/api/callcenter/voicemail';
+import type { VoiceMailBoxVO } from '@/api/callcenter/voicemail/types';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const loading = ref(false);
@@ -174,6 +240,8 @@ const nodeOptions = ref<FreeSwitchNodeVO[]>([]);
 const gatewayOptions = ref<FreeSwitchGatewayVO[]>([]);
 const ivrOptions = ref<IvrFlowVO[]>([]);
 const queueOptions = ref<CallQueueVO[]>([]);
+const businessHoursPlans = ref<BusinessHoursPlan[]>([]);
+const voicemailOptions = ref<VoiceMailBoxVO[]>([]);
 const queryFormRef = ref<ElFormInstance>();
 const formRef = ref<ElFormInstance>();
 const dialog = reactive<DialogOption>({ visible: false, title: '' });
@@ -186,7 +254,16 @@ const routeTypeOptions: Array<{ label: string; value: PhoneRouteType }> = [
   { label: '不路由', value: 'NONE' },
   { label: '固定分机', value: 'EXTENSION' },
   { label: 'IVR 流程', value: 'IVR' },
-  { label: '呼叫队列', value: 'QUEUE' }
+  { label: '呼叫队列', value: 'QUEUE' },
+  { label: '语音留言', value: 'VOICEMAIL' },
+  { label: '工作时间路由', value: 'BUSINESS_HOURS' }
+];
+const businessTargetOptions = [
+  { label: '固定分机', value: 'EXTENSION' },
+  { label: 'IVR 流程', value: 'IVR' },
+  { label: '呼叫队列', value: 'QUEUE' },
+  { label: '语音留言', value: 'VOICEMAIL' },
+  { label: '挂断', value: 'HANGUP' }
 ];
 const initialForm: PhoneNumberForm = {
   number: '',
@@ -197,7 +274,8 @@ const initialForm: PhoneNumberForm = {
   routeType: 'EXTENSION',
   routeTarget: '',
   outboundDefault: false,
-  enabled: true
+  enabled: true,
+  businessHoursRoute: { inHoursTargetType: 'EXTENSION', inHoursTarget: '', outHoursTargetType: 'HANGUP', outHoursTarget: '' }
 };
 const data = reactive<PageData<PhoneNumberForm, PhoneNumberQuery>>({
   form: { ...initialForm },
@@ -233,19 +311,27 @@ const routeTypeLabel = (value: PhoneRouteType) => routeTypeOptions.find((item) =
 const routeTargetLabel = (row: PhoneNumberVO) => {
   if (row.routeType === 'IVR') return ivrOptions.value.find((flow) => String(flow.id) === String(row.routeTarget))?.flowName || row.routeTarget;
   if (row.routeType === 'QUEUE') return queueOptions.value.find((queue) => String(queue.id) === String(row.routeTarget))?.queueName || row.routeTarget;
+  if (row.routeType === 'VOICEMAIL') return voicemailOptions.value.find((box) => String(box.id) === String(row.routeTarget))?.boxName || row.routeTarget;
+  if (row.routeType === 'BUSINESS_HOURS') {
+    return businessHoursPlans.value.find((plan) => String(plan.id) === String(row.businessHoursRoute?.planId))?.planName || row.routeTarget;
+  }
   return row.routeTarget;
 };
 const loadOptions = async () => {
-  const [nodeRes, gatewayRes, ivrRes, queueRes] = await Promise.all([
+  const [nodeRes, gatewayRes, ivrRes, queueRes, businessHoursRes, voicemailRes] = await Promise.all([
     listFreeSwitchNodes({ pageNum: 1, pageSize: 200, enabled: true }),
     listFreeSwitchGateways({ pageNum: 1, pageSize: 200, enabled: true }),
     listIvrFlows(),
-    listCallQueues()
+    listCallQueues(),
+    listBusinessHoursPlans(),
+    listVoiceMailBoxes({ pageNum: 1, pageSize: 1000, enabled: true })
   ]);
   nodeOptions.value = nodeRes.rows;
   gatewayOptions.value = gatewayRes.rows;
   ivrOptions.value = ivrRes.data;
   queueOptions.value = queueRes.data;
+  businessHoursPlans.value = businessHoursRes.data.filter((item) => item.enabled);
+  voicemailOptions.value = voicemailRes.rows.filter((item) => item.enabled);
 };
 const getList = async () => {
   loading.value = true;
@@ -284,6 +370,35 @@ const handleNodeChange = () => {
 };
 const handleRouteTypeChange = () => {
   form.value.routeTarget = '';
+  if (form.value.routeType === 'BUSINESS_HOURS' && !form.value.businessHoursRoute) {
+    form.value.businessHoursRoute = { inHoursTargetType: 'EXTENSION', inHoursTarget: '', outHoursTargetType: 'HANGUP', outHoursTarget: '' };
+  }
+};
+const handleBusinessTargetTypeChange = (position: 'in' | 'out') => {
+  if (position === 'in') {
+    form.value.businessHoursRoute.inHoursTarget = '';
+  } else {
+    form.value.businessHoursRoute.outHoursTarget = '';
+  }
+};
+const validateBusinessHoursRoute = () => {
+  if (form.value.routeType !== 'BUSINESS_HOURS') return true;
+  const route = form.value.businessHoursRoute;
+  if (!route?.planId) {
+    proxy?.$modal.msgError('请选择工作时间方案');
+    return false;
+  }
+  if (route.inHoursTargetType !== 'HANGUP' && !route.inHoursTarget) {
+    proxy?.$modal.msgError('请选择或输入时间内路由目标');
+    return false;
+  }
+  if (route.outHoursTargetType !== 'HANGUP' && !route.outHoursTarget) {
+    proxy?.$modal.msgError('请选择或输入时间外路由目标');
+    return false;
+  }
+  if (route.inHoursTargetType === 'HANGUP') route.inHoursTarget = '';
+  if (route.outHoursTargetType === 'HANGUP') route.outHoursTarget = '';
+  return true;
 };
 const handleAdd = () => {
   reset();
@@ -301,10 +416,11 @@ const handleUpdate = async (row: PhoneNumberVO) => {
 const submitForm = () =>
   formRef.value?.validate(async (valid) => {
     if (!valid) return;
-    if (form.value.routeType !== 'NONE' && !form.value.routeTarget) {
+    if (form.value.routeType !== 'NONE' && form.value.routeType !== 'BUSINESS_HOURS' && !form.value.routeTarget) {
       proxy?.$modal.msgError('请选择或输入呼入路由目标');
       return;
     }
+    if (!validateBusinessHoursRoute()) return;
     if (form.value.routeType === 'NONE') form.value.routeTarget = '';
     form.value.id ? await updatePhoneNumber(form.value) : await createPhoneNumber(form.value);
     proxy?.$modal.msgSuccess('操作成功');

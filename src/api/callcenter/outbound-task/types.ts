@@ -12,9 +12,14 @@ export interface OutboundTaskVO {
   maxRetryCount: number;
   retryIntervalMinutes: number;
   retryResultCodes: string;
+  autoAssignDueRetry: boolean;
+  retryAssigneeAgentId?: string | number;
   totalCount: number;
   pendingCount: number;
   completedCount: number;
+  dueRetryCount: number;
+  lastScheduledAt?: string;
+  lastScheduleSummary?: string;
   version?: number;
   createTime?: string;
 }
@@ -27,6 +32,8 @@ export interface OutboundTaskForm {
   maxRetryCount: number;
   retryIntervalMinutes: number;
   retryResultCodes: string;
+  autoAssignDueRetry: boolean;
+  retryAssigneeAgentId?: string | number;
   version?: number;
 }
 
@@ -143,6 +150,32 @@ export interface OutboundAttemptQuery {
   hangupCause?: string;
   startedAtBegin?: string;
   startedAtEnd?: string;
+}
+
+export interface OutboundAgentSummaryVO {
+  agentId: string | number;
+  agentCode?: string;
+  agentName?: string;
+  attemptCount: number;
+  answeredCount: number;
+  connectedCount: number;
+  customerCount: number;
+  totalDurationSeconds: number;
+  billableSeconds: number;
+  answerRate: number;
+  connectionRate: number;
+}
+
+export interface OutboundDailyTrendVO {
+  date: string;
+  attemptCount: number;
+  answeredCount: number;
+  connectedCount: number;
+  customerCount: number;
+  totalDurationSeconds: number;
+  billableSeconds: number;
+  answerRate: number;
+  connectionRate: number;
 }
 
 export interface CompleteOutboundMemberForm {

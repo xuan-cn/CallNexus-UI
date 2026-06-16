@@ -23,6 +23,17 @@
           </template>
         </el-table-column>
         <el-table-column label="说明" prop="description" min-width="180" show-overflow-tooltip />
+        <el-table-column label="调度状态" min-width="300">
+          <template #default="{ row }">
+            <div class="schedule-status">
+              <el-tag size="small" :type="row.dueRetryCount ? 'warning' : 'info'">到期 {{ row.dueRetryCount || 0 }}</el-tag>
+              <span class="schedule-summary" :title="row.lastScheduleSummary || '暂无调度记录'">
+                {{ compactScheduleSummary(row.lastScheduleSummary) }}
+              </span>
+              <span class="schedule-time">{{ row.lastScheduledAt || '尚未调度' }}</span>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="480" fixed="right" align="center">
           <template #default="{ row }">
             <el-button v-hasPermi="['callcenter:outbound-task:query']" link type="primary" @click="showMembers(row)">名单</el-button>
@@ -61,6 +72,14 @@
           <el-form-item label="重呼间隔">
             <el-input-number v-model="taskForm.retryIntervalMinutes" :min="1" :max="10080" />
             <span class="form-tip">分钟</span>
+          </el-form-item>
+          <el-divider content-position="left">到期重呼分配</el-divider>
+          <el-form-item label="自动分配"><el-switch v-model="taskForm.autoAssignDueRetry" /></el-form-item>
+          <el-form-item v-if="taskForm.autoAssignDueRetry" label="指定坐席">
+            <el-select v-model="taskForm.retryAssigneeAgentId" filterable style="width: 100%" placeholder="选择到期后自动分配的坐席">
+              <el-option v-for="agent in agentOptions" :key="agent.id" :label="`${agent.agentName}（${agent.agentCode}）`" :value="agent.id" />
+            </el-select>
+            <span class="form-tip">仅在坐席已签入示闲且没有活动外呼名单时自动分配。</span>
           </el-form-item>
         </template>
       </el-form>
@@ -215,7 +234,7 @@
         <el-table-column label="通话标识" prop="businessCallId" min-width="260" show-overflow-tooltip />
       </el-table>
     </el-drawer>
-    <el-drawer v-model="reportDrawer.visible" :title="`${reportDrawer.task?.taskName || ''} - 外呼详细报表`" size="88%">
+    <el-drawer v-model="reportDrawer.visible" :title="`${reportDrawer.task?.taskName || ''} - 外呼详细报表`" size="88%" @closed="disposeTrendChart">
       <el-form :model="reportQuery" inline>
         <el-form-item label="客户电话"><el-input v-model="reportQuery.phoneNumber" clearable style="width: 150px" /></el-form-item>
         <el-form-item label="坐席ID"><el-input v-model="reportQuery.agentId" clearable style="width: 150px" /></el-form-item>
@@ -229,21 +248,65 @@
         <el-form-item label="拨打时间">
           <el-date-picker v-model="reportDateRange" type="datetimerange" value-format="YYYY-MM-DD HH:mm:ss" range-separator="至" start-placeholder="开始时间" end-placeholder="结束时间" />
         </el-form-item>
-        <el-form-item><el-button type="primary" icon="Search" @click="queryReport">查询</el-button><el-button icon="Refresh" @click="resetReport">重置</el-button></el-form-item>
+        <el-form-item><el-button type="primary" icon="Search" @click="queryReport">查询</el-button><el-button icon="Refresh" @click="resetReport">重置</el-button><el-button type="success" plain icon="Download" @click="exportReport">导出明细</el-button></el-form-item>
       </el-form>
-      <el-table v-loading="reportDrawer.loading" :data="reportAttempts">
-        <el-table-column label="客户" prop="customerName" min-width="120" />
-        <el-table-column label="电话" prop="phoneNumber" min-width="140" />
-        <el-table-column label="坐席ID" prop="agentId" min-width="150" />
-        <el-table-column label="次数" prop="attemptNo" width="70" />
-        <el-table-column label="开始时间" prop="startedAt" min-width="170" />
-        <el-table-column label="总时长" width="90"><template #default="{ row }">{{ durationLabel(row.durationSeconds) }}</template></el-table-column>
-        <el-table-column label="接通时长" width="100"><template #default="{ row }">{{ durationLabel(row.billableSeconds) }}</template></el-table-column>
-        <el-table-column label="业务结果" width="110"><template #default="{ row }">{{ resultLabel(row.resultCode) }}</template></el-table-column>
-        <el-table-column label="系统建议" prop="suggestedResultLabel" width="110" />
-        <el-table-column label="挂断原因" prop="hangupCauseLabel" min-width="160" />
-      </el-table>
-      <pagination v-show="reportTotal > 0" v-model:page="reportQuery.pageNum" v-model:limit="reportQuery.pageSize" :total="reportTotal" @pagination="loadReport" />
+      <el-tabs v-model="reportDrawer.tab" @tab-change="handleReportTabChange">
+        <el-tab-pane label="拨打明细" name="detail">
+          <el-table v-loading="reportDrawer.loading" :data="reportAttempts">
+            <el-table-column label="客户" prop="customerName" min-width="120" />
+            <el-table-column label="电话" prop="phoneNumber" min-width="140" />
+            <el-table-column label="坐席ID" prop="agentId" min-width="150" />
+            <el-table-column label="次数" prop="attemptNo" width="70" />
+            <el-table-column label="开始时间" prop="startedAt" min-width="170" />
+            <el-table-column label="总时长" width="90"><template #default="{ row }">{{ durationLabel(row.durationSeconds) }}</template></el-table-column>
+            <el-table-column label="接通时长" width="100"><template #default="{ row }">{{ durationLabel(row.billableSeconds) }}</template></el-table-column>
+            <el-table-column label="业务结果" width="110"><template #default="{ row }">{{ resultLabel(row.resultCode) }}</template></el-table-column>
+            <el-table-column label="系统建议" prop="suggestedResultLabel" width="110" />
+            <el-table-column label="挂断原因" prop="hangupCauseLabel" min-width="160" />
+          </el-table>
+          <pagination v-show="reportTotal > 0" v-model:page="reportQuery.pageNum" v-model:limit="reportQuery.pageSize" :total="reportTotal" @pagination="loadReport" />
+        </el-tab-pane>
+        <el-tab-pane label="坐席汇总" name="agent">
+          <el-table v-loading="reportDrawer.loading" :data="agentSummaries">
+            <el-table-column label="坐席编码" prop="agentCode" min-width="130" />
+            <el-table-column label="坐席名称" prop="agentName" min-width="130" />
+            <el-table-column label="客户数" prop="customerCount" width="90" />
+            <el-table-column label="拨打次数" prop="attemptCount" width="100" />
+            <el-table-column label="接听次数" prop="answeredCount" width="100" />
+            <el-table-column label="已接通" prop="connectedCount" width="90" />
+            <el-table-column label="接听率" width="90"><template #default="{ row }">{{ row.answerRate }}%</template></el-table-column>
+            <el-table-column label="接通率" width="90"><template #default="{ row }">{{ row.connectionRate }}%</template></el-table-column>
+            <el-table-column label="总时长" width="110"><template #default="{ row }">{{ durationLabel(row.totalDurationSeconds) }}</template></el-table-column>
+            <el-table-column label="接通时长" width="110"><template #default="{ row }">{{ durationLabel(row.billableSeconds) }}</template></el-table-column>
+          </el-table>
+        </el-tab-pane>
+        <el-tab-pane label="日期趋势" name="trend">
+          <div class="trend-overview">
+            <div v-for="item in trendOverviewCards" :key="item.label" class="trend-overview-card" :class="item.tone">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+              <small>{{ item.description }}</small>
+            </div>
+          </div>
+          <div class="trend-panel">
+            <div class="trend-panel-header">
+              <div><strong>外呼量趋势</strong><span>按拨打开始日期统计</span></div>
+              <div class="trend-legend"><span class="attempt"></span>拨打次数 <span class="answered"></span>接听次数 <span class="connected"></span>已接通</div>
+            </div>
+            <div v-if="dailyTrends.length" ref="trendChartRef" class="trend-chart" />
+            <el-empty v-else description="当前筛选条件下暂无趋势数据" :image-size="80" />
+          </div>
+          <el-table :data="dailyTrends" class="trend-table">
+            <el-table-column label="日期" prop="date" />
+            <el-table-column label="客户数" prop="customerCount" />
+            <el-table-column label="拨打次数" prop="attemptCount" />
+            <el-table-column label="接听次数" prop="answeredCount" />
+            <el-table-column label="已接通" prop="connectedCount" />
+            <el-table-column label="接听率"><template #default="{ row }">{{ row.answerRate }}%</template></el-table-column>
+            <el-table-column label="接通率"><template #default="{ row }">{{ row.connectionRate }}%</template></el-table-column>
+          </el-table>
+        </el-tab-pane>
+      </el-tabs>
     </el-drawer>
     <CallCenterBusinessDetail v-model="customerDetail.visible" business-type="CUSTOMER" :business-id="customerDetail.id" />
   </div>
@@ -251,18 +314,22 @@
 
 <script setup name="OutboundTask" lang="ts">
 import {
-  addOutboundCustomers, claimNextOutboundMember, completeOutboundMember, confirmOutboundMemberImport, createOutboundTask, deleteOutboundTask, dialOutboundMember,
-  getOutboundTask, getOutboundTaskStatistics, listOutboundAttempts, listOutboundMembers, listOutboundTasks, pageOutboundAttempts, pauseOutboundTask, recoverExpiredOutboundMembers,
+  addOutboundCustomers, claimNextOutboundMember, completeOutboundMember, confirmOutboundMemberImport, createOutboundTask, deleteOutboundTask, dialOutboundMember, getCurrentAssignedOutboundMember,
+  getOutboundAgentSummary, getOutboundDailyTrend, getOutboundTask, getOutboundTaskStatistics, listOutboundAttempts, listOutboundMembers, listOutboundTasks, pageOutboundAttempts, pauseOutboundTask, recoverExpiredOutboundMembers,
   previewOutboundMemberImport, renewOutboundMemberLease, startOutboundTask, updateOutboundTask
 } from '@/api/callcenter/outbound-task';
-import { CompleteOutboundMemberForm, OutboundAttemptQuery, OutboundAttemptVO, OutboundImportBatchVO, OutboundMemberVO, OutboundTaskForm, OutboundTaskStatisticsVO, OutboundTaskStatus, OutboundTaskVO } from '@/api/callcenter/outbound-task/types';
+import { CompleteOutboundMemberForm, OutboundAgentSummaryVO, OutboundAttemptQuery, OutboundAttemptVO, OutboundDailyTrendVO, OutboundImportBatchVO, OutboundMemberVO, OutboundTaskForm, OutboundTaskStatisticsVO, OutboundTaskStatus, OutboundTaskVO } from '@/api/callcenter/outbound-task/types';
 import { CustomerQuery, CustomerVO, listCustomers } from '@/api/callcenter/customer';
+import { listAgents } from '@/api/callcenter/agent';
+import type { AgentVO } from '@/api/callcenter/agent/types';
 import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/index.vue';
 import type { UploadFile } from 'element-plus';
+import * as echarts from 'echarts';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const loading = ref(false);
 const tasks = ref<OutboundTaskVO[]>([]);
+const agentOptions = ref<AgentVO[]>([]);
 const taskFormRef = ref<ElFormInstance>();
 const taskDialog = reactive({ visible: false, title: '', id: undefined as string | number | undefined });
 const taskForm = reactive<OutboundTaskForm>({
@@ -272,7 +339,9 @@ const taskForm = reactive<OutboundTaskForm>({
   autoRetryEnabled: true,
   maxRetryCount: 2,
   retryIntervalMinutes: 30,
-  retryResultCodes: 'NO_ANSWER,BUSY,OTHER'
+  retryResultCodes: 'NO_ANSWER,BUSY,OTHER',
+  autoAssignDueRetry: false,
+  retryAssigneeAgentId: undefined
 });
 const retryResultCodeValues = computed({
   get: () => taskForm.retryResultCodes ? taskForm.retryResultCodes.split(',').filter(Boolean) : [],
@@ -302,8 +371,12 @@ const customerDetail = reactive({ visible: false, id: undefined as string | numb
 const statisticsDialog = reactive({ visible: false, loading: false, task: undefined as OutboundTaskVO | undefined, data: undefined as OutboundTaskStatisticsVO | undefined });
 const attemptDrawer = reactive({ visible: false, loading: false, member: undefined as OutboundMemberVO | undefined });
 const attempts = ref<OutboundAttemptVO[]>([]);
-const reportDrawer = reactive({ visible: false, loading: false, task: undefined as OutboundTaskVO | undefined });
+const reportDrawer = reactive({ visible: false, loading: false, tab: 'detail', task: undefined as OutboundTaskVO | undefined });
 const reportAttempts = ref<OutboundAttemptVO[]>([]);
+const agentSummaries = ref<OutboundAgentSummaryVO[]>([]);
+const dailyTrends = ref<OutboundDailyTrendVO[]>([]);
+const trendChartRef = ref<HTMLElement>();
+let trendChart: echarts.ECharts | undefined;
 const reportTotal = ref(0);
 const reportDateRange = ref<[string, string]>();
 const reportQuery = reactive<OutboundAttemptQuery>({ pageNum: 1, pageSize: 10 });
@@ -344,15 +417,33 @@ const statisticsCards = computed(() => {
 });
 const resultDistributionRows = computed(() => Object.entries(statisticsDialog.data?.resultDistribution || {})
   .map(([code, count]) => ({ code, label: resultLabel(code), count })));
+const trendOverviewCards = computed(() => {
+  const attempts = dailyTrends.value.reduce((total, item) => total + item.attemptCount, 0);
+  const answered = dailyTrends.value.reduce((total, item) => total + item.answeredCount, 0);
+  const connected = dailyTrends.value.reduce((total, item) => total + item.connectedCount, 0);
+  const customers = dailyTrends.value.reduce((total, item) => total + item.customerCount, 0);
+  return [
+    { label: '累计拨打', value: attempts, description: `${dailyTrends.value.length} 个统计日`, tone: 'primary' },
+    { label: '累计接听', value: answered, description: `接听率 ${attempts ? Math.round(answered * 10000 / attempts) / 100 : 0}%`, tone: 'success' },
+    { label: '业务接通', value: connected, description: `接通率 ${attempts ? Math.round(connected * 10000 / attempts) / 100 : 0}%`, tone: 'connected' },
+    { label: '覆盖客户', value: customers, description: '按日客户数累计', tone: 'customer' }
+  ];
+});
 const progress = (row: OutboundTaskVO) => row.totalCount ? Math.round(row.completedCount * 100 / row.totalCount) : 0;
+const compactScheduleSummary = (summary?: string) => summary
+  ? `本次：${summary.replace(/到期重呼=\d+，?/, '').replaceAll('，', ' · ')}`
+  : '等待首次调度';
 const resetTaskForm = () => Object.assign(taskForm, {
   taskCode: '', taskName: '', description: '', autoRetryEnabled: true, maxRetryCount: 2,
-  retryIntervalMinutes: 30, retryResultCodes: 'NO_ANSWER,BUSY,OTHER', version: undefined
+  retryIntervalMinutes: 30, retryResultCodes: 'NO_ANSWER,BUSY,OTHER',
+  autoAssignDueRetry: false, retryAssigneeAgentId: undefined, version: undefined
 });
 const resetResult = () => Object.assign(resultForm, { resultCode: 'CONNECTED', resultRemark: '', nextFollowUpAt: undefined, retry: false });
 const load = async () => { loading.value = true; try { tasks.value = (await listOutboundTasks()).data; } finally { loading.value = false; } };
-const handleAdd = () => { resetTaskForm(); taskDialog.id = undefined; taskDialog.title = '新增预览式外呼任务'; taskDialog.visible = true; };
-const handleUpdate = async (row: OutboundTaskVO) => { resetTaskForm(); Object.assign(taskForm, (await getOutboundTask(row.id)).data); taskDialog.id = row.id; taskDialog.title = '修改预览式外呼任务'; taskDialog.visible = true; };
+const refreshTasksQuietly = async () => { tasks.value = (await listOutboundTasks()).data; };
+const loadAgentOptions = async () => { agentOptions.value = (await listAgents({ pageNum: 1, pageSize: 1000, enabled: true })).rows; };
+const handleAdd = async () => { resetTaskForm(); await loadAgentOptions(); taskDialog.id = undefined; taskDialog.title = '新增预览式外呼任务'; taskDialog.visible = true; };
+const handleUpdate = async (row: OutboundTaskVO) => { resetTaskForm(); await loadAgentOptions(); Object.assign(taskForm, (await getOutboundTask(row.id)).data); taskDialog.id = row.id; taskDialog.title = '修改预览式外呼任务'; taskDialog.visible = true; };
 const submitTask = () => taskFormRef.value?.validate(async (valid) => { if (!valid) return; taskDialog.id ? await updateOutboundTask(taskDialog.id, taskForm) : await createOutboundTask(taskForm); proxy?.$modal.msgSuccess('保存成功'); taskDialog.visible = false; await load(); });
 const handleDelete = async (row: OutboundTaskVO) => { await proxy?.$modal.confirm(`确认删除外呼任务“${row.taskName}”吗？`); await deleteOutboundTask(row.id); proxy?.$modal.msgSuccess('删除成功'); await load(); };
 const changeTaskStatus = async (row: OutboundTaskVO, start: boolean) => { start ? await startOutboundTask(row.id) : await pauseOutboundTask(row.id); proxy?.$modal.msgSuccess(start ? '任务已开始' : '任务已暂停'); await load(); };
@@ -381,12 +472,102 @@ const loadReport = async () => {
     reportTotal.value = response.total;
   } finally { reportDrawer.loading = false; }
 };
-const showReport = async (row: OutboundTaskVO) => { reportDrawer.task = row; reportDrawer.visible = true; await loadReport(); };
-const queryReport = async () => { reportQuery.pageNum = 1; await loadReport(); };
+const reportParams = () => ({ ...reportQuery, startedAtBegin: reportDateRange.value?.[0], startedAtEnd: reportDateRange.value?.[1] });
+const loadAgentSummary = async () => { reportDrawer.loading = true; try { agentSummaries.value = (await getOutboundAgentSummary(reportParams())).data; } finally { reportDrawer.loading = false; } };
+const loadDailyTrend = async () => {
+  reportDrawer.loading = true;
+  try {
+    dailyTrends.value = (await getOutboundDailyTrend(reportParams())).data;
+    await nextTick();
+    renderTrendChart();
+  } finally { reportDrawer.loading = false; }
+};
+const renderTrendChart = () => {
+  if (!trendChartRef.value) return;
+  trendChart?.dispose();
+  trendChart = echarts.init(trendChartRef.value);
+  trendChart.setOption({
+    color: ['#053b70', '#18a981', '#55c99f'],
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(17, 32, 55, 0.94)',
+      borderWidth: 0,
+      padding: [10, 14],
+      textStyle: { color: '#fff', fontSize: 12 },
+      axisPointer: { type: 'line', lineStyle: { color: '#a9bad0', type: 'dashed' } }
+    },
+    grid: { left: 42, right: 20, top: 24, bottom: 34, containLabel: true },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: dailyTrends.value.map((item) => item.date.slice(5)),
+      axisLine: { lineStyle: { color: '#dfe6ef' } },
+      axisTick: { show: false },
+      axisLabel: { color: '#8491a5', margin: 14 }
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { color: '#8491a5' },
+      splitLine: { lineStyle: { color: '#edf1f6', type: 'dashed' } }
+    },
+    series: [
+      {
+        name: '拨打次数',
+        type: 'line',
+        smooth: 0.35,
+        symbol: 'circle',
+        symbolSize: 7,
+        showSymbol: false,
+        lineStyle: { width: 3, color: '#053b70' },
+        itemStyle: { color: '#053b70', borderColor: '#fff', borderWidth: 2 },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(5, 59, 112, 0.24)' },
+            { offset: 1, color: 'rgba(5, 59, 112, 0.01)' }
+          ])
+        },
+        data: dailyTrends.value.map((item) => item.attemptCount)
+      },
+      {
+        name: '接听次数',
+        type: 'line',
+        smooth: 0.35,
+        symbol: 'circle',
+        symbolSize: 6,
+        showSymbol: false,
+        lineStyle: { width: 2.5, color: '#18a981' },
+        itemStyle: { color: '#18a981' },
+        data: dailyTrends.value.map((item) => item.answeredCount)
+      },
+      {
+        name: '已接通',
+        type: 'line',
+        smooth: 0.35,
+        symbol: 'circle',
+        symbolSize: 6,
+        showSymbol: false,
+        lineStyle: { width: 2, color: '#55c99f', type: 'dashed' },
+        itemStyle: { color: '#55c99f' },
+        data: dailyTrends.value.map((item) => item.connectedCount)
+      }
+    ]
+  });
+};
+const disposeTrendChart = () => { trendChart?.dispose(); trendChart = undefined; };
+const handleReportTabChange = async (tab: string | number) => { if (tab === 'agent') await loadAgentSummary(); else if (tab === 'trend') await loadDailyTrend(); else await loadReport(); };
+const showReport = async (row: OutboundTaskVO) => { reportDrawer.task = row; reportDrawer.tab = 'detail'; reportDrawer.visible = true; await loadReport(); };
+const queryReport = async () => { reportQuery.pageNum = 1; await handleReportTabChange(reportDrawer.tab); };
 const resetReport = async () => {
   Object.assign(reportQuery, { pageNum: 1, pageSize: 10, taskId: reportDrawer.task?.id, agentId: undefined, phoneNumber: '', resultCode: undefined, suggestedResultCode: undefined, hangupCause: '' });
   reportDateRange.value = undefined;
-  await loadReport();
+  await handleReportTabChange(reportDrawer.tab);
+};
+const exportReport = () => {
+  if (!reportDrawer.task) return;
+  proxy?.download('api/v1/outbound-tasks/attempts/export', reportParams(), `${reportDrawer.task.taskName}_外呼拨打明细_${Date.now()}.xlsx`);
 };
 const durationLabel = (seconds?: number) => seconds == null ? '-' : `${seconds}秒`;
 const recoverExpired = async (row: OutboundTaskVO) => {
@@ -503,6 +684,21 @@ const completeCurrent = async () => {
 };
 let leaseRenewTimer: ReturnType<typeof setInterval> | undefined;
 let suggestionTimer: ReturnType<typeof setInterval> | undefined;
+let assignmentTimer: ReturnType<typeof setInterval> | undefined;
+let taskRefreshTimer: ReturnType<typeof setInterval> | undefined;
+const checkCurrentAssignment = async () => {
+  if (workbench.visible) return;
+  const member = (await getCurrentAssignedOutboundMember()).data;
+  if (!member) return;
+  if (!tasks.value.some((item) => String(item.id) === String(member.taskId))) await load();
+  workbench.task = tasks.value.find((item) => String(item.id) === String(member.taskId));
+  workbench.member = member;
+  workbench.suggestedResultLabel = '';
+  resetResult();
+  resultTouched.value = false;
+  workbench.visible = true;
+  proxy?.$modal.msgSuccess('到期重呼名单已自动分配，请确认客户资料后拨打');
+};
 const renewCurrentMemberLease = async () => {
   if (!workbench.visible || !workbench.member || !['CLAIMED', 'DIALING'].includes(workbench.member.status)) return;
   try {
@@ -515,16 +711,24 @@ onMounted(() => {
   load();
   leaseRenewTimer = setInterval(renewCurrentMemberLease, 5 * 60 * 1000);
   suggestionTimer = setInterval(refreshCurrentAttemptSuggestion, 5 * 1000);
+  assignmentTimer = setInterval(checkCurrentAssignment, 10 * 1000);
+  taskRefreshTimer = setInterval(refreshTasksQuietly, 15 * 1000);
+  checkCurrentAssignment();
 });
 onBeforeUnmount(() => {
   if (leaseRenewTimer) clearInterval(leaseRenewTimer);
   if (suggestionTimer) clearInterval(suggestionTimer);
+  if (assignmentTimer) clearInterval(assignmentTimer);
+  if (taskRefreshTimer) clearInterval(taskRefreshTimer);
 });
 </script>
 
 <style scoped>
 .card-header { display: flex; align-items: center; justify-content: space-between; }
 .description, .progress-text { margin-top: 6px; color: var(--el-text-color-secondary); font-size: 12px; }
+.schedule-status { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; }
+.schedule-summary { max-width: 190px; overflow: hidden; color: var(--el-text-color-secondary); font-size: 12px; text-overflow: ellipsis; }
+.schedule-time { color: var(--el-text-color-placeholder); font-size: 12px; }
 .form-tip { margin-left: 8px; color: var(--el-text-color-secondary); font-size: 12px; }
 .member-toolbar { margin-bottom: 14px; }
 .import-actions { display: flex; align-items: flex-start; gap: 10px; margin: 18px 0; }
@@ -538,4 +742,27 @@ onBeforeUnmount(() => {
 .statistics-card { display: flex; flex-direction: column; gap: 8px; padding: 16px; border: 1px solid var(--el-border-color-light); border-radius: 8px; background: var(--el-fill-color-light); }
 .statistics-card span { color: var(--el-text-color-secondary); font-size: 13px; }
 .statistics-card strong { color: var(--el-color-primary); font-size: 24px; }
+.trend-overview { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.trend-overview-card { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; overflow: hidden; border: 1px solid #e7edf5; border-radius: 12px; background: #fff; }
+.trend-overview-card::after { position: absolute; top: 0; right: 0; width: 52px; height: 52px; border-radius: 0 0 0 52px; content: ''; opacity: .12; background: currentColor; }
+.trend-overview-card span { color: #778196; font-size: 12px; }
+.trend-overview-card strong { color: #172033; font-size: 25px; line-height: 1.1; }
+.trend-overview-card small { color: #8993a6; font-size: 11px; }
+.trend-overview-card.primary { color: #053b70; }
+.trend-overview-card.success { color: #18a981; }
+.trend-overview-card.connected { color: #55c99f; }
+.trend-overview-card.customer { color: #7c65c1; }
+.trend-panel { padding: 18px 18px 8px; margin-bottom: 16px; border: 1px solid #e7edf5; border-radius: 14px; background: linear-gradient(180deg, #fff, #fbfcfe); box-shadow: 0 5px 18px rgba(28, 48, 78, .04); }
+.trend-panel-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 0 2px 8px; }
+.trend-panel-header > div:first-child { display: grid; gap: 4px; }
+.trend-panel-header strong { color: #172033; font-size: 15px; }
+.trend-panel-header span { color: #8a95a8; font-size: 11px; }
+.trend-legend { display: flex; align-items: center; gap: 8px; color: #778196; font-size: 11px; }
+.trend-legend span { width: 18px; height: 3px; border-radius: 3px; }
+.trend-legend .attempt { background: #053b70; }
+.trend-legend .answered { background: #18a981; }
+.trend-legend .connected { background: #55c99f; }
+.trend-chart { width: 100%; height: 330px; }
+.trend-table { overflow: hidden; border: 1px solid #e7edf5; border-radius: 12px; }
+@media (max-width: 1100px) { .trend-overview { grid-template-columns: repeat(2, 1fr); } }
 </style>

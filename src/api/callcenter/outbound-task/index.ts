@@ -1,16 +1,30 @@
 import request from '@/utils/request';
-import { AddOutboundMembersResult, CompleteOutboundMemberForm, OutboundAttemptQuery, OutboundAttemptVO, OutboundImportBatchVO, OutboundMemberVO, OutboundTaskForm, OutboundTaskStatisticsVO, OutboundTaskVO } from './types';
+import {
+  AddOutboundMembersResult,
+  CompleteOutboundMemberForm,
+  OutboundAgentSummaryVO,
+  OutboundAttemptQuery,
+  OutboundAttemptVO,
+  OutboundDailyTrendVO,
+  OutboundImportBatchVO,
+  OutboundMemberVO,
+  OutboundTaskForm,
+  OutboundTaskStatisticsVO,
+  OutboundTaskVO
+} from './types';
 
 export const listOutboundTasks = () => request<OutboundTaskVO[]>({ url: '/api/v1/outbound-tasks', method: 'get' });
 export const getOutboundTask = (id: string | number) => request<OutboundTaskVO>({ url: `/api/v1/outbound-tasks/${id}`, method: 'get' });
 export const createOutboundTask = (data: OutboundTaskForm) => request<string | number>({ url: '/api/v1/outbound-tasks', method: 'post', data });
-export const updateOutboundTask = (id: string | number, data: OutboundTaskForm) => request({ url: `/api/v1/outbound-tasks/${id}`, method: 'put', data });
+export const updateOutboundTask = (id: string | number, data: OutboundTaskForm) =>
+  request({ url: `/api/v1/outbound-tasks/${id}`, method: 'put', data });
 export const deleteOutboundTask = (id: string | number) => request({ url: `/api/v1/outbound-tasks/${id}`, method: 'delete' });
 export const startOutboundTask = (id: string | number) => request({ url: `/api/v1/outbound-tasks/${id}/start`, method: 'post' });
 export const pauseOutboundTask = (id: string | number) => request({ url: `/api/v1/outbound-tasks/${id}/pause`, method: 'post' });
 export const addOutboundCustomers = (id: string | number, customerIds: Array<string | number>) =>
   request<AddOutboundMembersResult>({ url: `/api/v1/outbound-tasks/${id}/members`, method: 'post', data: { customerIds } });
-export const listOutboundMembers = (id: string | number) => request<OutboundMemberVO[]>({ url: `/api/v1/outbound-tasks/${id}/members`, method: 'get' });
+export const listOutboundMembers = (id: string | number) =>
+  request<OutboundMemberVO[]>({ url: `/api/v1/outbound-tasks/${id}/members`, method: 'get' });
 export const previewOutboundMemberImport = (id: string | number, file: File) => {
   const data = new FormData();
   data.append('file', file);
@@ -22,12 +36,25 @@ export const confirmOutboundMemberImport = (id: string | number, batchId: string
     method: 'post',
     data: { autoCreateCustomer }
   });
-export const listOutboundAttempts = (memberId: string | number) => request<OutboundAttemptVO[]>({ url: `/api/v1/outbound-tasks/members/${memberId}/attempts`, method: 'get' });
-export const pageOutboundAttempts = (query: OutboundAttemptQuery) => request<OutboundAttemptVO[]>({ url: '/api/v1/outbound-tasks/attempts/page', method: 'get', params: query });
-export const getOutboundTaskStatistics = (id: string | number) => request<OutboundTaskStatisticsVO>({ url: `/api/v1/outbound-tasks/${id}/statistics`, method: 'get' });
-export const recoverExpiredOutboundMembers = (id: string | number) => request<number>({ url: `/api/v1/outbound-tasks/${id}/recover-expired`, method: 'post' });
-export const claimNextOutboundMember = (id: string | number) => request<OutboundMemberVO>({ url: `/api/v1/outbound-tasks/${id}/claim-next`, method: 'post' });
-export const renewOutboundMemberLease = (memberId: string | number) => request<OutboundMemberVO>({ url: `/api/v1/outbound-tasks/members/${memberId}/renew-lease`, method: 'post' });
-export const dialOutboundMember = (memberId: string | number) => request<OutboundMemberVO>({ url: `/api/v1/outbound-tasks/members/${memberId}/dial`, method: 'post' });
+export const listOutboundAttempts = (memberId: string | number) =>
+  request<OutboundAttemptVO[]>({ url: `/api/v1/outbound-tasks/members/${memberId}/attempts`, method: 'get' });
+export const pageOutboundAttempts = (query: OutboundAttemptQuery) =>
+  request<OutboundAttemptVO[]>({ url: '/api/v1/outbound-tasks/attempts/page', method: 'get', params: query });
+export const getOutboundAgentSummary = (query: OutboundAttemptQuery) =>
+  request<OutboundAgentSummaryVO[]>({ url: '/api/v1/outbound-tasks/attempts/agent-summary', method: 'get', params: query });
+export const getOutboundDailyTrend = (query: OutboundAttemptQuery) =>
+  request<OutboundDailyTrendVO[]>({ url: '/api/v1/outbound-tasks/attempts/daily-trend', method: 'get', params: query });
+export const getOutboundTaskStatistics = (id: string | number) =>
+  request<OutboundTaskStatisticsVO>({ url: `/api/v1/outbound-tasks/${id}/statistics`, method: 'get' });
+export const recoverExpiredOutboundMembers = (id: string | number) =>
+  request<number>({ url: `/api/v1/outbound-tasks/${id}/recover-expired`, method: 'post' });
+export const claimNextOutboundMember = (id: string | number) =>
+  request<OutboundMemberVO>({ url: `/api/v1/outbound-tasks/${id}/claim-next`, method: 'post' });
+export const getCurrentAssignedOutboundMember = () =>
+  request<OutboundMemberVO | null>({ url: '/api/v1/outbound-tasks/members/current-assigned', method: 'get' });
+export const renewOutboundMemberLease = (memberId: string | number) =>
+  request<OutboundMemberVO>({ url: `/api/v1/outbound-tasks/members/${memberId}/renew-lease`, method: 'post' });
+export const dialOutboundMember = (memberId: string | number) =>
+  request<OutboundMemberVO>({ url: `/api/v1/outbound-tasks/members/${memberId}/dial`, method: 'post' });
 export const completeOutboundMember = (memberId: string | number, data: CompleteOutboundMemberForm) =>
   request({ url: `/api/v1/outbound-tasks/members/${memberId}/complete`, method: 'post', data });

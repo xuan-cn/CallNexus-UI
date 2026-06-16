@@ -1,4 +1,4 @@
-export type IvrNodeType = 'START' | 'PLAYBACK' | 'DTMF' | 'EXTENSION' | 'QUEUE' | 'HANGUP';
+export type IvrNodeType = 'START' | 'PLAYBACK' | 'DTMF' | 'EXTENSION' | 'QUEUE' | 'BUSINESS_HOURS' | 'VOICEMAIL' | 'HANGUP';
 
 export interface IvrNode {
   id: string;
@@ -11,6 +11,8 @@ export interface IvrNode {
     mediaId?: string | number;
     extension?: string;
     queueId?: string | number;
+    planId?: string | number;
+    boxId?: string | number;
   };
 }
 

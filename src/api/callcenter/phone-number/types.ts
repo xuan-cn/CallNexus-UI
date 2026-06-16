@@ -1,5 +1,14 @@
 export type PhoneNumberType = 'DID' | 'CALLER_ID' | 'BOTH';
-export type PhoneRouteType = 'NONE' | 'EXTENSION' | 'IVR' | 'QUEUE';
+export type PhoneRouteType = 'NONE' | 'EXTENSION' | 'IVR' | 'QUEUE' | 'VOICEMAIL' | 'BUSINESS_HOURS';
+export type BusinessHoursTargetType = 'EXTENSION' | 'IVR' | 'QUEUE' | 'VOICEMAIL' | 'HANGUP';
+export interface PhoneBusinessHoursRoute {
+  id?: string | number;
+  planId?: string | number;
+  inHoursTargetType: BusinessHoursTargetType;
+  inHoursTarget?: string;
+  outHoursTargetType: BusinessHoursTargetType;
+  outHoursTarget?: string;
+}
 
 export interface PhoneNumberVO {
   id: string | number;
@@ -16,6 +25,7 @@ export interface PhoneNumberVO {
   enabled: boolean;
   version: number;
   createTime: string;
+  businessHoursRoute?: PhoneBusinessHoursRoute;
 }
 
 export interface PhoneNumberForm {
@@ -30,6 +40,7 @@ export interface PhoneNumberForm {
   outboundDefault: boolean;
   enabled: boolean;
   version?: number;
+  businessHoursRoute: PhoneBusinessHoursRoute;
 }
 
 export interface PhoneNumberQuery extends PageQuery {

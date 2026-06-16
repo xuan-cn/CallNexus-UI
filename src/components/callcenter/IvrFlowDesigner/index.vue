@@ -47,6 +47,8 @@
               :model-value="selectedNode.config[property.key]"
               :media-options="mediaOptions"
               :queue-options="queueOptions"
+              :business-hours-options="businessHoursOptions"
+              :voicemail-options="voicemailOptions"
               :placeholder="property.placeholder"
               @update:model-value="updateNodeProperty(property.key, $event)"
             />
@@ -59,7 +61,11 @@
         <div class="property-title">连线配置</div>
         <el-form label-position="top">
           <el-form-item v-if="sourceDefinition.edgeSchema" :label="sourceDefinition.edgeSchema.label">
-            <el-input
+            <el-select v-if="sourceDefinition.edgeSchema.component === 'BUSINESS_HOURS_BRANCH'" v-model="selectedEdge.condition" style="width: 100%" @change="updateSelectedEdge">
+              <el-option label="工作时间内" value="IN_HOURS" />
+              <el-option label="工作时间外" value="OUT_OF_HOURS" />
+            </el-select>
+            <el-input v-else
               v-model="selectedEdge.condition"
               maxlength="1"
               :placeholder="sourceDefinition.edgeSchema.placeholder"
@@ -81,13 +87,17 @@ import '@logicflow/core/lib/index.css';
 import { IvrEdge, IvrGraph, IvrNode, IvrNodeType } from '@/api/callcenter/ivr-flow/types';
 import { MediaAssetVO } from '@/api/callcenter/media-asset/types';
 import { CallQueueVO } from '@/api/callcenter/call-queue/types';
+import type { BusinessHoursPlan } from '@/api/callcenter/business-hours/types';
+import type { VoiceMailBoxVO } from '@/api/callcenter/voicemail/types';
 import { getIvrNodeDefinition, IvrNodeDefinition, ivrPaletteDefinitions } from './nodeRegistry';
 import { getIvrPropertyEditor } from './propertyEditors';
 
 const props = withDefaults(
-  defineProps<{ modelValue: IvrGraph; mediaOptions: MediaAssetVO[]; queueOptions?: CallQueueVO[]; readonly?: boolean }>(),
+  defineProps<{ modelValue: IvrGraph; mediaOptions: MediaAssetVO[]; queueOptions?: CallQueueVO[]; businessHoursOptions?: BusinessHoursPlan[]; voicemailOptions?: VoiceMailBoxVO[]; readonly?: boolean }>(),
   {
     queueOptions: () => [],
+    businessHoursOptions: () => [],
+    voicemailOptions: () => [],
     readonly: false
   }
 );
@@ -169,21 +179,31 @@ const readGraph = (): IvrGraph => {
     })),
     edges: raw.edges.map((edge: any) => ({
       id: edge.id,
-      source: edge.sourceNodeId,
-      target: edge.targetNodeId,
+      source: edge.sourceNodeId || edge.sourceNode?.id || edge.source,
+      target: edge.targetNodeId || edge.targetNode?.id || edge.target,
       condition: edge.properties?.condition || edge.text?.value || edge.text || ''
     }))
   };
 };
 
 const syncGraph = () => emit('update:modelValue', readGraph());
+const toIvrEdge = (data: any): IvrEdge | undefined => {
+  if (!data?.id) return undefined;
+  const graphEdge = readGraph().edges.find((item) => item.id === data.id);
+  return {
+    id: data.id,
+    source: graphEdge?.source || data.sourceNodeId || data.sourceNode?.id || data.source,
+    target: graphEdge?.target || data.targetNodeId || data.targetNode?.id || data.target,
+    condition: graphEdge?.condition || data.properties?.condition || data.text?.value || data.text || ''
+  };
+};
 const selectNode = (id: string) => {
   const node = readGraph().nodes.find((item) => item.id === id);
   selectedNode.value = node ? reactive(node) : undefined;
   selectedEdge.value = undefined;
 };
-const selectEdge = (id: string) => {
-  const edge = readGraph().edges.find((item) => item.id === id);
+const selectEdge = (id: string, data?: any) => {
+  const edge = data ? toIvrEdge(data) : readGraph().edges.find((item) => item.id === id);
   selectedEdge.value = edge ? reactive(edge) : undefined;
   selectedNode.value = undefined;
 };
@@ -206,8 +226,13 @@ const updateNodeProperty = (key: string, value: string | number) => {
 };
 const updateSelectedEdge = () => {
   if (!lf || !selectedEdge.value) return;
-  lf.updateText(selectedEdge.value.id, selectedEdge.value.condition || '');
-  lf.setProperties(selectedEdge.value.id, { condition: selectedEdge.value.condition || '' });
+  let condition = selectedEdge.value.condition || '';
+  if (sourceDefinition.value.edgeSchema?.component === 'DTMF_DIGIT') {
+    condition = condition.replace(/\D/g, '').slice(0, 1);
+    selectedEdge.value.condition = condition;
+  }
+  lf.updateText(selectedEdge.value.id, condition);
+  lf.setProperties(selectedEdge.value.id, { condition });
   syncGraph();
 };
 const removeSelection = () => {
@@ -249,10 +274,10 @@ const initialize = async () => {
     polyline: { stroke: '#91a4bd', strokeWidth: 2 },
     anchor: { fill: '#ffffff', stroke: '#053b70', r: 4 },
     nodeText: { color: '#303133', fontSize: 14 },
-    edgeText: { color: '#e6a23c', fontSize: 13 }
+    edgeText: { color: '#e6a23c', fontSize: 13, textWidth: 80 }
   });
   lf.on('node:click', ({ data }: any) => selectNode(data.id));
-  lf.on('edge:click', ({ data }: any) => selectEdge(data.id));
+  lf.on('edge:click', ({ data }: any) => selectEdge(data.id, data));
   lf.on('blank:click', () => {
     selectedNode.value = undefined;
     selectedEdge.value = undefined;
@@ -265,7 +290,11 @@ const initialize = async () => {
     selectedEdge.value = undefined;
     syncGraph();
   });
-  lf.on('node:add,node:drop,edge:add', syncGraph);
+  lf.on('node:add,node:drop', syncGraph);
+  lf.on('edge:add', ({ data }: any) => {
+    syncGraph();
+    selectEdge(data.id, data);
+  });
   lf.render(toLogicFlowData(props.modelValue));
   lf.fitView(40, 40);
 };

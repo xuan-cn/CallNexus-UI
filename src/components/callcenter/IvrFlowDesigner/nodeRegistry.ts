@@ -1,7 +1,7 @@
 import type { IvrNodeType } from '@/api/callcenter/ivr-flow/types';
 
-export type IvrPropertyEditorType = 'MEDIA_SELECT' | 'EXTENSION_INPUT' | 'QUEUE_SELECT';
-export type IvrEdgeEditorType = 'DTMF_DIGIT';
+export type IvrPropertyEditorType = 'MEDIA_SELECT' | 'EXTENSION_INPUT' | 'QUEUE_SELECT' | 'BUSINESS_HOURS_SELECT' | 'VOICEMAIL_SELECT';
+export type IvrEdgeEditorType = 'DTMF_DIGIT' | 'BUSINESS_HOURS_BRANCH';
 
 export interface IvrPropertyDefinition {
   key: string;
@@ -86,6 +86,22 @@ const definitions: IvrNodeDefinition[] = [
         required: true
       }
     ]
+  },
+  {
+    type: 'BUSINESS_HOURS',
+    label: '工作时间判断',
+    color: '#0f766e',
+    description: '根据工作时间方案选择时间内或时间外分支',
+    propertySchema: [{ key: 'planId', label: '工作时间方案', component: 'BUSINESS_HOURS_SELECT', required: true }],
+    edgeSchema: { label: '分支', component: 'BUSINESS_HOURS_BRANCH', required: true }
+  },
+  {
+    type: 'VOICEMAIL',
+    label: '语音留言',
+    color: '#8b5cf6',
+    description: '播放提示音并录制客户留言',
+    terminal: true,
+    propertySchema: [{ key: 'boxId', label: '留言箱', component: 'VOICEMAIL_SELECT', required: true }]
   },
   {
     type: 'HANGUP',
