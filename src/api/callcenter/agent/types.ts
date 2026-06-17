@@ -4,6 +4,9 @@ export interface AgentVO {
   agentName: string;
   userId?: string | number;
   sipAccountId?: string | number;
+  sipExtension?: string;
+  sipDisplayName?: string;
+  sipDomain?: string;
   enabled: boolean;
   version: number;
   createTime: string;

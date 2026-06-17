@@ -77,7 +77,7 @@
           <el-form-item label="自动分配"><el-switch v-model="taskForm.autoAssignDueRetry" /></el-form-item>
           <el-form-item v-if="taskForm.autoAssignDueRetry" label="指定坐席">
             <el-select v-model="taskForm.retryAssigneeAgentId" filterable style="width: 100%" placeholder="选择到期后自动分配的坐席">
-              <el-option v-for="agent in agentOptions" :key="agent.id" :label="`${agent.agentName}（${agent.agentCode}）`" :value="agent.id" />
+              <el-option v-for="agent in agentOptions" :key="agent.id" :label="agentOptionLabel(agent)" :value="agent.id" />
             </el-select>
             <span class="form-tip">仅在坐席已签入示闲且没有活动外呼名单时自动分配。</span>
           </el-form-item>
@@ -442,6 +442,11 @@ const resetResult = () => Object.assign(resultForm, { resultCode: 'CONNECTED', r
 const load = async () => { loading.value = true; try { tasks.value = (await listOutboundTasks()).data; } finally { loading.value = false; } };
 const refreshTasksQuietly = async () => { tasks.value = (await listOutboundTasks()).data; };
 const loadAgentOptions = async () => { agentOptions.value = (await listAgents({ pageNum: 1, pageSize: 1000, enabled: true })).rows; };
+const agentOptionLabel = (agent: AgentVO) => {
+  const extension = agent.sipExtension ? '\u5206\u673a ' + agent.sipExtension : '\u672a\u7ed1\u5b9a\u5206\u673a';
+  const userId = agent.userId ? '\u7528\u6237ID ' + agent.userId : '\u672a\u7ed1\u5b9a\u7528\u6237';
+  return agent.agentName + '\uff08' + agent.agentCode + '\uff0c\u5750\u5e2dID ' + agent.id + '\uff0c' + extension + '\uff0c' + userId + '\uff09';
+};
 const handleAdd = async () => { resetTaskForm(); await loadAgentOptions(); taskDialog.id = undefined; taskDialog.title = '新增预览式外呼任务'; taskDialog.visible = true; };
 const handleUpdate = async (row: OutboundTaskVO) => { resetTaskForm(); await loadAgentOptions(); Object.assign(taskForm, (await getOutboundTask(row.id)).data); taskDialog.id = row.id; taskDialog.title = '修改预览式外呼任务'; taskDialog.visible = true; };
 const submitTask = () => taskFormRef.value?.validate(async (valid) => { if (!valid) return; taskDialog.id ? await updateOutboundTask(taskDialog.id, taskForm) : await createOutboundTask(taskForm); proxy?.$modal.msgSuccess('保存成功'); taskDialog.visible = false; await load(); });
@@ -691,7 +696,9 @@ const checkCurrentAssignment = async () => {
   const member = (await getCurrentAssignedOutboundMember()).data;
   if (!member) return;
   if (!tasks.value.some((item) => String(item.id) === String(member.taskId))) await load();
-  workbench.task = tasks.value.find((item) => String(item.id) === String(member.taskId));
+  const task = tasks.value.find((item) => String(item.id) === String(member.taskId));
+  if (!isAutoAssignedDueRetryMember(task, member)) return;
+  workbench.task = task;
   workbench.member = member;
   workbench.suggestedResultLabel = '';
   resetResult();
@@ -699,6 +706,13 @@ const checkCurrentAssignment = async () => {
   workbench.visible = true;
   proxy?.$modal.msgSuccess('到期重呼名单已自动分配，请确认客户资料后拨打');
 };
+const isAutoAssignedDueRetryMember = (task: OutboundTaskVO | undefined, member: OutboundMemberVO) =>
+  Boolean(
+    task?.autoAssignDueRetry
+      && task.retryAssigneeAgentId
+      && member.claimedAgentId
+      && String(task.retryAssigneeAgentId) === String(member.claimedAgentId)
+  );
 const renewCurrentMemberLease = async () => {
   if (!workbench.visible || !workbench.member || !['CLAIMED', 'DIALING'].includes(workbench.member.status)) return;
   try {
