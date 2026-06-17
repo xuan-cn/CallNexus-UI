@@ -1,3 +1,5 @@
+import type { VoiceMailMessageVO } from '@/api/callcenter/voicemail/types';
+
 export type CallDirection = 'INBOUND' | 'OUTBOUND' | 'INTERNAL' | 'UNKNOWN';
 export type CallStatus = 'CREATED' | 'RINGING' | 'ANSWERED' | 'BRIDGED' | 'ENDED';
 
@@ -31,6 +33,7 @@ export interface CallRecordVO {
   recordingUrl?: string;
   legs?: CallLegVO[];
   events?: CallEventVO[];
+  voicemailMessages?: VoiceMailMessageVO[];
 }
 
 export interface CallLegVO {

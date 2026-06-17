@@ -110,10 +110,10 @@
             <span class="panel-kicker">需要关注</span>
             <h2>今日待办</h2>
           </div>
-          <el-button text type="primary">查看全部</el-button>
+          <el-button text type="primary" @click="openUnhandledVoiceMail">查看未处理</el-button>
         </div>
         <div class="todo-list">
-          <div v-for="todo in todos" :key="todo.title" class="todo-item">
+          <div v-for="todo in todos" :key="todo.title" class="todo-item" :class="{ 'is-action': todo.action }" @click="handleTodo(todo)">
             <span class="todo-icon" :class="todo.tone"
               ><el-icon><component :is="todo.icon" /></el-icon
             ></span>
@@ -163,13 +163,16 @@ import {
   UserFilled,
   Warning
 } from '@element-plus/icons-vue';
+import { listVoiceMailMessages } from '@/api/callcenter/voicemail';
 import { ElMessage } from 'element-plus';
-import type { Ref } from 'vue';
+import type { Component, Ref } from 'vue';
 
 // 获取 layout 提供的 agentToolbarRef
 const agentToolbarRef = inject<Ref<{ simulateIncomingCall: () => void } | null>>('agentToolbarRef');
+const router = useRouter();
 
 const currentDate = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date());
+const unhandledVoiceMailCount = ref(0);
 
 const metrics = [
   { label: '今日呼叫量', value: '1,286', change: '较昨日 +12.6%', positive: true, tone: 'blue', icon: Phone },
@@ -191,11 +194,31 @@ const services = [
   { name: 'WebSocket', description: '实时状态推送', state: '运行中', tone: 'purple', icon: SwitchButton }
 ];
 
-const todos = [
+type TodoAction = 'UNHANDLED_VOICEMAIL';
+type TodoItem = {
+  title: string;
+  description: string;
+  count: string;
+  tone: string;
+  tagType: 'success' | 'warning' | 'info' | 'primary' | 'danger';
+  icon: Component;
+  action?: TodoAction;
+};
+
+const todos = computed<TodoItem[]>(() => [
   { title: '未接来电待回拨', description: '最早一条等待 16 分钟', count: '8 条', tone: 'orange', tagType: 'warning' as const, icon: Phone },
+  {
+    title: '未处理语音留言',
+    description: unhandledVoiceMailCount.value > 0 ? '客户留言需要跟进处理' : '暂无待处理留言',
+    count: `${unhandledVoiceMailCount.value} 条`,
+    tone: 'purple',
+    tagType: unhandledVoiceMailCount.value > 0 ? 'warning' : 'info',
+    icon: Bell,
+    action: 'UNHANDLED_VOICEMAIL'
+  },
   { title: '异常呼叫待排查', description: '呼叫失败率出现波动', count: '3 条', tone: 'red', tagType: 'danger' as const, icon: Warning },
   { title: '坐席状态异常', description: '长时间处于话后处理状态', count: '2 人', tone: 'blue', tagType: 'primary' as const, icon: User }
-];
+]);
 
 const quickActions = [
   { label: '新建坐席', tone: 'blue', icon: Plus },
@@ -206,7 +229,29 @@ const quickActions = [
   { label: '运营报表', tone: 'green', icon: DataAnalysis }
 ];
 
-const refreshDashboard = () => ElMessage.success('首页数据已刷新');
+const loadUnhandledVoiceMailCount = async () => {
+  try {
+    const res = await listVoiceMailMessages({ pageNum: 1, pageSize: 1, status: 'UNHANDLED' });
+    unhandledVoiceMailCount.value = res.total || 0;
+  } catch (error) {
+    console.warn('加载未处理语音留言数量失败', error);
+  }
+};
+
+const openUnhandledVoiceMail = () => {
+  router.push({ path: '/callcenter/callcenter-routing/voicemail', query: { status: 'UNHANDLED' } });
+};
+
+const handleTodo = (todo: TodoItem) => {
+  if (todo.action === 'UNHANDLED_VOICEMAIL') {
+    openUnhandledVoiceMail();
+  }
+};
+
+const refreshDashboard = async () => {
+  await loadUnhandledVoiceMailCount();
+  ElMessage.success('首页数据已刷新');
+};
 const handleQuickAction = (label: string) => ElMessage.info(`${label}功能将在对应业务模块接入后开放`);
 const simulateIncomingCall = () => {
   if (agentToolbarRef?.value?.simulateIncomingCall) {
@@ -215,6 +260,10 @@ const simulateIncomingCall = () => {
     ElMessage.warning('坐席工具栏未就绪');
   }
 };
+
+onMounted(() => {
+  loadUnhandledVoiceMailCount();
+});
 </script>
 
 <style lang="scss" scoped>
@@ -501,6 +550,16 @@ const simulateIncomingCall = () => {
   min-height: 50px;
   padding-bottom: 11px;
   border-bottom: 1px solid #f0f3f7;
+}
+.todo-item.is-action {
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease;
+}
+.todo-item.is-action:hover {
+  background: #f7faff;
+  transform: translateX(2px);
 }
 .service-item:last-child,
 .todo-item:last-child {

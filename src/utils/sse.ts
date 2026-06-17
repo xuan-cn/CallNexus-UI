@@ -1,6 +1,7 @@
 import { getToken } from '@/utils/auth';
 import { ElNotification } from 'element-plus';
 import { useNoticeStore } from '@/store/modules/notice';
+import { dispatchCallEvent } from '@/utils/websocket';
 
 let initialized = false;
 
@@ -29,6 +30,15 @@ export const initSSE = (url: any) => {
 
   watch(data, () => {
     if (!data.value) return;
+    try {
+      const event = JSON.parse(data.value) as Record<string, unknown>;
+      if (dispatchCallEvent(event, 'SSE')) {
+        data.value = null;
+        return;
+      }
+    } catch {
+      // 非 JSON 消息继续按普通通知处理。
+    }
     useNoticeStore().addNotice({
       message: data.value,
       read: false,

@@ -21,6 +21,7 @@
             </el-form-item>
             <el-form-item>
               <el-button type="primary" icon="Search" @click="loadMessages">查询</el-button>
+              <el-button type="warning" plain @click="filterUnhandledMessages">未处理留言</el-button>
               <el-button icon="Refresh" @click="resetMessageQuery">重置</el-button>
             </el-form-item>
           </el-form>
@@ -33,6 +34,22 @@
             </el-table-column>
             <el-table-column label="主叫号码" prop="callerNumber" min-width="130" />
             <el-table-column label="被叫号码" prop="calledNumber" min-width="130" />
+            <el-table-column label="关联客户" min-width="110">
+              <template #default="{ row }">
+                <el-button v-if="row.customerId" link type="primary" @click="openBusinessDetail('CUSTOMER', row.customerId)">
+                  客户 #{{ row.customerId }}</el-button
+                >
+                <span v-else>-</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="关联工单" min-width="110">
+              <template #default="{ row }">
+                <el-button v-if="row.ticketId" link type="primary" @click="openBusinessDetail('TICKET', row.ticketId)">
+                  工单 #{{ row.ticketId }}</el-button
+                >
+                <span v-else>-</span>
+              </template>
+            </el-table-column>
             <el-table-column label="时长" width="100">
               <template #default="{ row }">{{ durationLabel(row.durationMs) }}</template>
             </el-table-column>
@@ -92,16 +109,35 @@
       </el-tab-pane>
     </el-tabs>
 
-    <el-dialog v-model="messageDialog.visible" title="语音留言详情" width="720px" append-to-body>
-      <el-descriptions :column="2" border>
+    <el-dialog v-model="messageDialog.visible" title="语音留言详情" width="1040px" append-to-body class="voicemail-detail-dialog">
+      <el-descriptions class="voicemail-detail-descriptions" :column="3" border>
         <el-descriptions-item label="留言箱">{{ boxName(currentMessage.voicemailBoxId) }}</el-descriptions-item>
         <el-descriptions-item label="状态">{{ statusLabel(currentMessage.status) }}</el-descriptions-item>
+        <el-descriptions-item label="留言时长">{{ durationLabel(currentMessage.durationMs) }}</el-descriptions-item>
         <el-descriptions-item label="主叫号码">{{ currentMessage.callerNumber || '-' }}</el-descriptions-item>
         <el-descriptions-item label="被叫号码">{{ currentMessage.calledNumber || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="通话ID">{{ currentMessage.businessCallId || '-' }}</el-descriptions-item>
         <el-descriptions-item label="创建时间">{{ formatTime(currentMessage.createTime) }}</el-descriptions-item>
+        <el-descriptions-item label="通话ID">{{ currentMessage.businessCallId || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="通话记录">{{ currentMessage.callSessionId ? `#${currentMessage.callSessionId}` : '-' }}</el-descriptions-item>
+        <el-descriptions-item label="录音文件">{{ currentMessage.recordingFileName || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="关联客户">
+          <el-button v-if="currentMessage.customerId" link type="primary" @click="openBusinessDetail('CUSTOMER', currentMessage.customerId)">
+            客户 #{{ currentMessage.customerId }}
+          </el-button>
+          <span v-else>-</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="关联工单">
+          <el-button v-if="currentMessage.ticketId" link type="primary" @click="openBusinessDetail('TICKET', currentMessage.ticketId)">
+            工单 #{{ currentMessage.ticketId }}
+          </el-button>
+          <span v-else>-</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="处理时间">{{ formatTime(currentMessage.handledAt) }}</el-descriptions-item>
+        <el-descriptions-item label="处理备注" :span="3">{{ currentMessage.handleRemark || '-' }}</el-descriptions-item>
       </el-descriptions>
-      <audio v-if="currentMessage.playbackUrl" class="mt-4 w-full" controls :src="currentMessage.playbackUrl" />
+      <div v-if="currentMessage.playbackUrl" class="message-player">
+        <AudioWaveform :src="currentMessage.playbackUrl" />
+      </div>
       <el-empty v-else class="mt-4" description="暂无可播放录音" />
       <el-input v-model="handleRemark" class="mt-4" type="textarea" maxlength="500" show-word-limit placeholder="处理备注" />
       <template #footer>
@@ -110,6 +146,8 @@
         <el-button type="primary" @click="handleCurrent('HANDLED')">标记已处理</el-button>
       </template>
     </el-dialog>
+
+    <CallCenterBusinessDetail v-model="businessDetail.visible" :business-type="businessDetail.type" :business-id="businessDetail.id" />
 
     <el-dialog v-model="boxDialog.visible" :title="boxDialog.title" width="640px" append-to-body>
       <el-form ref="boxFormRef" :model="boxForm" :rules="boxRules" label-width="110px">
@@ -161,8 +199,14 @@ import {
 import type { VoiceMailBoxForm, VoiceMailBoxVO, VoiceMailMessageQuery, VoiceMailMessageVO } from '@/api/callcenter/voicemail/types';
 import { listMediaAssets } from '@/api/callcenter/media-asset';
 import type { MediaAssetVO } from '@/api/callcenter/media-asset/types';
+import AudioWaveform from '@/components/AudioWaveform/index.vue';
+import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/index.vue';
+import type { FormBusinessType } from '@/api/callcenter/form-template/types';
+import { getCallCenterConfigGroup } from '@/api/callcenter/callcenter-config';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
+const route = useRoute();
+const router = useRouter();
 const activeTab = ref('messages');
 const messageLoading = ref(false);
 const boxLoading = ref(false);
@@ -174,27 +218,49 @@ const messageQuery = reactive<VoiceMailMessageQuery>({ pageNum: 1, pageSize: 10 
 const messageDialog = reactive<DialogOption>({ visible: false, title: '' });
 const currentMessage = ref<Partial<VoiceMailMessageVO>>({});
 const handleRemark = ref('');
+const businessDetail = reactive<{ visible: boolean; type: FormBusinessType; id?: string | number }>({
+  visible: false,
+  type: 'CUSTOMER'
+});
 const boxDialog = reactive<DialogOption>({ visible: false, title: '' });
 const boxFormRef = ref<ElFormInstance>();
-const boxForm = ref<VoiceMailBoxForm>({
+const voicemailDefaults = reactive({
+  maxSeconds: 120,
+  silenceThreshold: 200,
+  silenceHits: 5
+});
+const initialBoxForm = (): VoiceMailBoxForm => ({
   boxCode: '',
   boxName: '',
   promptMediaId: undefined,
-  maxSeconds: 120,
-  silenceThreshold: 200,
-  silenceHits: 5,
+  maxSeconds: voicemailDefaults.maxSeconds,
+  silenceThreshold: voicemailDefaults.silenceThreshold,
+  silenceHits: voicemailDefaults.silenceHits,
   enabled: true
 });
+const boxForm = ref<VoiceMailBoxForm>(initialBoxForm());
 const boxRules = {
   boxCode: [{ required: true, message: '请输入留言箱编码', trigger: 'blur' }],
   boxName: [{ required: true, message: '请输入留言箱名称', trigger: 'blur' }],
   promptMediaId: [{ required: true, message: '请选择留言提示音', trigger: 'change' }]
 };
+const messageStatuses = ['UNHANDLED', 'HANDLED', 'INVALID'];
 
 const statusLabel = (status?: string) => ({ UNHANDLED: '未处理', HANDLED: '已处理', INVALID: '无效' })[status || ''] || status || '-';
 const boxName = (id?: string | number) => boxList.value.find((item) => String(item.id) === String(id))?.boxName || '-';
-const durationLabel = (durationMs?: number) => (durationMs ? `${Math.round(durationMs / 1000)}秒` : '-');
+const durationLabel = (durationMs?: number) =>
+  durationMs === undefined || durationMs === null ? '-' : `${Math.max(0, Math.round(durationMs / 1000))}秒`;
 const formatTime = (time?: string) => (time ? proxy?.parseTime(time) || '-' : '-');
+const numberConfigValue = (value: string | undefined, fallback: number) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+const openBusinessDetail = (type: FormBusinessType, id?: string | number) => {
+  if (!id) return;
+  businessDetail.type = type;
+  businessDetail.id = id;
+  businessDetail.visible = true;
+};
 
 const loadBoxes = async () => {
   boxLoading.value = true;
@@ -217,13 +283,43 @@ const loadMessages = async () => {
   }
 };
 
+const applyRouteMessageStatus = () => {
+  const status = Array.isArray(route.query.status) ? route.query.status[0] : route.query.status;
+  if (!status || !messageStatuses.includes(status)) {
+    return false;
+  }
+  activeTab.value = 'messages';
+  messageQuery.status = status;
+  messageQuery.pageNum = 1;
+  return true;
+};
+
+const filterUnhandledMessages = () => {
+  router.push({ path: route.path, query: { ...route.query, status: 'UNHANDLED' } });
+};
+
 const loadPrompts = async () => {
   const res = await listMediaAssets({ pageNum: 1, pageSize: 1000, category: 'IVR_PROMPT', enabled: true });
   promptOptions.value = res.rows.filter((item) => item.publishStatus === 'PUBLISHED');
 };
 
+const loadVoicemailDefaults = async () => {
+  try {
+    const { data } = await getCallCenterConfigGroup('VOICEMAIL');
+    const valueOf = (key: string) => data.items.find((item) => item.configKey === key)?.effectiveValue;
+    voicemailDefaults.maxSeconds = numberConfigValue(valueOf('voicemail.defaultMaxSeconds'), voicemailDefaults.maxSeconds);
+    voicemailDefaults.silenceThreshold = numberConfigValue(valueOf('voicemail.defaultSilenceThreshold'), voicemailDefaults.silenceThreshold);
+    voicemailDefaults.silenceHits = numberConfigValue(valueOf('voicemail.defaultSilenceHits'), voicemailDefaults.silenceHits);
+  } catch {
+    return;
+  }
+};
+
 const resetMessageQuery = () => {
   Object.assign(messageQuery, { pageNum: 1, pageSize: 10, voicemailBoxId: undefined, callerNumber: '', calledNumber: '', status: undefined });
+  if (route.query.status) {
+    router.replace({ path: route.path, query: { ...route.query, status: undefined } });
+  }
   loadMessages();
 };
 
@@ -249,9 +345,7 @@ const markHandled = async (id: string | number) => {
 };
 
 const openBoxForm = (row?: VoiceMailBoxVO) => {
-  boxForm.value = row
-    ? { ...row }
-    : { boxCode: '', boxName: '', promptMediaId: undefined, maxSeconds: 120, silenceThreshold: 200, silenceHits: 5, enabled: true };
+  boxForm.value = row ? { ...row } : initialBoxForm();
   boxDialog.title = row ? '修改留言箱' : '新增留言箱';
   boxDialog.visible = true;
 };
@@ -272,8 +366,44 @@ const removeBox = async (row: VoiceMailBoxVO) => {
   await loadBoxes();
 };
 
+watch(
+  () => route.query.status,
+  () => {
+    if (applyRouteMessageStatus()) {
+      loadMessages();
+    }
+  }
+);
+
 onMounted(async () => {
-  await Promise.all([loadBoxes(), loadPrompts()]);
+  applyRouteMessageStatus();
+  await Promise.all([loadBoxes(), loadPrompts(), loadVoicemailDefaults()]);
   await loadMessages();
 });
 </script>
+
+<style scoped lang="scss">
+:deep(.voicemail-detail-dialog) {
+  .el-dialog__body {
+    padding-top: 18px;
+  }
+}
+
+:deep(.voicemail-detail-descriptions) {
+  .el-descriptions__label {
+    min-width: 96px;
+    white-space: nowrap;
+  }
+  .el-descriptions__content {
+    min-width: 160px;
+  }
+}
+
+.message-player {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid #e5edf7;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+</style>

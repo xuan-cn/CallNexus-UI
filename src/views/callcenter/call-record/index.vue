@@ -103,6 +103,38 @@
           </div>
           <el-empty v-else :description="recordingStatusLabel(detail.recordingStatus)" :image-size="70" />
         </el-tab-pane>
+        <el-tab-pane label="语音留言" name="voicemail">
+          <div v-if="detail.voicemailMessages?.length" class="voicemail-list">
+            <el-card v-for="message in detail.voicemailMessages" :key="String(message.id)" class="voicemail-card" shadow="never">
+              <template #header>
+                <div class="voicemail-header">
+                  <div>
+                    <strong>留言 #{{ message.id }}</strong>
+                    <span>{{ message.createTime || '-' }}</span>
+                  </div>
+                  <div class="voicemail-actions">
+                    <el-tag :type="voicemailStatusTag(message.status)" size="small">{{ voicemailStatusLabel(message.status) }}</el-tag>
+                    <el-button v-if="message.status !== 'HANDLED'" link type="success" @click="handleVoiceMail(message.id)">标记已处理</el-button>
+                  </div>
+                </div>
+              </template>
+              <el-descriptions :column="3" border size="small">
+                <el-descriptions-item label="留言箱ID">{{ message.voicemailBoxId || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="主叫号码">{{ message.callerNumber || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="被叫号码">{{ message.calledNumber || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="留言时长">{{ formatMilliseconds(message.durationMs) }}</el-descriptions-item>
+                <el-descriptions-item label="处理人">{{ message.handledBy || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="处理时间">{{ message.handledAt || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="处理备注" :span="3">{{ message.handleRemark || '-' }}</el-descriptions-item>
+              </el-descriptions>
+              <div v-if="message.playbackUrl" class="voicemail-player">
+                <AudioWaveform :src="message.playbackUrl" />
+              </div>
+              <el-empty v-else description="留言录音不可播放" :image-size="60" />
+            </el-card>
+          </div>
+          <el-empty v-else description="暂无语音留言" :image-size="70" />
+        </el-tab-pane>
         <el-tab-pane label="处理时间线" name="timeline">
           <div v-if="timelineEvents.length" class="timeline-layout">
             <div class="timeline-list">
@@ -171,8 +203,10 @@
 <script setup name="CallRecord" lang="ts">
 import { getCallRecord, listCallRecords } from '@/api/callcenter/call-record';
 import { hangupCauseLabel } from '@/api/callcenter/call-record/display';
+import { handleVoiceMailMessage } from '@/api/callcenter/voicemail';
 import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/index.vue';
 import { CallDirection, CallRecordQuery, CallRecordVO, CallStatus } from '@/api/callcenter/call-record/types';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   Connection,
   Bell,
@@ -222,6 +256,8 @@ const directionLabel = (value: CallDirection) => directionOptions.find((item) =>
 const statusLabel = (value: CallStatus) => statusOptions.find((item) => item.value === value)?.label || value;
 const recordingStatusLabel = (value?: CallRecordVO['recordingStatus']) =>
   ({ NONE: '暂无录音', PENDING: '录音正在上传', UPLOADED: '录音已上传', FAILED: '录音上传失败' })[value || 'NONE'];
+const voicemailStatusLabel = (value?: string) => ({ UNHANDLED: '未处理', HANDLED: '已处理', INVALID: '无效留言' })[value || 'UNHANDLED'] || value || '-';
+const voicemailStatusTag = (value?: string) => ({ UNHANDLED: 'warning', HANDLED: 'success', INVALID: 'info' })[value || 'UNHANDLED'] as any;
 const directionTag = (value: CallDirection) => ({ INBOUND: 'success', OUTBOUND: 'primary', INTERNAL: 'warning', UNKNOWN: 'info' })[value] as any;
 const eventLabel = (eventType: string) =>
   ({
@@ -240,7 +276,8 @@ const eventLabel = (eventType: string) =>
     AGENT_ANSWER: '坐席接听',
     AGENT_NO_ANSWER: '坐席未接',
     QUEUE_TIMEOUT: '队列超时',
-    ABANDON: '主叫放弃'
+    ABANDON: '主叫放弃',
+    VOICEMAIL_RECORDED: '语音留言已录制'
   })[eventType] || eventType;
 const formatDuration = (seconds?: number) => {
   const value = Math.max(0, seconds || 0);
@@ -248,6 +285,7 @@ const formatDuration = (seconds?: number) => {
   const remainSeconds = value % 60;
   return minutes > 0 ? `${minutes}分${remainSeconds}秒` : `${remainSeconds}秒`;
 };
+const formatMilliseconds = (milliseconds?: number) => formatDuration(Math.ceil((milliseconds || 0) / 1000));
 const secondsBetween = (start?: string, end?: string) => {
   if (!start || !end) return 0;
   return Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 1000));
@@ -280,6 +318,7 @@ const FLOW_NODE_META: Record<string, { icon: any; tone: string; label: string }>
   TRANSFERRED: { icon: Upload, tone: 'primary', label: '转接通话' },
   QUEUE_TIMEOUT: { icon: Warning, tone: 'danger', label: '队列超时' },
   ABANDON: { icon: CircleClose, tone: 'danger', label: '主叫放弃' },
+  VOICEMAIL_RECORDED: { icon: Upload, tone: 'primary', label: '语音留言' },
   CALL_LEG_ENDED: { icon: SwitchButton, tone: 'danger', label: '通话结束' }
 };
 // 耗时药丸文案：相邻两种事件类型之间的耗时展示文案。
@@ -390,6 +429,20 @@ const handleDetail = async (row: CallRecordVO) => {
   detailTab.value = 'basic';
   detailVisible.value = true;
   await loadDetail(row.id);
+};
+const handleVoiceMail = async (id: string | number) => {
+  const { value } = await ElMessageBox.prompt('填写本次留言处理备注', '标记语音留言已处理', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    inputType: 'textarea',
+    inputPlaceholder: '例如：已回拨客户，已创建工单',
+    inputValidator: (text) => (text && text.length > 500 ? '处理备注不能超过 500 个字符' : true)
+  });
+  await handleVoiceMailMessage(id, { status: 'HANDLED', handleRemark: value });
+  ElMessage.success('语音留言已标记处理');
+  if (detail.value?.id) {
+    await loadDetail(detail.value.id);
+  }
 };
 // 打开客户详情弹窗：先赋 ID 再置 visible，保证组件 watch 触发时 businessId 已是新值
 const openCustomerDetail = (id: string | number) => {
@@ -615,6 +668,37 @@ onBeforeUnmount(stopRecordingPoll);
 }
 .recording-player {
   padding: 20px 0;
+}
+.voicemail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.voicemail-card {
+  border-radius: 10px;
+}
+.voicemail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.voicemail-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.voicemail-header span {
+  color: #909399;
+  font-size: 12px;
+}
+.voicemail-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.voicemail-player {
+  padding-top: 14px;
 }
 .recording-file {
   margin-top: 12px;

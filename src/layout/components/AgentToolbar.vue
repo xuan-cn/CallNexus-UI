@@ -1,12 +1,12 @@
 <template>
-  <div ref="phoneShellRef" class="agent-phone-shell" :style="phonePositionStyle">
-    <button v-if="!panelOpen" type="button" class="toolbar-trigger" :class="{ calling: callActive }" @click="handleTriggerClick">
-      <span class="trigger-icon">
+  <div ref="phoneShellRef" class="agent-phone-shell" :class="{ incoming: incomingCall }" :style="phonePositionStyle">
+    <button v-if="!panelOpen" type="button" class="toolbar-trigger" :class="{ calling: callActive, incoming: incomingCall }" @click="handleTriggerClick">
+      <span class="trigger-icon" :class="{ incoming: incomingCall }">
         <el-icon><PhoneFilled /></el-icon>
       </span>
       <div>
-        <strong>{{ callActive ? dialNumber : currentAgent.agentName || '坐席电话' }}</strong>
-        <small>{{ callActive ? `呼叫中 · ${callDuration}` : agentSummary }}</small>
+        <strong>{{ incomingCall ? incomingNumber : callActive ? dialNumber : currentAgent.agentName || '坐席电话' }}</strong>
+        <small>{{ incomingCall ? '来电振铃中' : callActive ? `通话中 · ${callDuration}` : agentSummary }}</small>
       </div>
       <i :class="statusClass"></i>
     </button>
@@ -40,7 +40,28 @@
         </div>
       </div>
 
-      <template v-if="!callActive">
+      <template v-if="incomingCall">
+        <div class="active-call incoming-call">
+          <span class="call-pulse"
+            ><el-icon><PhoneFilled /></el-icon
+          ></span>
+          <small>来电振铃中，请在软电话接听</small><strong>{{ incomingNumber }}</strong>
+          <span>等待接听</span>
+        </div>
+        <div class="call-actions">
+          <button type="button" @click="createCustomer">
+            <el-icon><User /></el-icon>新建客户
+          </button>
+          <button type="button" @click="createTicket">
+            <el-icon><Tickets /></el-icon>创建工单
+          </button>
+        </div>
+        <button type="button" class="hangup-button" @click="hangup">
+          <el-icon><CloseBold /></el-icon>挂断电话
+        </button>
+      </template>
+
+      <template v-else-if="!callActive">
         <div class="dial-input">
           <el-icon><Phone /></el-icon>
           <input v-model="dialNumber" :disabled="!phoneRegistered" maxlength="20" placeholder="输入号码在线拨打" @keyup.enter="makeCall" />
@@ -102,6 +123,8 @@ const agentStatus = ref<AgentStatus>('idle');
 const currentAgent = ref<CurrentAgentVO>({ configured: false, status: 'OFFLINE' });
 const dialNumber = ref('');
 const callActive = ref(false);
+const incomingCall = ref(false);
+const incomingNumber = ref('');
 const activeCallId = ref('');
 const callSeconds = ref(0);
 const customerDialogVisible = ref(false);
@@ -112,6 +135,8 @@ const registrationSummary = computed(() => {
   return currentAgent.value.extension ? '外置软电话' : '未绑定分机';
 });
 let callTimer: ReturnType<typeof setInterval> | undefined;
+let ringTimer: ReturnType<typeof setInterval> | undefined;
+let ringAudioContext: AudioContext | undefined;
 let presenceTimer: ReturnType<typeof setInterval> | undefined;
 let unsubscribeCallEvents: (() => void) | undefined;
 let syncingCallPresence = false;
@@ -155,6 +180,8 @@ const applyCurrentAgent = (agent: CurrentAgentVO) => {
   signedIn.value = agent.status !== 'OFFLINE';
   if (agent.status !== 'OFFLINE') agentStatus.value = statusFromApi[agent.status];
   if (agent.activeCallId) {
+    incomingCall.value = false;
+    stopRingTone();
     activeCallId.value = agent.activeCallId;
     dialNumber.value = agent.activeCallNumber || dialNumber.value;
     callActive.value = true;
@@ -170,6 +197,7 @@ const loadCurrentAgent = async () => {
   applyCurrentAgent(res.data);
 };
 const changeStatus = async (command: StatusCommand) => {
+  void unlockRingAudio();
   if (command === 'signIn') {
     try {
       const res = await signInCurrentAgent();
@@ -193,9 +221,11 @@ const changeStatus = async (command: StatusCommand) => {
   ElMessage.success(`坐席状态已切换为${statusLabels[command]}`);
 };
 const appendNumber = (value: string) => {
+  void unlockRingAudio();
   if (dialNumber.value.length < 20) dialNumber.value += value;
 };
 const makeCall = async () => {
+  void unlockRingAudio();
   if (!phoneRegistered.value || !dialNumber.value) return;
   try {
     const response = await originateCall({ destination: dialNumber.value });
@@ -213,9 +243,7 @@ const hangup = async () => {
   if (!activeCallId.value) return;
   try {
     await hangupCall(activeCallId.value);
-    callActive.value = false;
-    activeCallId.value = '';
-    stopCallTimer();
+    clearActiveCallState();
     const current = await getCurrentAgent();
     applyCurrentAgent(current.data);
   } catch {
@@ -230,6 +258,7 @@ const createTicket = () => {
 };
 
 const handleTriggerClick = () => {
+  void unlockRingAudio();
   panelOpen.value = true;
   nextTick(constrainPosition);
 };
@@ -287,6 +316,66 @@ const stopCallTimer = () => {
   if (callTimer) clearInterval(callTimer);
   callTimer = undefined;
 };
+const unlockRingAudio = async () => {
+  const AudioContextConstructor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextConstructor) return;
+  if (!ringAudioContext) ringAudioContext = new AudioContextConstructor();
+  if (ringAudioContext.state === 'suspended') {
+    await ringAudioContext.resume().catch(() => undefined);
+  }
+};
+const playRingPulse = () => {
+  if (!ringAudioContext || ringAudioContext.state !== 'running') return;
+  const startAt = ringAudioContext.currentTime;
+  const oscillator = ringAudioContext.createOscillator();
+  const gain = ringAudioContext.createGain();
+  oscillator.type = 'sine';
+  oscillator.frequency.setValueAtTime(880, startAt);
+  gain.gain.setValueAtTime(0.0001, startAt);
+  gain.gain.exponentialRampToValueAtTime(0.08, startAt + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.45);
+  oscillator.connect(gain);
+  gain.connect(ringAudioContext.destination);
+  oscillator.start(startAt);
+  oscillator.stop(startAt + 0.5);
+};
+const startRingTone = () => {
+  if (ringTimer) return;
+  void unlockRingAudio().then(() => {
+    playRingPulse();
+    ringTimer = setInterval(playRingPulse, 1200);
+  });
+};
+const stopRingTone = () => {
+  if (ringTimer) clearInterval(ringTimer);
+  ringTimer = undefined;
+};
+const showIncomingCall = (event: Record<string, unknown>) => {
+  const eventCallId = String(event.callId || '');
+  const callerNumber = String(event.callerNumber || '');
+  if (eventCallId) activeCallId.value = eventCallId;
+  incomingNumber.value = callerNumber || '未知号码';
+  dialNumber.value = incomingNumber.value;
+  incomingCall.value = true;
+  callActive.value = false;
+  stopCallTimer();
+  panelOpen.value = false;
+  startRingTone();
+  nextTick(constrainPosition);
+};
+const showActiveCall = (event: Record<string, unknown>) => {
+  const eventCallId = String(event.callId || '');
+  const callerNumber = String(event.callerNumber || '');
+  const calledNumber = String(event.calledNumber || '');
+  if (eventCallId) activeCallId.value = eventCallId;
+  dialNumber.value = callerNumber === currentAgent.value.extension ? calledNumber : callerNumber;
+  incomingCall.value = false;
+  stopRingTone();
+  callActive.value = true;
+  panelOpen.value = true;
+  startCallTimer();
+  nextTick(constrainPosition);
+};
 const handleCallEvent = (event: Record<string, unknown>) => {
   const type = String(event.type || '');
   const agentExtension = String(event.agentExtension || '');
@@ -295,32 +384,47 @@ const handleCallEvent = (event: Record<string, unknown>) => {
   const eventCallId = String(event.callId || '');
   const relatedToCurrentAgent =
     agentExtension === currentAgent.value.extension || callerNumber === currentAgent.value.extension || calledNumber === currentAgent.value.extension;
+  if (import.meta.env.DEV) {
+    console.debug('[CallNexus][AgentToolbar] 通话事件判断', {
+      type,
+      currentExtension: currentAgent.value.extension,
+      agentExtension,
+      callerNumber,
+      calledNumber,
+      eventCallId,
+      relatedToCurrentAgent
+    });
+  }
   if (type === 'CALL_HANGUP_COMPLETE') {
     const relatedToCurrentCall = !activeCallId.value || eventCallId === activeCallId.value || relatedToCurrentAgent;
     if (!relatedToCurrentCall) return;
-    callActive.value = false;
-    activeCallId.value = '';
-    stopCallTimer();
-    panelOpen.value = false;
+    clearActiveCallState();
     void loadCurrentAgent();
     return;
   }
   if (!relatedToCurrentAgent) return;
-  if (type === 'CALL_CREATE' || type === 'CALL_PROGRESS' || type === 'CALL_PROGRESS_MEDIA' || type === 'CALL_ANSWER' || type === 'CALL_BRIDGE') {
-    if (!activeCallId.value) activeCallId.value = String(event.callId || '');
-    dialNumber.value =
-      String(event.callerNumber || '') === currentAgent.value.extension ? String(event.calledNumber || '') : String(event.callerNumber || '');
-    callActive.value = true;
-    panelOpen.value = true;
-    startCallTimer();
-    nextTick(constrainPosition);
+  if (type === 'CALL_ANSWER' || type === 'CALL_BRIDGE') {
+    showActiveCall(event);
+    return;
+  }
+  if (type === 'CALL_CREATE' || type === 'CALL_PROGRESS' || type === 'CALL_PROGRESS_MEDIA') {
+    const isIncomingToCurrentAgent =
+      agentExtension === currentAgent.value.extension && callerNumber !== currentAgent.value.extension && calledNumber !== '';
+    if (isIncomingToCurrentAgent) {
+      showIncomingCall(event);
+    } else {
+      showActiveCall(event);
+    }
     return;
   }
 };
 const clearActiveCallState = () => {
+  incomingCall.value = false;
+  incomingNumber.value = '';
   callActive.value = false;
   activeCallId.value = '';
   stopCallTimer();
+  stopRingTone();
   panelOpen.value = false;
 };
 const syncActiveCallPresence = async () => {
@@ -344,6 +448,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   unsubscribeCallEvents?.();
   stopCallTimer();
+  stopRingTone();
   if (presenceTimer) clearInterval(presenceTimer);
   window.removeEventListener('resize', constrainPosition);
   window.removeEventListener('pointermove', handleDrag);
@@ -417,9 +522,7 @@ button {
 .toolbar-trigger.incoming {
   border-color: #22c55e;
   background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-  animation:
-    incoming-pulse 1s ease-in-out infinite,
-    incoming-shake 0.5s ease-in-out infinite;
+  animation: incoming-pulse 1s ease-in-out infinite !important;
 }
 @keyframes incoming-pulse {
   0%,
@@ -428,25 +531,6 @@ button {
   }
   50% {
     box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
-  }
-}
-@keyframes incoming-shake {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  10%,
-  30%,
-  50%,
-  70%,
-  90% {
-    transform: translateX(-2px);
-  }
-  20%,
-  40%,
-  60%,
-  80% {
-    transform: translateX(2px);
   }
 }
 .trigger-icon {
@@ -462,15 +546,39 @@ button {
 }
 .trigger-icon.incoming {
   background: #22c55e;
-  animation: icon-pulse 0.8s ease-in-out infinite;
+  animation:
+    icon-ring 0.65s ease-in-out infinite,
+    icon-pulse 1.1s ease-in-out infinite !important;
+  transform-origin: center center;
+}
+@keyframes icon-ring {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+  15% {
+    transform: rotate(-14deg) scale(1.08);
+  }
+  30% {
+    transform: rotate(12deg) scale(1.08);
+  }
+  45% {
+    transform: rotate(-10deg) scale(1.08);
+  }
+  60% {
+    transform: rotate(8deg) scale(1.05);
+  }
+  75% {
+    transform: rotate(-4deg) scale(1.02);
+  }
 }
 @keyframes icon-pulse {
   0%,
   100% {
-    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45);
   }
   50% {
-    transform: scale(1.15);
+    box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
   }
 }
 .agent-phone-shell {
@@ -478,6 +586,27 @@ button {
   z-index: 1001;
   width: max-content;
   filter: drop-shadow(0 10px 20px rgba(26, 48, 82, 0.18));
+}
+.agent-phone-shell.incoming {
+  animation: shell-ring 0.55s ease-in-out infinite !important;
+}
+@keyframes shell-ring {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  20% {
+    translate: -3px 0;
+  }
+  40% {
+    translate: 3px 0;
+  }
+  60% {
+    translate: -2px 0;
+  }
+  80% {
+    translate: 2px 0;
+  }
 }
 .agent-panel {
   display: grid;
@@ -655,6 +784,13 @@ button {
   > span:last-child {
     color: #6e7c91;
     font-size: 11px;
+  }
+}
+.active-call.incoming-call {
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  small {
+    color: #15803d;
   }
 }
 .call-pulse {

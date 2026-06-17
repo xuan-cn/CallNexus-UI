@@ -10,6 +10,13 @@ export const subscribeCallEvents = (subscriber: (event: Record<string, unknown>)
   return () => callEventSubscribers.delete(subscriber);
 };
 
+export const dispatchCallEvent = (event: Record<string, unknown>, source = 'WebSocket') => {
+  if (typeof event.type !== 'string' || !event.type.startsWith('CALL_')) return false;
+  console.debug(`[CallNexus][${source}] 收到通话事件`, event);
+  callEventSubscribers.forEach((subscriber) => subscriber(event));
+  return true;
+};
+
 // 初始化socket
 export const initWebSocket = (url: any) => {
   if (import.meta.env.VITE_APP_WEBSOCKET === 'false' || initialized) {
@@ -46,8 +53,7 @@ export const initWebSocket = (url: any) => {
       }
       try {
         const event = JSON.parse(e.data) as Record<string, unknown>;
-        if (typeof event.type === 'string' && event.type.startsWith('CALL_')) {
-          callEventSubscribers.forEach((subscriber) => subscriber(event));
+        if (dispatchCallEvent(event, 'WebSocket')) {
           return;
         }
       } catch {
