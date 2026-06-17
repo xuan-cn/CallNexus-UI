@@ -8,6 +8,7 @@ export interface OutboundTaskVO {
   taskType: 'PREVIEW';
   status: OutboundTaskStatus;
   description?: string;
+  callerNumberId?: string | number;
   autoRetryEnabled: boolean;
   maxRetryCount: number;
   retryIntervalMinutes: number;
@@ -28,6 +29,7 @@ export interface OutboundTaskForm {
   taskCode: string;
   taskName: string;
   description?: string;
+  callerNumberId?: string | number;
   autoRetryEnabled: boolean;
   maxRetryCount: number;
   retryIntervalMinutes: number;

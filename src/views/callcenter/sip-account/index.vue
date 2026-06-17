@@ -161,7 +161,11 @@ const handleNodeChange = (nodeId: string | number) => {
 const submitForm = () =>
   formRef.value?.validate(async (valid) => {
     if (!valid) return;
-    form.value.id ? await updateSipAccount(form.value) : await createSipAccount(form.value);
+    const payload: SipAccountForm = { ...form.value };
+    if (payload.id && !payload.password?.trim()) {
+      delete payload.password;
+    }
+    form.value.id ? await updateSipAccount(payload) : await createSipAccount(payload);
     proxy?.$modal.msgSuccess('操作成功');
     dialog.visible = false;
     await getList();

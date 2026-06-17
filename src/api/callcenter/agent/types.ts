@@ -3,6 +3,7 @@ export interface AgentVO {
   agentCode: string;
   agentName: string;
   userId?: string | number;
+  callerNumberId?: string | number;
   sipAccountId?: string | number;
   sipExtension?: string;
   sipDisplayName?: string;
@@ -17,6 +18,7 @@ export interface AgentForm {
   agentCode: string;
   agentName: string;
   userId?: string | number;
+  callerNumberId?: string | number;
   enabled: boolean;
   version?: number;
 }
@@ -35,6 +37,7 @@ export interface CurrentAgentVO {
   agentCode?: string;
   agentName?: string;
   userId?: string | number;
+  callerNumberId?: string | number;
   sipAccountId?: string | number;
   nodeId?: string | number;
   extension?: string;

@@ -71,6 +71,13 @@
               ><el-select v-model="form.waitMediaId" clearable style="width: 100%"
                 ><el-option v-for="item in mediaOptions" :key="item.id" :label="item.assetName" :value="item.id" /></el-select></el-form-item
           ></el-col>
+          <el-col :span="12">
+            <el-form-item label="默认主叫">
+              <el-select v-model="form.callerNumberId" clearable filterable style="width: 100%" placeholder="队列回呼/后续外呼使用">
+                <el-option v-for="item in callerNumberOptions" :key="item.id" :label="callerNumberLabel(item)" :value="item.id" />
+              </el-select>
+            </el-form-item>
+          </el-col>
         </el-row>
         <el-collapse>
           <el-collapse-item title="高级参数" name="advanced">
@@ -124,6 +131,8 @@ import { NodeGroupVO } from '@/api/callcenter/freeswitch-node-group/types';
 import { listMediaAssets } from '@/api/callcenter/media-asset';
 import { MediaAssetVO } from '@/api/callcenter/media-asset/types';
 import { getCallCenterConfigGroup } from '@/api/callcenter/callcenter-config';
+import { listPhoneNumbers } from '@/api/callcenter/phone-number';
+import type { PhoneNumberVO } from '@/api/callcenter/phone-number/types';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const loading = ref(false);
@@ -132,6 +141,7 @@ const queues = ref<CallQueueVO[]>([]);
 const skillGroups = ref<SkillGroupVO[]>([]);
 const nodeGroups = ref<NodeGroupVO[]>([]);
 const mediaOptions = ref<MediaAssetVO[]>([]);
+const callerNumberOptions = ref<PhoneNumberVO[]>([]);
 const formRef = ref<ElFormInstance>();
 const dialog = reactive({ visible: false, title: '' });
 const strategies: Array<{ label: string; value: QueueStrategy }> = [
@@ -154,6 +164,7 @@ const initialForm = (): CallQueueForm => ({
   skillGroupId: '',
   strategy: 'LONGEST_IDLE_AGENT',
   waitMediaId: undefined,
+  callerNumberId: undefined,
   maxWaitSeconds: queueDefaults.maxWaitSeconds,
   ringTimeoutSeconds: queueDefaults.ringTimeoutSeconds,
   maxNoAnswer: queueDefaults.maxNoAnswer,
@@ -179,6 +190,7 @@ const numberConfigValue = (value: string | undefined, fallback: number) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
+const callerNumberLabel = (item: PhoneNumberVO) => `${item.number} - ${item.numberName || item.gatewayName || '主叫号码'}`;
 const showSyncError = (row: CallQueueVO) => {
   if (!row.syncError) return;
   ElMessageBox.alert(row.syncError, `${row.queueName}同步失败原因`, {
@@ -208,16 +220,18 @@ const loadQueueDefaults = async () => {
 const load = async () => {
   loading.value = true;
   try {
-    const [queueRes, skillRes, nodeRes, mediaRes] = await Promise.all([
+    const [queueRes, skillRes, nodeRes, mediaRes, callerRes] = await Promise.all([
       listCallQueues(),
       listSkillGroups(),
       listNodeGroups(),
-      listMediaAssets({ pageNum: 1, pageSize: 1000, category: 'QUEUE_WAIT_MUSIC', enabled: true })
+      listMediaAssets({ pageNum: 1, pageSize: 1000, category: 'QUEUE_WAIT_MUSIC', enabled: true }),
+      listPhoneNumbers({ pageNum: 1, pageSize: 1000, enabled: true })
     ]);
     queues.value = queueRes.data;
     skillGroups.value = skillRes.data.filter((item) => item.enabled);
     nodeGroups.value = nodeRes.data.filter((item) => item.enabled);
     mediaOptions.value = mediaRes.rows.filter((item) => item.publishStatus === 'PUBLISHED');
+    callerNumberOptions.value = callerRes.rows.filter((item) => ['CALLER_ID', 'BOTH'].includes(item.numberType) && !!item.gatewayId);
   } finally {
     loading.value = false;
   }

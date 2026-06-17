@@ -55,6 +55,12 @@
         <el-form-item label="任务编码" prop="taskCode"><el-input v-model="taskForm.taskCode" placeholder="例如 OUTBOUND_202606" /></el-form-item>
         <el-form-item label="任务名称" prop="taskName"><el-input v-model="taskForm.taskName" /></el-form-item>
         <el-form-item label="任务说明"><el-input v-model="taskForm.description" type="textarea" :rows="4" maxlength="500" show-word-limit /></el-form-item>
+        <el-form-item label="外呼主叫">
+          <el-select v-model="taskForm.callerNumberId" clearable filterable style="width: 100%" placeholder="不选则使用坐席默认主叫或节点默认主叫">
+            <el-option v-for="item in callerNumberOptions" :key="item.id" :label="callerNumberLabel(item)" :value="item.id" />
+          </el-select>
+          <span class="form-tip">任务主叫优先于坐席默认主叫。</span>
+        </el-form-item>
         <el-divider content-position="left">自动重呼策略</el-divider>
         <el-form-item label="自动重呼"><el-switch v-model="taskForm.autoRetryEnabled" /></el-form-item>
         <template v-if="taskForm.autoRetryEnabled">
@@ -322,6 +328,8 @@ import { CompleteOutboundMemberForm, OutboundAgentSummaryVO, OutboundAttemptQuer
 import { CustomerQuery, CustomerVO, listCustomers } from '@/api/callcenter/customer';
 import { listAgents } from '@/api/callcenter/agent';
 import type { AgentVO } from '@/api/callcenter/agent/types';
+import { listPhoneNumbers } from '@/api/callcenter/phone-number';
+import type { PhoneNumberVO } from '@/api/callcenter/phone-number/types';
 import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/index.vue';
 import type { UploadFile } from 'element-plus';
 import * as echarts from 'echarts';
@@ -330,12 +338,14 @@ const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const loading = ref(false);
 const tasks = ref<OutboundTaskVO[]>([]);
 const agentOptions = ref<AgentVO[]>([]);
+const callerNumberOptions = ref<PhoneNumberVO[]>([]);
 const taskFormRef = ref<ElFormInstance>();
 const taskDialog = reactive({ visible: false, title: '', id: undefined as string | number | undefined });
 const taskForm = reactive<OutboundTaskForm>({
   taskCode: '',
   taskName: '',
   description: '',
+  callerNumberId: undefined,
   autoRetryEnabled: true,
   maxRetryCount: 2,
   retryIntervalMinutes: 30,
@@ -434,7 +444,7 @@ const compactScheduleSummary = (summary?: string) => summary
   ? `本次：${summary.replace(/到期重呼=\d+，?/, '').replaceAll('，', ' · ')}`
   : '等待首次调度';
 const resetTaskForm = () => Object.assign(taskForm, {
-  taskCode: '', taskName: '', description: '', autoRetryEnabled: true, maxRetryCount: 2,
+  taskCode: '', taskName: '', description: '', callerNumberId: undefined, autoRetryEnabled: true, maxRetryCount: 2,
   retryIntervalMinutes: 30, retryResultCodes: 'NO_ANSWER,BUSY,OTHER',
   autoAssignDueRetry: false, retryAssigneeAgentId: undefined, version: undefined
 });
@@ -442,13 +452,18 @@ const resetResult = () => Object.assign(resultForm, { resultCode: 'CONNECTED', r
 const load = async () => { loading.value = true; try { tasks.value = (await listOutboundTasks()).data; } finally { loading.value = false; } };
 const refreshTasksQuietly = async () => { tasks.value = (await listOutboundTasks()).data; };
 const loadAgentOptions = async () => { agentOptions.value = (await listAgents({ pageNum: 1, pageSize: 1000, enabled: true })).rows; };
+const loadCallerNumberOptions = async () => {
+  const res = await listPhoneNumbers({ pageNum: 1, pageSize: 1000, enabled: true });
+  callerNumberOptions.value = res.rows.filter((item) => ['CALLER_ID', 'BOTH'].includes(item.numberType) && !!item.gatewayId);
+};
+const callerNumberLabel = (item: PhoneNumberVO) => `${item.number} - ${item.numberName || item.gatewayName || '主叫号码'}`;
 const agentOptionLabel = (agent: AgentVO) => {
   const extension = agent.sipExtension ? '\u5206\u673a ' + agent.sipExtension : '\u672a\u7ed1\u5b9a\u5206\u673a';
   const userId = agent.userId ? '\u7528\u6237ID ' + agent.userId : '\u672a\u7ed1\u5b9a\u7528\u6237';
   return agent.agentName + '\uff08' + agent.agentCode + '\uff0c\u5750\u5e2dID ' + agent.id + '\uff0c' + extension + '\uff0c' + userId + '\uff09';
 };
-const handleAdd = async () => { resetTaskForm(); await loadAgentOptions(); taskDialog.id = undefined; taskDialog.title = '新增预览式外呼任务'; taskDialog.visible = true; };
-const handleUpdate = async (row: OutboundTaskVO) => { resetTaskForm(); await loadAgentOptions(); Object.assign(taskForm, (await getOutboundTask(row.id)).data); taskDialog.id = row.id; taskDialog.title = '修改预览式外呼任务'; taskDialog.visible = true; };
+const handleAdd = async () => { resetTaskForm(); await Promise.all([loadAgentOptions(), loadCallerNumberOptions()]); taskDialog.id = undefined; taskDialog.title = '新增预览式外呼任务'; taskDialog.visible = true; };
+const handleUpdate = async (row: OutboundTaskVO) => { resetTaskForm(); await Promise.all([loadAgentOptions(), loadCallerNumberOptions()]); Object.assign(taskForm, (await getOutboundTask(row.id)).data); taskDialog.id = row.id; taskDialog.title = '修改预览式外呼任务'; taskDialog.visible = true; };
 const submitTask = () => taskFormRef.value?.validate(async (valid) => { if (!valid) return; taskDialog.id ? await updateOutboundTask(taskDialog.id, taskForm) : await createOutboundTask(taskForm); proxy?.$modal.msgSuccess('保存成功'); taskDialog.visible = false; await load(); });
 const handleDelete = async (row: OutboundTaskVO) => { await proxy?.$modal.confirm(`确认删除外呼任务“${row.taskName}”吗？`); await deleteOutboundTask(row.id); proxy?.$modal.msgSuccess('删除成功'); await load(); };
 const changeTaskStatus = async (row: OutboundTaskVO, start: boolean) => { start ? await startOutboundTask(row.id) : await pauseOutboundTask(row.id); proxy?.$modal.msgSuccess(start ? '任务已开始' : '任务已暂停'); await load(); };

@@ -11,6 +11,7 @@ export interface CallQueueVO {
   skillGroupName?: string;
   strategy: QueueStrategy;
   waitMediaId?: string | number;
+  callerNumberId?: string | number;
   maxWaitSeconds: number;
   ringTimeoutSeconds: number;
   maxNoAnswer: number;

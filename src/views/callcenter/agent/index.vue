@@ -67,6 +67,11 @@
             <el-option v-for="user in userOptions" :key="user.userId" :label="formatUserLabel(user)" :value="user.userId" />
           </el-select>
         </el-form-item>
+        <el-form-item label="默认主叫" prop="callerNumberId">
+          <el-select v-model="form.callerNumberId" clearable filterable style="width: 100%" placeholder="不选则使用节点默认主叫">
+            <el-option v-for="item in callerNumberOptions" :key="item.id" :label="callerNumberLabel(item)" :value="item.id" />
+          </el-select>
+        </el-form-item>
         <el-form-item v-if="form.id" label="状态"><el-switch v-model="form.enabled" /></el-form-item>
       </el-form>
       <template #footer
@@ -95,6 +100,8 @@
 <script setup name="Agent" lang="ts">
 import { bindAgentExtension, createAgent, deleteAgent, getAgent, listAgents, unbindAgentExtension, updateAgent } from '@/api/callcenter/agent';
 import { AgentForm, AgentQuery, AgentVO } from '@/api/callcenter/agent/types';
+import { listPhoneNumbers } from '@/api/callcenter/phone-number';
+import type { PhoneNumberVO } from '@/api/callcenter/phone-number/types';
 import { listSipAccounts } from '@/api/callcenter/sip-account';
 import { SipAccountVO } from '@/api/callcenter/sip-account/types';
 import { listUser, optionSelect } from '@/api/system/user';
@@ -106,6 +113,7 @@ const total = ref(0);
 const agentList = ref<AgentVO[]>([]);
 const sipAccounts = ref<SipAccountVO[]>([]);
 const userOptions = ref<UserVO[]>([]);
+const callerNumberOptions = ref<PhoneNumberVO[]>([]);
 const userMap = ref<Map<string, UserVO>>(new Map());
 const userLoading = ref(false);
 const selectedAgentId = ref<string | number>();
@@ -114,7 +122,7 @@ const queryFormRef = ref<ElFormInstance>();
 const formRef = ref<ElFormInstance>();
 const dialog = reactive<DialogOption>({ visible: false, title: '' });
 const bindDialog = reactive<DialogOption>({ visible: false, title: '' });
-const initialForm: AgentForm = { agentCode: '', agentName: '', userId: undefined, enabled: true };
+const initialForm: AgentForm = { agentCode: '', agentName: '', userId: undefined, callerNumberId: undefined, enabled: true };
 const data = reactive<PageData<AgentForm, AgentQuery>>({
   form: { ...initialForm },
   queryParams: { pageNum: 1, pageSize: 10, agentCode: '', agentName: '', enabled: undefined },
@@ -165,6 +173,11 @@ const searchUsers = async (keyword: string) => {
     userLoading.value = false;
   }
 };
+const callerNumberLabel = (item: PhoneNumberVO) => `${item.number} - ${item.numberName || item.gatewayName || '主叫号码'}`;
+const loadCallerNumberOptions = async () => {
+  const res = await listPhoneNumbers({ pageNum: 1, pageSize: 1000, enabled: true });
+  callerNumberOptions.value = res.rows.filter((item) => ['CALLER_ID', 'BOTH'].includes(item.numberType) && !!item.gatewayId);
+};
 const handleQuery = () => {
   queryParams.value.pageNum = 1;
   getList();
@@ -180,6 +193,7 @@ const reset = () => {
 const handleAdd = () => {
   reset();
   searchUsers('');
+  loadCallerNumberOptions();
   dialog.title = '新增坐席';
   dialog.visible = true;
 };
@@ -187,7 +201,7 @@ const handleUpdate = async (row: AgentVO) => {
   reset();
   const res = await getAgent(row.id);
   Object.assign(form.value, res.data);
-  await loadAgentUsers([res.data]);
+  await Promise.all([loadAgentUsers([res.data]), loadCallerNumberOptions()]);
   dialog.title = '修改坐席';
   dialog.visible = true;
 };
