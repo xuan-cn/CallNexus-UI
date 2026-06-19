@@ -1,6 +1,6 @@
 import request from '@/utils/request';
 import { AxiosPromise } from 'axios';
-import { AgentForm, AgentPresenceStatus, AgentQuery, AgentVO, CurrentAgentVO } from './types';
+import { AgentForm, AgentPresenceStatus, AgentQuery, AgentVO, AgentWebRtcConfigVO, CurrentAgentVO } from './types';
 
 export const listAgents = (query: AgentQuery): AxiosPromise<AgentVO[]> => request({ url: '/api/v1/agents', method: 'get', params: query });
 
@@ -18,6 +18,9 @@ export const bindAgentExtension = (id: string | number, sipAccountId: string | n
 export const unbindAgentExtension = (id: string | number) => request({ url: `/api/v1/agents/${id}/extension`, method: 'delete' });
 
 export const getCurrentAgent = (): AxiosPromise<CurrentAgentVO> => request({ url: '/api/v1/agent-session/me', method: 'get' });
+
+export const getCurrentAgentWebRtcConfig = (): AxiosPromise<AgentWebRtcConfigVO> =>
+  request({ url: '/api/v1/agent-session/webrtc-config', method: 'get' });
 
 export const signInCurrentAgent = (): AxiosPromise<CurrentAgentVO> => request({ url: '/api/v1/agent-session/sign-in', method: 'put' });
 

@@ -1,4 +1,7 @@
 const HANGUP_CAUSE_LABELS: Record<string, string> = {
+  ABANDON: '客户放弃',
+  QUEUE_TIMEOUT: '队列超时',
+  AGENT_NO_ANSWER: '坐席未接',
   NONE: '未指定',
   NORMAL_CLEARING: '正常挂断',
   ORIGINATOR_CANCEL: '主叫取消',

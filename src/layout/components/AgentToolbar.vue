@@ -1,6 +1,12 @@
 <template>
   <div ref="phoneShellRef" class="agent-phone-shell" :class="{ incoming: incomingCall }" :style="phonePositionStyle">
-    <button v-if="!panelOpen" type="button" class="toolbar-trigger" :class="{ calling: callActive, incoming: incomingCall }" @click="handleTriggerClick">
+    <button
+      v-if="!panelOpen"
+      type="button"
+      class="toolbar-trigger"
+      :class="{ calling: callActive, incoming: incomingCall }"
+      @click="handleTriggerClick"
+    >
       <span class="trigger-icon" :class="{ incoming: incomingCall }">
         <el-icon><PhoneFilled /></el-icon>
       </span>
@@ -14,8 +20,8 @@
     <aside v-else class="agent-panel">
       <div class="panel-heading" @pointerdown="startDrag">
         <div>
-          <strong>{{ currentAgent.agentName || '坐席电话' }}</strong
-          ><small>{{ extensionSummary }} · {{ registrationSummary }}</small>
+          <strong>{{ currentAgent.agentName || '坐席电话' }}</strong>
+          <small>{{ extensionSummary }} · {{ registrationSummary }}</small>
         </div>
         <div class="heading-actions">
           <el-dropdown trigger="click" @command="changeStatus">
@@ -45,7 +51,8 @@
           <span class="call-pulse"
             ><el-icon><PhoneFilled /></el-icon
           ></span>
-          <small>来电振铃中，请在软电话接听</small><strong>{{ incomingNumber }}</strong>
+          <small>来电振铃中，请在软电话接听</small>
+          <strong>{{ incomingNumber }}</strong>
           <span>等待接听</span>
         </div>
         <div class="call-actions">
@@ -56,6 +63,9 @@
             <el-icon><Tickets /></el-icon>创建工单
           </button>
         </div>
+        <button v-if="webRtcIncoming" type="button" class="call-button" :disabled="callActionLoading" @click="answerWebRtcCall">
+          <el-icon><PhoneFilled /></el-icon>接听电话
+        </button>
         <button type="button" class="hangup-button" @click="hangup">
           <el-icon><CloseBold /></el-icon>挂断电话
         </button>
@@ -82,8 +92,31 @@
           <span class="call-pulse"
             ><el-icon><PhoneFilled /></el-icon
           ></span>
-          <small>软电话正在呼叫</small><strong>{{ dialNumber }}</strong
-          ><span>{{ callDuration }}</span>
+          <small>{{ callHeld ? '通话已保持' : '软电话正在呼叫' }}</small>
+          <strong>{{ dialNumber }}</strong>
+          <span>{{ callDuration }}<em v-if="callHeld"> · 已保持</em></span>
+        </div>
+        <div class="call-control-actions">
+          <button type="button" :disabled="callActionLoading" @click="toggleHold">{{ callHeld ? '恢复通话' : '保持通话' }}</button>
+          <button type="button" :disabled="callActionLoading || consultActive" @click="transferPanelOpen = !transferPanelOpen">盲转</button>
+          <button type="button" :disabled="callActionLoading || callHeld" @click="consultPanelOpen = !consultPanelOpen">咨询转接</button>
+        </div>
+        <div v-if="transferPanelOpen" class="transfer-panel">
+          <input v-model="transferTarget" maxlength="20" placeholder="输入目标分机" @keyup.enter="confirmTransfer" />
+          <button type="button" :disabled="callActionLoading || !transferTarget" @click="confirmTransfer">确认转接</button>
+          <button type="button" :disabled="callActionLoading" @click="cancelTransfer">取消</button>
+        </div>
+        <div v-if="consultPanelOpen" class="transfer-panel consult-panel">
+          <template v-if="!consultActive">
+            <input v-model="consultTarget" maxlength="20" placeholder="输入咨询目标分机" @keyup.enter="startConsult" />
+            <button type="button" :disabled="callActionLoading || !consultTarget" @click="startConsult">开始咨询</button>
+            <button type="button" :disabled="callActionLoading" @click="cancelConsultPanel">取消</button>
+          </template>
+          <template v-else>
+            <span class="consult-tip">客户已保持，请用外置软电话咨询 {{ consultTarget }}</span>
+            <button type="button" :disabled="callActionLoading" @click="completeConsult">完成转接</button>
+            <button type="button" :disabled="callActionLoading" @click="cancelConsult">取消咨询</button>
+          </template>
         </div>
         <div class="call-actions">
           <button type="button" @click="createCustomer">
@@ -93,23 +126,41 @@
             <el-icon><Tickets /></el-icon>创建工单
           </button>
         </div>
-        <button type="button" class="hangup-button" @click="hangup">
+        <button type="button" class="hangup-button" :disabled="callActionLoading" @click="hangup">
           <el-icon><CloseBold /></el-icon>挂断电话
         </button>
       </template>
     </aside>
+
     <dynamic-business-form-dialog v-model="customerDialogVisible" business-type="CUSTOMER" :phone-number="dialNumber" :call-id="activeCallId" />
     <dynamic-business-form-dialog v-model="ticketDialogVisible" business-type="TICKET" :phone-number="dialNumber" :call-id="activeCallId" />
+    <audio ref="remoteAudioRef" autoplay playsinline></audio>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ArrowDown, CloseBold, Phone, PhoneFilled, Tickets, User } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
-import { changeCurrentAgentStatus, getCurrentAgent, signInCurrentAgent, signOutCurrentAgent } from '@/api/callcenter/agent';
+import {
+  changeCurrentAgentStatus,
+  getCurrentAgent,
+  getCurrentAgentWebRtcConfig,
+  signInCurrentAgent,
+  signOutCurrentAgent
+} from '@/api/callcenter/agent';
 import { AgentPresenceStatus, CurrentAgentVO } from '@/api/callcenter/agent/types';
-import { hangupCall, originateCall } from '@/api/callcenter/call';
+import {
+  cancelConsultTransfer,
+  completeConsultTransfer,
+  hangupCall,
+  holdCall,
+  originateCall,
+  startConsultTransfer,
+  transferCall,
+  unholdCall
+} from '@/api/callcenter/call';
 import { subscribeCallEvents } from '@/utils/websocket';
+import { webRtcPhone } from '@/utils/webrtcPhone';
 import DynamicBusinessFormDialog from './DynamicBusinessFormDialog.vue';
 
 type AgentStatus = 'idle' | 'busy' | 'afterCall';
@@ -117,21 +168,35 @@ type StatusCommand = AgentStatus | 'signIn' | 'signOut';
 
 const panelOpen = ref(false);
 const phoneShellRef = ref<HTMLElement>();
+const remoteAudioRef = ref<HTMLAudioElement>();
 const phonePosition = reactive({ left: 0, top: 0 });
 const signedIn = ref(false);
 const agentStatus = ref<AgentStatus>('idle');
 const currentAgent = ref<CurrentAgentVO>({ configured: false, status: 'OFFLINE' });
 const dialNumber = ref('');
 const callActive = ref(false);
+const callHeld = ref(false);
+const callActionLoading = ref(false);
+const transferPanelOpen = ref(false);
+const transferTarget = ref('');
+const consultPanelOpen = ref(false);
+const consultTarget = ref('');
+const consultActive = ref(false);
+const consultCallId = ref('');
 const incomingCall = ref(false);
 const incomingNumber = ref('');
 const activeCallId = ref('');
 const callSeconds = ref(0);
 const customerDialogVisible = ref(false);
 const ticketDialogVisible = ref(false);
+const webRtcRegistered = ref(false);
+const webRtcConnecting = ref(false);
+const webRtcIncoming = ref(false);
 const phoneRegistered = computed(() => signedIn.value && Boolean(currentAgent.value.extension));
 const registrationSummary = computed(() => {
   if (!signedIn.value) return '未签入';
+  if (webRtcRegistered.value) return 'WebRTC 已注册';
+  if (webRtcConnecting.value) return 'WebRTC 注册中';
   return currentAgent.value.extension ? '外置软电话' : '未绑定分机';
 });
 let callTimer: ReturnType<typeof setInterval> | undefined;
@@ -143,9 +208,11 @@ let syncingCallPresence = false;
 let dragging = false;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
+let suppressActiveCallUntil = 0;
+const recentlyEndedCallIds = new Map<string, number>();
+const WEBRTC_ENDED_CALL_SUPPRESS_MS = 120000;
 
 const phonePositionStyle = computed(() => ({ left: `${phonePosition.left}px`, top: `${phonePosition.top}px` }));
-
 const dialKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
 const statusLabels: Record<AgentStatus, string> = { idle: '示闲', busy: '示忙', afterCall: '话后处理' };
 const statusToApi: Record<AgentStatus, AgentPresenceStatus> = { idle: 'IDLE', busy: 'BUSY', afterCall: 'AFTER_CALL' };
@@ -180,29 +247,97 @@ const applyCurrentAgent = (agent: CurrentAgentVO) => {
   signedIn.value = agent.status !== 'OFFLINE';
   if (agent.status !== 'OFFLINE') agentStatus.value = statusFromApi[agent.status];
   if (agent.activeCallId) {
+    if (isWebRtcLocalIdle()) {
+      return;
+    }
+    const activeCallEndedAt = recentlyEndedCallIds.get(String(agent.activeCallId));
+    if (Date.now() < suppressActiveCallUntil || (activeCallEndedAt && Date.now() - activeCallEndedAt < 8000)) {
+      return;
+    }
     incomingCall.value = false;
     stopRingTone();
     activeCallId.value = agent.activeCallId;
     dialNumber.value = agent.activeCallNumber || dialNumber.value;
+    agentStatus.value = 'busy';
     callActive.value = true;
     if (!wasActive) panelOpen.value = true;
     startCallTimer();
     nextTick(constrainPosition);
-  } else if (callActive.value) {
+  } else if (callActive.value && !webRtcPhone.hasActiveCall()) {
     clearActiveCallState();
   }
 };
+
 const loadCurrentAgent = async () => {
   const res = await getCurrentAgent();
   applyCurrentAgent(res.data);
 };
+
+const registerWebRtcPhone = async () => {
+  if (!signedIn.value || !remoteAudioRef.value || webRtcConnecting.value) return;
+  try {
+    webRtcConnecting.value = true;
+    const response = await getCurrentAgentWebRtcConfig();
+    webRtcPhone.configure({
+      onIncoming: () => {
+        webRtcIncoming.value = true;
+        incomingCall.value = true;
+        incomingNumber.value = dialNumber.value || '未知号码';
+        panelOpen.value = true;
+        startRingTone();
+        nextTick(constrainPosition);
+      },
+      onAnswered: () => {
+        webRtcIncoming.value = false;
+        incomingCall.value = false;
+        stopRingTone();
+        callActive.value = true;
+        agentStatus.value = 'busy';
+        startCallTimer();
+      },
+      onHangup: () => {
+        webRtcIncoming.value = false;
+        markCallEnded(activeCallId.value);
+        clearActiveCallState();
+        void restoreIdleAfterWebRtcHangup();
+      },
+      onHold: (held) => {
+        callHeld.value = held;
+      },
+      onRegistered: () => {
+        webRtcRegistered.value = true;
+      },
+      onUnregistered: () => {
+        webRtcRegistered.value = false;
+      },
+      onServerDisconnect: () => {
+        webRtcRegistered.value = false;
+      }
+    });
+    await webRtcPhone.connect(response.data, remoteAudioRef.value);
+  } catch (error) {
+    webRtcRegistered.value = false;
+    console.warn('[WebRTC] 注册失败，保留外置软电话模式', error);
+  } finally {
+    webRtcConnecting.value = false;
+  }
+};
+
+const disconnectWebRtcPhone = async () => {
+  webRtcIncoming.value = false;
+  webRtcRegistered.value = false;
+  webRtcConnecting.value = false;
+  await webRtcPhone.disconnect();
+};
+
 const changeStatus = async (command: StatusCommand) => {
   void unlockRingAudio();
   if (command === 'signIn') {
     try {
       const res = await signInCurrentAgent();
       applyCurrentAgent(res.data);
-      ElMessage.success('坐席签入成功，请保持外置软电话在线');
+      await registerWebRtcPhone();
+      ElMessage.success(webRtcRegistered.value ? '坐席签入成功，WebRTC 软电话已注册' : '坐席签入成功，请保持外置软电话在线');
     } catch {
       // HTTP 错误由全局请求拦截器统一提示。
     }
@@ -210,6 +345,7 @@ const changeStatus = async (command: StatusCommand) => {
   }
   if (command === 'signOut') {
     if (callActive.value) await hangup();
+    await disconnectWebRtcPhone();
     await signOutCurrentAgent();
     applyCurrentAgent({ ...currentAgent.value, status: 'OFFLINE' });
     dialNumber.value = '';
@@ -220,17 +356,28 @@ const changeStatus = async (command: StatusCommand) => {
   applyCurrentAgent(res.data);
   ElMessage.success(`坐席状态已切换为${statusLabels[command]}`);
 };
+
 const appendNumber = (value: string) => {
   void unlockRingAudio();
   if (dialNumber.value.length < 20) dialNumber.value += value;
 };
+
 const makeCall = async () => {
   void unlockRingAudio();
   if (!phoneRegistered.value || !dialNumber.value) return;
   try {
+    if (webRtcRegistered.value) {
+      await webRtcPhone.call(dialNumber.value);
+      callActive.value = true;
+      resetCallControls();
+      startCallTimer();
+      ElMessage.success('WebRTC 外呼已发起');
+      return;
+    }
     const response = await originateCall({ destination: dialNumber.value });
     activeCallId.value = response.data.callId;
     callActive.value = true;
+    resetCallControls();
     startCallTimer();
     const current = await getCurrentAgent();
     applyCurrentAgent(current.data);
@@ -239,20 +386,155 @@ const makeCall = async () => {
     // HTTP 错误由全局请求拦截器统一提示。
   }
 };
+
 const hangup = async () => {
-  if (!activeCallId.value) return;
+  if (!activeCallId.value && !webRtcPhone.hasActiveCall() && !webRtcIncoming.value) return;
   try {
+    callActionLoading.value = true;
+    if (webRtcRegistered.value && (webRtcPhone.hasActiveCall() || webRtcIncoming.value)) {
+      if (webRtcIncoming.value && !callActive.value) {
+        await webRtcPhone.decline();
+      } else {
+        await webRtcPhone.hangup();
+      }
+      markCallEnded(activeCallId.value);
+      clearActiveCallState();
+      await restoreIdleAfterWebRtcHangup();
+      return;
+    }
     await hangupCall(activeCallId.value);
+    markCallEnded(activeCallId.value);
     clearActiveCallState();
     const current = await getCurrentAgent();
     applyCurrentAgent(current.data);
   } catch {
     // HTTP 错误由全局请求拦截器统一提示。
+  } finally {
+    callActionLoading.value = false;
   }
 };
+
+const toggleHold = async () => {
+  if (!activeCallId.value && !webRtcPhone.hasActiveCall()) return;
+  try {
+    callActionLoading.value = true;
+    if (callHeld.value) {
+      if (webRtcRegistered.value && webRtcPhone.hasActiveCall()) {
+        await webRtcPhone.unhold();
+      } else {
+        await unholdCall(activeCallId.value);
+      }
+      callHeld.value = false;
+      ElMessage.success('通话已恢复');
+    } else {
+      if (webRtcRegistered.value && webRtcPhone.hasActiveCall()) {
+        await webRtcPhone.hold();
+      } else {
+        await holdCall(activeCallId.value);
+      }
+      callHeld.value = true;
+      ElMessage.success('通话已保持');
+    }
+  } finally {
+    callActionLoading.value = false;
+  }
+};
+
+const answerWebRtcCall = async () => {
+  if (!webRtcIncoming.value || !webRtcRegistered.value) return;
+  try {
+    callActionLoading.value = true;
+    await webRtcPhone.answer();
+  } finally {
+    callActionLoading.value = false;
+  }
+};
+
+const confirmTransfer = async () => {
+  if (!activeCallId.value || !transferTarget.value) return;
+  try {
+    callActionLoading.value = true;
+    await transferCall(activeCallId.value, transferTarget.value);
+    ElMessage.success('通话已转接');
+    clearActiveCallState();
+    const current = await getCurrentAgent();
+    applyCurrentAgent(current.data);
+  } finally {
+    callActionLoading.value = false;
+  }
+};
+
+const cancelTransfer = () => {
+  transferPanelOpen.value = false;
+  transferTarget.value = '';
+};
+
+const startConsult = async () => {
+  if (!activeCallId.value || !consultTarget.value) return;
+  try {
+    callActionLoading.value = true;
+    const response = await startConsultTransfer(activeCallId.value, consultTarget.value);
+    consultCallId.value = response.data.callId;
+    consultActive.value = true;
+    callHeld.value = true;
+    transferPanelOpen.value = false;
+    ElMessage.success('客户通话已保持，请用外置软电话拨打目标分机咨询');
+  } finally {
+    callActionLoading.value = false;
+  }
+};
+
+const cancelConsult = async () => {
+  if (!activeCallId.value) return;
+  try {
+    callActionLoading.value = true;
+    await cancelConsultTransfer(activeCallId.value);
+    consultActive.value = false;
+    consultCallId.value = '';
+    consultPanelOpen.value = false;
+    consultTarget.value = '';
+    callHeld.value = false;
+    ElMessage.success('咨询已取消，客户通话已恢复');
+  } finally {
+    callActionLoading.value = false;
+  }
+};
+
+const completeConsult = async () => {
+  if (!activeCallId.value) return;
+  try {
+    callActionLoading.value = true;
+    await completeConsultTransfer(activeCallId.value);
+    ElMessage.success('咨询转接已完成');
+    clearActiveCallState();
+    const current = await getCurrentAgent();
+    applyCurrentAgent(current.data);
+  } finally {
+    callActionLoading.value = false;
+  }
+};
+
+const cancelConsultPanel = () => {
+  if (consultActive.value) return;
+  consultPanelOpen.value = false;
+  consultTarget.value = '';
+};
+
+const resetCallControls = () => {
+  callHeld.value = false;
+  callActionLoading.value = false;
+  transferPanelOpen.value = false;
+  transferTarget.value = '';
+  consultPanelOpen.value = false;
+  consultTarget.value = '';
+  consultActive.value = false;
+  consultCallId.value = '';
+};
+
 const createCustomer = () => {
   customerDialogVisible.value = true;
 };
+
 const createTicket = () => {
   ticketDialogVisible.value = true;
 };
@@ -262,25 +544,29 @@ const handleTriggerClick = () => {
   panelOpen.value = true;
   nextTick(constrainPosition);
 };
+
 const startDrag = (event: PointerEvent) => {
-  if ((event.target as HTMLElement).closest('button, .el-dropdown')) return;
+  if ((event.target as HTMLElement).closest('button, .el-dropdown, input')) return;
   dragging = true;
   dragOffsetX = event.clientX - phonePosition.left;
   dragOffsetY = event.clientY - phonePosition.top;
   window.addEventListener('pointermove', handleDrag);
   window.addEventListener('pointerup', stopDrag, { once: true });
 };
+
 const handleDrag = (event: PointerEvent) => {
   if (!dragging) return;
   phonePosition.left = event.clientX - dragOffsetX;
   phonePosition.top = event.clientY - dragOffsetY;
   constrainPosition();
 };
+
 const stopDrag = () => {
   dragging = false;
   window.removeEventListener('pointermove', handleDrag);
   sessionStorage.setItem('callnexus-agent-phone-position', JSON.stringify(phonePosition));
 };
+
 const constrainPosition = () => {
   const rect = phoneShellRef.value?.getBoundingClientRect();
   const width = rect?.width || 140;
@@ -288,6 +574,7 @@ const constrainPosition = () => {
   phonePosition.left = Math.min(Math.max(8, phonePosition.left), Math.max(8, window.innerWidth - width - 8));
   phonePosition.top = Math.min(Math.max(8, phonePosition.top), Math.max(8, window.innerHeight - height - 8));
 };
+
 const initializePosition = () => {
   const saved = sessionStorage.getItem('callnexus-agent-phone-position');
   if (saved) {
@@ -304,6 +591,7 @@ const initializePosition = () => {
   phonePosition.left = window.innerWidth - width - 18;
   phonePosition.top = (window.innerHeight - height) / 2;
 };
+
 const startCallTimer = () => {
   if (callTimer) return;
   callSeconds.value = 0;
@@ -312,10 +600,12 @@ const startCallTimer = () => {
     if (callSeconds.value % 3 === 0) void syncActiveCallPresence();
   }, 1000);
 };
+
 const stopCallTimer = () => {
   if (callTimer) clearInterval(callTimer);
   callTimer = undefined;
 };
+
 const unlockRingAudio = async () => {
   const AudioContextConstructor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!AudioContextConstructor) return;
@@ -324,6 +614,7 @@ const unlockRingAudio = async () => {
     await ringAudioContext.resume().catch(() => undefined);
   }
 };
+
 const playRingPulse = () => {
   if (!ringAudioContext || ringAudioContext.state !== 'running') return;
   const startAt = ringAudioContext.currentTime;
@@ -339,6 +630,7 @@ const playRingPulse = () => {
   oscillator.start(startAt);
   oscillator.stop(startAt + 0.5);
 };
+
 const startRingTone = () => {
   if (ringTimer) return;
   void unlockRingAudio().then(() => {
@@ -346,11 +638,14 @@ const startRingTone = () => {
     ringTimer = setInterval(playRingPulse, 1200);
   });
 };
+
 const stopRingTone = () => {
   if (ringTimer) clearInterval(ringTimer);
   ringTimer = undefined;
 };
+
 const showIncomingCall = (event: Record<string, unknown>) => {
+  if (isWebRtcLocalIdle()) return;
   const eventCallId = String(event.callId || '');
   const callerNumber = String(event.callerNumber || '');
   if (eventCallId) activeCallId.value = eventCallId;
@@ -358,15 +653,19 @@ const showIncomingCall = (event: Record<string, unknown>) => {
   dialNumber.value = incomingNumber.value;
   incomingCall.value = true;
   callActive.value = false;
+  resetCallControls();
   stopCallTimer();
   panelOpen.value = false;
   startRingTone();
   nextTick(constrainPosition);
 };
+
 const showActiveCall = (event: Record<string, unknown>) => {
+  if (isWebRtcLocalIdle()) return;
   const eventCallId = String(event.callId || '');
   const callerNumber = String(event.callerNumber || '');
   const calledNumber = String(event.calledNumber || '');
+  if (eventCallId && recentlyEndedCallIds.has(eventCallId)) return;
   if (eventCallId) activeCallId.value = eventCallId;
   dialNumber.value = callerNumber === currentAgent.value.extension ? calledNumber : callerNumber;
   incomingCall.value = false;
@@ -376,6 +675,7 @@ const showActiveCall = (event: Record<string, unknown>) => {
   startCallTimer();
   nextTick(constrainPosition);
 };
+
 const handleCallEvent = (event: Record<string, unknown>) => {
   const type = String(event.type || '');
   const agentExtension = String(event.agentExtension || '');
@@ -396,13 +696,23 @@ const handleCallEvent = (event: Record<string, unknown>) => {
     });
   }
   if (type === 'CALL_HANGUP_COMPLETE') {
-    const relatedToCurrentCall = !activeCallId.value || eventCallId === activeCallId.value || relatedToCurrentAgent;
+    const extension = currentAgent.value.extension || '';
+    const matchedCurrentLeg = callerNumber === extension || calledNumber === extension;
+    const relatedToCurrentCall = activeCallId.value ? eventCallId === activeCallId.value && matchedCurrentLeg : relatedToCurrentAgent;
     if (!relatedToCurrentCall) return;
     clearActiveCallState();
     void loadCurrentAgent();
     return;
   }
   if (!relatedToCurrentAgent) return;
+  if (type === 'CALL_HOLD') {
+    callHeld.value = true;
+    return;
+  }
+  if (type === 'CALL_UNHOLD') {
+    callHeld.value = false;
+    return;
+  }
   if (type === 'CALL_ANSWER' || type === 'CALL_BRIDGE') {
     showActiveCall(event);
     return;
@@ -415,20 +725,45 @@ const handleCallEvent = (event: Record<string, unknown>) => {
     } else {
       showActiveCall(event);
     }
-    return;
   }
 };
+
 const clearActiveCallState = () => {
   incomingCall.value = false;
   incomingNumber.value = '';
   callActive.value = false;
   activeCallId.value = '';
+  resetCallControls();
   stopCallTimer();
   stopRingTone();
   panelOpen.value = false;
 };
+
+const markCallEnded = (callId?: string) => {
+  suppressActiveCallUntil = Date.now() + WEBRTC_ENDED_CALL_SUPPRESS_MS;
+  if (callId) recentlyEndedCallIds.set(callId, Date.now());
+  for (const [endedCallId, endedAt] of recentlyEndedCallIds.entries()) {
+    if (Date.now() - endedAt > WEBRTC_ENDED_CALL_SUPPRESS_MS) {
+      recentlyEndedCallIds.delete(endedCallId);
+    }
+  }
+};
+
+const isWebRtcLocalIdle = () => webRtcRegistered.value && !webRtcIncoming.value && !webRtcPhone.hasActiveCall();
+
+const restoreIdleAfterWebRtcHangup = async () => {
+  if (!signedIn.value || agentStatus.value === 'idle') return;
+  try {
+    const response = await changeCurrentAgentStatus('IDLE');
+    applyCurrentAgent(response.data);
+  } catch (error) {
+    console.warn('[WebRTC] 挂断后自动示闲失败', error);
+  }
+};
+
 const syncActiveCallPresence = async () => {
   if (!signedIn.value || syncingCallPresence) return;
+  if (webRtcPhone.hasActiveCall() && !activeCallId.value) return;
   syncingCallPresence = true;
   try {
     const current = await getCurrentAgent();
@@ -437,16 +772,20 @@ const syncActiveCallPresence = async () => {
     syncingCallPresence = false;
   }
 };
+
 onMounted(async () => {
   unsubscribeCallEvents = subscribeCallEvents(handleCallEvent);
   await loadCurrentAgent();
   await nextTick();
+  await registerWebRtcPhone();
   initializePosition();
   presenceTimer = setInterval(() => void syncActiveCallPresence(), 3000);
   window.addEventListener('resize', constrainPosition);
 });
+
 onBeforeUnmount(() => {
   unsubscribeCallEvents?.();
+  void disconnectWebRtcPhone();
   stopCallTimer();
   stopRingTone();
   if (presenceTimer) clearInterval(presenceTimer);
@@ -459,6 +798,18 @@ onBeforeUnmount(() => {
 button {
   font: inherit;
 }
+
+.agent-phone-shell {
+  position: fixed;
+  z-index: 1001;
+  width: max-content;
+  filter: drop-shadow(0 10px 20px rgba(26, 48, 82, 0.18));
+}
+
+.agent-phone-shell.incoming {
+  animation: shell-ring 0.55s ease-in-out infinite !important;
+}
+
 .toolbar-trigger {
   display: flex;
   align-items: center;
@@ -472,12 +823,14 @@ button {
   border-radius: 12px;
   background: #fff;
   transition: all 0.2s ease;
+
   div {
     display: grid;
     gap: 2px;
     min-width: 0;
     text-align: left;
   }
+
   strong {
     max-width: 120px;
     overflow: hidden;
@@ -487,10 +840,12 @@ button {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
   small {
     color: #8b96a8;
     font-size: 10px;
   }
+
   > i {
     width: 8px;
     height: 8px;
@@ -498,41 +853,36 @@ button {
     border-radius: 50%;
     background: #a0a9b7;
   }
+
   > i.idle {
     background: #16b887;
   }
+
   > i.busy {
     background: #df4d5b;
   }
+
   > i.afterCall {
     background: #e99a23;
   }
 }
+
 .toolbar-trigger:hover {
   border-color: #bfd1ef;
   box-shadow: 0 2px 8px rgba(40, 105, 216, 0.15);
 }
-.toolbar-trigger:active {
-  transform: scale(0.98);
-}
+
 .toolbar-trigger.calling {
   border-color: #b7d4ff;
   background: #f2f7ff;
 }
+
 .toolbar-trigger.incoming {
   border-color: #22c55e;
   background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
   animation: incoming-pulse 1s ease-in-out infinite !important;
 }
-@keyframes incoming-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
-  }
-}
+
 .trigger-icon {
   display: grid;
   place-items: center;
@@ -544,6 +894,7 @@ button {
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
 }
+
 .trigger-icon.incoming {
   background: #22c55e;
   animation:
@@ -551,66 +902,10 @@ button {
     icon-pulse 1.1s ease-in-out infinite !important;
   transform-origin: center center;
 }
-@keyframes icon-ring {
-  0%,
-  100% {
-    transform: rotate(0deg) scale(1);
-  }
-  15% {
-    transform: rotate(-14deg) scale(1.08);
-  }
-  30% {
-    transform: rotate(12deg) scale(1.08);
-  }
-  45% {
-    transform: rotate(-10deg) scale(1.08);
-  }
-  60% {
-    transform: rotate(8deg) scale(1.05);
-  }
-  75% {
-    transform: rotate(-4deg) scale(1.02);
-  }
-}
-@keyframes icon-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45);
-  }
-  50% {
-    box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
-  }
-}
-.agent-phone-shell {
-  position: fixed;
-  z-index: 1001;
-  width: max-content;
-  filter: drop-shadow(0 10px 20px rgba(26, 48, 82, 0.18));
-}
-.agent-phone-shell.incoming {
-  animation: shell-ring 0.55s ease-in-out infinite !important;
-}
-@keyframes shell-ring {
-  0%,
-  100% {
-    translate: 0 0;
-  }
-  20% {
-    translate: -3px 0;
-  }
-  40% {
-    translate: 3px 0;
-  }
-  60% {
-    translate: -2px 0;
-  }
-  80% {
-    translate: 2px 0;
-  }
-}
+
 .agent-panel {
   display: grid;
-  width: 360px;
+  width: 380px;
   gap: 13px;
   padding: 15px;
   border: 1px solid #dfe6f1;
@@ -618,6 +913,7 @@ button {
   background: #fff;
   box-shadow: 0 18px 45px rgba(25, 46, 79, 0.2);
 }
+
 .panel-heading {
   display: flex;
   align-items: center;
@@ -626,35 +922,47 @@ button {
   border-bottom: 1px solid #edf1f6;
   cursor: move;
   user-select: none;
+
   > div {
     display: grid;
     gap: 2px;
   }
+
   strong {
     color: #24314a;
     font-size: 13px;
   }
+
   small {
     color: #929cad;
     font-size: 9px;
   }
 }
+
 .heading-actions {
   display: flex !important;
   align-items: center;
   gap: 6px !important;
 }
-.collapse-button {
+
+.collapse-button,
+.clear-number {
   display: grid;
   place-items: center;
-  width: 27px;
-  height: 27px;
   color: #8c97a8;
   cursor: pointer;
+  border: 0;
+  background: transparent;
+}
+
+.collapse-button {
+  width: 27px;
+  height: 27px;
   border: 1px solid #e1e7f0;
   border-radius: 7px;
   background: #fff;
 }
+
 .agent-status {
   display: flex;
   align-items: center;
@@ -667,6 +975,7 @@ button {
   border: 1px solid #e1e7f0;
   border-radius: 7px;
   background: #fff;
+
   i {
     width: 6px;
     height: 6px;
@@ -674,26 +983,33 @@ button {
     background: #9ba5b5;
   }
 }
+
 .agent-status.idle {
   color: #087e60;
+
   i {
     background: #16b887;
   }
 }
+
 .agent-status.busy {
   color: #c73e4c;
   background: #fff0f2;
+
   i {
     background: #df4d5b;
   }
 }
+
 .agent-status.afterCall {
   color: #a96d12;
   background: #fff7e8;
+
   i {
     background: #e99a23;
   }
 }
+
 .dial-input {
   display: flex;
   align-items: center;
@@ -703,6 +1019,7 @@ button {
   border: 1px solid #e3e8f1;
   border-radius: 8px;
   background: #fff;
+
   input {
     min-width: 0;
     flex: 1;
@@ -714,20 +1031,17 @@ button {
     background: transparent;
   }
 }
+
 .clear-number {
-  display: grid;
-  place-items: center;
   width: 30px;
   height: 30px;
-  color: #9aa4b4;
-  cursor: pointer;
-  border: 0;
-  background: transparent;
 }
+
 .dial-pad {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 7px;
+
   button {
     height: 42px;
     color: #344057;
@@ -736,16 +1050,19 @@ button {
     border-radius: 8px;
     background: #f8fafc;
   }
+
   button:hover:not(:disabled) {
     color: #245dcc;
     border-color: #cddcff;
     background: #f0f5ff;
   }
+
   button:disabled {
     cursor: not-allowed;
     opacity: 0.45;
   }
 }
+
 .call-button,
 .hangup-button {
   display: flex;
@@ -760,39 +1077,58 @@ button {
   border-radius: 7px;
   background: #19ad80;
 }
-.call-button:disabled {
+
+.call-button:disabled,
+.hangup-button:disabled {
   cursor: not-allowed;
-  opacity: 0.4;
+  opacity: 0.5;
 }
+
 .active-call {
   display: flex;
   align-items: center;
   flex-direction: column;
   justify-content: center;
   gap: 5px;
-  min-height: 125px;
+  min-height: 120px;
   border-radius: 12px;
   background: #f5f9ff;
+
   small {
     color: #2870d7;
     font-size: 8px;
   }
+
   strong {
     color: #21304b;
     font-size: 19px;
   }
+
   > span:last-child {
     color: #6e7c91;
     font-size: 11px;
   }
+
+  em {
+    color: #e99a23;
+    font-style: normal;
+  }
 }
+
 .active-call.incoming-call {
   border: 1px solid #bbf7d0;
   background: #f0fdf4;
+  animation: incoming-pulse 1s ease-in-out infinite;
+
   small {
     color: #15803d;
   }
+
+  .call-pulse {
+    animation: icon-ring 0.65s ease-in-out infinite;
+  }
 }
+
 .call-pulse {
   display: grid;
   place-items: center;
@@ -803,10 +1139,13 @@ button {
   background: #20b68b;
   box-shadow: 0 0 0 5px rgba(32, 182, 139, 0.13);
 }
-.call-actions {
+
+.call-actions,
+.call-control-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 7px;
+
   button {
     display: flex;
     align-items: center;
@@ -820,21 +1159,143 @@ button {
     border-radius: 7px;
     background: #fff;
   }
+
+  button:hover:not(:disabled) {
+    color: #053b70;
+    border-color: #9bb9dc;
+    background: #f5f9ff;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
 }
-.call-actions .accept-button {
-  color: #087e60;
-  border-color: #b8eadb;
-  background: #effbf7;
+
+.call-control-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-.call-actions .reject-button {
-  color: #c73e4c;
-  border-color: #f2c7cc;
-  background: #fff5f6;
+
+.transfer-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 78px 52px;
+  gap: 7px;
+
+  input {
+    min-width: 0;
+    height: 34px;
+    padding: 0 10px;
+    color: #253149;
+    font-size: 11px;
+    border: 1px solid #dce5f1;
+    border-radius: 7px;
+    outline: 0;
+  }
+
+  button {
+    height: 34px;
+    color: #053b70;
+    font-size: 9px;
+    cursor: pointer;
+    border: 1px solid #b7cbe3;
+    border-radius: 7px;
+    background: #fff;
+  }
 }
-.incoming-card {
-  background: #f0fdf4;
+
+.consult-panel {
+  grid-template-columns: minmax(0, 1fr) 78px 62px;
+
+  .consult-tip {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    height: 34px;
+    padding: 0 10px;
+    overflow: hidden;
+    color: #5c6b82;
+    font-size: 11px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    border: 1px solid #dce5f1;
+    border-radius: 7px;
+    background: #f8fbff;
+  }
 }
+
 .hangup-button {
   background: #df4d5b;
+}
+
+@keyframes incoming-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
+  }
+}
+
+@keyframes icon-ring {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+
+  15% {
+    transform: rotate(-14deg) scale(1.08);
+  }
+
+  30% {
+    transform: rotate(12deg) scale(1.08);
+  }
+
+  45% {
+    transform: rotate(-10deg) scale(1.08);
+  }
+
+  60% {
+    transform: rotate(8deg) scale(1.05);
+  }
+
+  75% {
+    transform: rotate(-4deg) scale(1.02);
+  }
+}
+
+@keyframes icon-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45);
+  }
+
+  50% {
+    box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+  }
+}
+
+@keyframes shell-ring {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  20% {
+    transform: translateX(-3px);
+  }
+
+  40% {
+    transform: translateX(3px);
+  }
+
+  60% {
+    transform: translateX(-2px);
+  }
+
+  80% {
+    transform: translateX(2px);
+  }
 }
 </style>

@@ -51,3 +51,14 @@ export interface CurrentAgentVO {
   signedInAt?: string;
   updatedAt?: string;
 }
+
+export interface AgentWebRtcConfigVO {
+  agentId?: string | number;
+  sipAccountId?: string | number;
+  nodeId?: string | number;
+  extension: string;
+  sipDisplayName?: string;
+  sipDomain: string;
+  wssUrl: string;
+  authPassword: string;
+}
