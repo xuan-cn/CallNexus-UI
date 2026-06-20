@@ -21,9 +21,20 @@
       <div class="panel-heading" @pointerdown="startDrag">
         <div>
           <strong>{{ currentAgent.agentName || '坐席电话' }}</strong>
-          <small>{{ extensionSummary }} · {{ registrationSummary }}</small>
+          <small>{{ extensionSummary }} · {{ displayedRegistrationSummary }}</small>
         </div>
         <div class="heading-actions">
+          <el-dropdown trigger="click" @command="changePhoneMode">
+            <button type="button" class="phone-mode-button">
+              {{ phoneModeLabel }}<el-icon><ArrowDown /></el-icon>
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="EXTERNAL_SOFTPHONE">外置软电话</el-dropdown-item>
+                <el-dropdown-item command="WEBRTC">浏览器 WebRTC</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
           <el-dropdown trigger="click" @command="changeStatus">
             <button type="button" class="agent-status" :class="statusClass">
               <i></i>{{ signedIn ? currentStatusLabel : '未签入' }}<el-icon><ArrowDown /></el-icon>
@@ -165,6 +176,9 @@ import DynamicBusinessFormDialog from './DynamicBusinessFormDialog.vue';
 
 type AgentStatus = 'idle' | 'busy' | 'afterCall';
 type StatusCommand = AgentStatus | 'signIn' | 'signOut';
+type PhoneMode = 'EXTERNAL_SOFTPHONE' | 'WEBRTC';
+const PHONE_MODE_STORAGE_KEY = 'callnexus_agent_phone_mode';
+const savedPhoneMode = localStorage.getItem(PHONE_MODE_STORAGE_KEY);
 
 const panelOpen = ref(false);
 const phoneShellRef = ref<HTMLElement>();
@@ -209,8 +223,20 @@ let dragging = false;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
 let suppressActiveCallUntil = 0;
+let suppressIncomingCallUntil = 0;
 const recentlyEndedCallIds = new Map<string, number>();
 const WEBRTC_ENDED_CALL_SUPPRESS_MS = 120000;
+const phoneMode = ref<PhoneMode>(savedPhoneMode === 'WEBRTC' ? 'WEBRTC' : 'EXTERNAL_SOFTPHONE');
+const webRtcPhoneEnabled = computed(() => phoneMode.value === 'WEBRTC');
+const phoneModeLabel = computed(() => (phoneMode.value === 'WEBRTC' ? 'WebRTC' : '外置软电话'));
+const displayedRegistrationSummary = computed(() => {
+  if (!signedIn.value) return '未签入';
+  if (!currentAgent.value.extension) return '未绑定分机';
+  if (!webRtcPhoneEnabled.value) return '外置软电话';
+  if (webRtcRegistered.value) return 'WebRTC 已注册';
+  if (webRtcConnecting.value) return 'WebRTC 注册中';
+  return 'WebRTC 未注册';
+});
 
 const phonePositionStyle = computed(() => ({ left: `${phonePosition.left}px`, top: `${phonePosition.top}px` }));
 const dialKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
@@ -247,6 +273,13 @@ const applyCurrentAgent = (agent: CurrentAgentVO) => {
   signedIn.value = agent.status !== 'OFFLINE';
   if (agent.status !== 'OFFLINE') agentStatus.value = statusFromApi[agent.status];
   if (agent.activeCallId) {
+    if (webRtcIncoming.value) {
+      activeCallId.value = agent.activeCallId;
+      dialNumber.value = agent.activeCallNumber || dialNumber.value;
+      panelOpen.value = true;
+      nextTick(constrainPosition);
+      return;
+    }
     if (isWebRtcLocalIdle()) {
       return;
     }
@@ -274,9 +307,15 @@ const loadCurrentAgent = async () => {
 };
 
 const registerWebRtcPhone = async () => {
-  if (!signedIn.value || !remoteAudioRef.value || webRtcConnecting.value) return;
+  if (!webRtcPhoneEnabled.value) {
+    await disconnectWebRtcPhone();
+    return false;
+  }
+  if (!signedIn.value || !remoteAudioRef.value || webRtcConnecting.value) return false;
+  let registrationSucceeded = false;
   try {
     webRtcConnecting.value = true;
+    webRtcRegistered.value = false;
     const response = await getCurrentAgentWebRtcConfig();
     webRtcPhone.configure({
       onIncoming: () => {
@@ -315,11 +354,18 @@ const registerWebRtcPhone = async () => {
       }
     });
     await webRtcPhone.connect(response.data, remoteAudioRef.value);
+    registrationSucceeded = true;
+    webRtcRegistered.value = true;
+    return true;
   } catch (error) {
     webRtcRegistered.value = false;
+    console.warn('[WebRTC] register failed, fallback to external softphone mode', error);
+    await disconnectWebRtcPhone();
+    return false;
     console.warn('[WebRTC] 注册失败，保留外置软电话模式', error);
   } finally {
     webRtcConnecting.value = false;
+    webRtcRegistered.value = webRtcPhoneEnabled.value && (registrationSucceeded || webRtcPhone.isRegistered());
   }
 };
 
@@ -328,6 +374,27 @@ const disconnectWebRtcPhone = async () => {
   webRtcRegistered.value = false;
   webRtcConnecting.value = false;
   await webRtcPhone.disconnect();
+};
+
+const changePhoneMode = async (mode: PhoneMode) => {
+  if (mode !== 'EXTERNAL_SOFTPHONE' && mode !== 'WEBRTC') return;
+  if (callActive.value || incomingCall.value) {
+    ElMessage.warning('通话中不能切换电话模式');
+    return;
+  }
+  phoneMode.value = mode;
+  localStorage.setItem(PHONE_MODE_STORAGE_KEY, mode);
+  if (mode === 'EXTERNAL_SOFTPHONE') {
+    await disconnectWebRtcPhone();
+    ElMessage.success('已切换为外置软电话模式');
+    return;
+  }
+  const registered = await registerWebRtcPhone();
+  if (!registered) {
+    ElMessage.warning('WebRTC 注册失败，请检查 WSS 配置');
+    return;
+  }
+  ElMessage.success(webRtcRegistered.value ? '已切换为 WebRTC 模式' : 'WebRTC 注册失败，请检查 WSS 配置');
 };
 
 const changeStatus = async (command: StatusCommand) => {
@@ -366,22 +433,20 @@ const makeCall = async () => {
   void unlockRingAudio();
   if (!phoneRegistered.value || !dialNumber.value) return;
   try {
-    if (webRtcRegistered.value) {
-      await webRtcPhone.call(dialNumber.value);
-      callActive.value = true;
-      resetCallControls();
-      startCallTimer();
-      ElMessage.success('WebRTC 外呼已发起');
-      return;
-    }
+    suppressIncomingCallUntil = webRtcPhoneEnabled.value ? 0 : Date.now() + 15000;
     const response = await originateCall({ destination: dialNumber.value });
     activeCallId.value = response.data.callId;
-    callActive.value = true;
     resetCallControls();
-    startCallTimer();
     const current = await getCurrentAgent();
-    applyCurrentAgent(current.data);
-    ElMessage.success('外呼命令已发送，请在软电话接听');
+    if (webRtcRegistered.value) {
+      panelOpen.value = true;
+      ElMessage.success('外呼命令已发送，请接听 WebRTC 软电话来电');
+    } else {
+      callActive.value = true;
+      startCallTimer();
+      applyCurrentAgent(current.data);
+      ElMessage.success('外呼命令已发送，请在软电话接听');
+    }
   } catch {
     // HTTP 错误由全局请求拦截器统一提示。
   }
@@ -645,6 +710,7 @@ const stopRingTone = () => {
 };
 
 const showIncomingCall = (event: Record<string, unknown>) => {
+  if (Date.now() < suppressIncomingCallUntil) return;
   if (isWebRtcLocalIdle()) return;
   const eventCallId = String(event.callId || '');
   const callerNumber = String(event.callerNumber || '');
@@ -655,7 +721,7 @@ const showIncomingCall = (event: Record<string, unknown>) => {
   callActive.value = false;
   resetCallControls();
   stopCallTimer();
-  panelOpen.value = false;
+  panelOpen.value = true;
   startRingTone();
   nextTick(constrainPosition);
 };
@@ -749,7 +815,7 @@ const markCallEnded = (callId?: string) => {
   }
 };
 
-const isWebRtcLocalIdle = () => webRtcRegistered.value && !webRtcIncoming.value && !webRtcPhone.hasActiveCall();
+const isWebRtcLocalIdle = () => webRtcPhoneEnabled.value && !webRtcIncoming.value && !webRtcPhone.hasActiveCall();
 
 const restoreIdleAfterWebRtcHangup = async () => {
   if (!signedIn.value || agentStatus.value === 'idle') return;
@@ -961,6 +1027,20 @@ button {
   border: 1px solid #e1e7f0;
   border-radius: 7px;
   background: #fff;
+}
+
+.phone-mode-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 27px;
+  padding: 0 8px;
+  color: #053b70;
+  font-size: 9px;
+  cursor: pointer;
+  border: 1px solid #d5e1ef;
+  border-radius: 7px;
+  background: #f7fbff;
 }
 
 .agent-status {
