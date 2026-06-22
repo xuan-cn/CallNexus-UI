@@ -25,6 +25,6 @@ export const getCurrentAgentWebRtcConfig = (): AxiosPromise<AgentWebRtcConfigVO>
 export const signInCurrentAgent = (): AxiosPromise<CurrentAgentVO> => request({ url: '/api/v1/agent-session/sign-in', method: 'put' });
 
 export const changeCurrentAgentStatus = (status: AgentPresenceStatus): AxiosPromise<CurrentAgentVO> =>
-  request({ url: '/api/v1/agent-session/status', method: 'put', data: { status } });
+  request({ url: '/api/v1/agent-session/status', method: 'put', data: { status }, headers: { repeatSubmit: false } });
 
 export const signOutCurrentAgent = () => request({ url: '/api/v1/agent-session/sign-out', method: 'delete' });

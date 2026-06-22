@@ -24,7 +24,7 @@
           <small>{{ extensionSummary }} · {{ displayedRegistrationSummary }}</small>
         </div>
         <div class="heading-actions">
-          <el-dropdown trigger="click" @command="changePhoneMode">
+          <el-dropdown trigger="click" popper-class="agent-phone-mode-dropdown" @command="changePhoneMode">
             <button type="button" class="phone-mode-button">
               {{ phoneModeLabel }}<el-icon><ArrowDown /></el-icon>
             </button>
@@ -74,6 +74,7 @@
             <el-icon><Tickets /></el-icon>创建工单
           </button>
         </div>
+        <p v-if="webRtcFirstLegWaiting" class="webrtc-first-leg-tip">请在 30 秒内接听浏览器软电话，接听后才会继续呼叫客户。</p>
         <button v-if="webRtcIncoming" type="button" class="call-button" :disabled="callActionLoading" @click="answerWebRtcCall">
           <el-icon><PhoneFilled /></el-icon>接听电话
         </button>
@@ -103,14 +104,37 @@
           <span class="call-pulse"
             ><el-icon><PhoneFilled /></el-icon
           ></span>
-          <small>{{ callHeld ? '通话已保持' : '软电话正在呼叫' }}</small>
+          <small>{{ callHeld ? '通话已保持' : callMuted ? '坐席已静音' : '软电话正在呼叫' }}</small>
           <strong>{{ dialNumber }}</strong>
-          <span>{{ callDuration }}<em v-if="callHeld"> · 已保持</em></span>
+          <span>{{ callDuration }}<em v-if="callHeld"> · 已保持</em><em v-if="callMuted"> · 已静音</em></span>
         </div>
         <div class="call-control-actions">
           <button type="button" :disabled="callActionLoading" @click="toggleHold">{{ callHeld ? '恢复通话' : '保持通话' }}</button>
+          <button type="button" :disabled="callActionLoading" @click="toggleMute">{{ callMuted ? '取消静音' : '静音' }}</button>
           <button type="button" :disabled="callActionLoading || consultActive" @click="transferPanelOpen = !transferPanelOpen">盲转</button>
           <button type="button" :disabled="callActionLoading || callHeld" @click="consultPanelOpen = !consultPanelOpen">咨询转接</button>
+          <button type="button" :disabled="callActionLoading" @click="dtmfPanelOpen = !dtmfPanelOpen">DTMF</button>
+          <button type="button" :disabled="callActionLoading" @click="notePanelOpen = !notePanelOpen">通话备注</button>
+        </div>
+        <div v-if="dtmfPanelOpen" class="dtmf-panel">
+          <div class="dtmf-input">
+            <input v-model="dtmfDigits" maxlength="32" placeholder="输入或点击按键，例如 1#" @keyup.enter="sendDtmf" />
+            <button type="button" :disabled="callActionLoading || !dtmfDigits" @click="sendDtmf">发送</button>
+          </div>
+          <div class="dtmf-pad">
+            <button v-for="key in dialKeys" :key="`dtmf-${key}`" type="button" :disabled="callActionLoading" @click="appendDtmfDigit(key)">
+              {{ key }}
+            </button>
+            <button type="button" :disabled="callActionLoading || !dtmfDigits" @click="dtmfDigits = dtmfDigits.slice(0, -1)">退格</button>
+            <button type="button" :disabled="callActionLoading || !dtmfDigits" @click="dtmfDigits = ''">清空</button>
+          </div>
+        </div>
+        <div v-if="notePanelOpen" class="note-panel">
+          <textarea v-model="callNoteContent" maxlength="1000" placeholder="记录本次通话备注，保存后写入通话事件时间线"></textarea>
+          <div>
+            <span>{{ callNoteContent.length }} / 1000</span>
+            <button type="button" :disabled="noteSaving || !callNoteContent.trim()" @click="saveNote">保存备注</button>
+          </div>
         </div>
         <div v-if="transferPanelOpen" class="transfer-panel">
           <input v-model="transferTarget" maxlength="20" placeholder="输入目标分机" @keyup.enter="confirmTransfer" />
@@ -124,7 +148,7 @@
             <button type="button" :disabled="callActionLoading" @click="cancelConsultPanel">取消</button>
           </template>
           <template v-else>
-            <span class="consult-tip">客户已保持，请用外置软电话咨询 {{ consultTarget }}</span>
+            <span class="consult-tip">客户已保持，正在咨询 {{ consultTarget }}</span>
             <button type="button" :disabled="callActionLoading" @click="completeConsult">完成转接</button>
             <button type="button" :disabled="callActionLoading" @click="cancelConsult">取消咨询</button>
           </template>
@@ -165,9 +189,13 @@ import {
   completeConsultTransfer,
   hangupCall,
   holdCall,
+  muteCall,
   originateCall,
+  saveCallNote,
+  sendCallDtmf,
   startConsultTransfer,
   transferCall,
+  unmuteCall,
   unholdCall
 } from '@/api/callcenter/call';
 import { subscribeCallEvents } from '@/utils/websocket';
@@ -178,7 +206,11 @@ type AgentStatus = 'idle' | 'busy' | 'afterCall';
 type StatusCommand = AgentStatus | 'signIn' | 'signOut';
 type PhoneMode = 'EXTERNAL_SOFTPHONE' | 'WEBRTC';
 const PHONE_MODE_STORAGE_KEY = 'callnexus_agent_phone_mode';
+const WEBRTC_MODE_DISABLED = true;
 const savedPhoneMode = localStorage.getItem(PHONE_MODE_STORAGE_KEY);
+if (WEBRTC_MODE_DISABLED && savedPhoneMode === 'WEBRTC') {
+  localStorage.setItem(PHONE_MODE_STORAGE_KEY, 'EXTERNAL_SOFTPHONE');
+}
 
 const panelOpen = ref(false);
 const phoneShellRef = ref<HTMLElement>();
@@ -190,6 +222,7 @@ const currentAgent = ref<CurrentAgentVO>({ configured: false, status: 'OFFLINE' 
 const dialNumber = ref('');
 const callActive = ref(false);
 const callHeld = ref(false);
+const callMuted = ref(false);
 const callActionLoading = ref(false);
 const transferPanelOpen = ref(false);
 const transferTarget = ref('');
@@ -197,6 +230,11 @@ const consultPanelOpen = ref(false);
 const consultTarget = ref('');
 const consultActive = ref(false);
 const consultCallId = ref('');
+const dtmfPanelOpen = ref(false);
+const dtmfDigits = ref('');
+const notePanelOpen = ref(false);
+const callNoteContent = ref('');
+const noteSaving = ref(false);
 const incomingCall = ref(false);
 const incomingNumber = ref('');
 const activeCallId = ref('');
@@ -206,6 +244,7 @@ const ticketDialogVisible = ref(false);
 const webRtcRegistered = ref(false);
 const webRtcConnecting = ref(false);
 const webRtcIncoming = ref(false);
+const webRtcFirstLegWaiting = ref(false);
 const phoneRegistered = computed(() => signedIn.value && Boolean(currentAgent.value.extension));
 const registrationSummary = computed(() => {
   if (!signedIn.value) return '未签入';
@@ -219,6 +258,8 @@ let ringAudioContext: AudioContext | undefined;
 let presenceTimer: ReturnType<typeof setInterval> | undefined;
 let unsubscribeCallEvents: (() => void) | undefined;
 let syncingCallPresence = false;
+let restoringIdleAfterHangup = false;
+let webRtcFirstLegTimeout: ReturnType<typeof setTimeout> | undefined;
 let dragging = false;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
@@ -226,7 +267,8 @@ let suppressActiveCallUntil = 0;
 let suppressIncomingCallUntil = 0;
 const recentlyEndedCallIds = new Map<string, number>();
 const WEBRTC_ENDED_CALL_SUPPRESS_MS = 120000;
-const phoneMode = ref<PhoneMode>(savedPhoneMode === 'WEBRTC' ? 'WEBRTC' : 'EXTERNAL_SOFTPHONE');
+const WEBRTC_FIRST_LEG_ANSWER_TIMEOUT_MS = 30000;
+const phoneMode = ref<PhoneMode>(!WEBRTC_MODE_DISABLED && savedPhoneMode === 'WEBRTC' ? 'WEBRTC' : 'EXTERNAL_SOFTPHONE');
 const webRtcPhoneEnabled = computed(() => phoneMode.value === 'WEBRTC');
 const phoneModeLabel = computed(() => (phoneMode.value === 'WEBRTC' ? 'WebRTC' : '外置软电话'));
 const displayedRegistrationSummary = computed(() => {
@@ -259,6 +301,23 @@ const statusClass = computed(() => ({
   busy: signedIn.value && agentStatus.value === 'busy',
   afterCall: signedIn.value && agentStatus.value === 'afterCall'
 }));
+const clearWebRtcFirstLegTimeout = () => {
+  if (!webRtcFirstLegTimeout) return;
+  clearTimeout(webRtcFirstLegTimeout);
+  webRtcFirstLegTimeout = undefined;
+};
+const stopWebRtcFirstLegWaiting = () => {
+  webRtcFirstLegWaiting.value = false;
+  clearWebRtcFirstLegTimeout();
+};
+const startWebRtcFirstLegTimeout = () => {
+  clearWebRtcFirstLegTimeout();
+  webRtcFirstLegTimeout = setTimeout(() => {
+    if (!webRtcFirstLegWaiting.value || callActive.value) return;
+    ElMessage.warning('WebRTC 来电未接听，本次外呼已取消');
+    void hangup();
+  }, WEBRTC_FIRST_LEG_ANSWER_TIMEOUT_MS);
+};
 const callDuration = computed(() => {
   const minutes = Math.floor(callSeconds.value / 60)
     .toString()
@@ -320,15 +379,18 @@ const registerWebRtcPhone = async () => {
     webRtcPhone.configure({
       onIncoming: () => {
         webRtcIncoming.value = true;
+        webRtcFirstLegWaiting.value = true;
         incomingCall.value = true;
         incomingNumber.value = dialNumber.value || '未知号码';
         panelOpen.value = true;
+        startWebRtcFirstLegTimeout();
         startRingTone();
         nextTick(constrainPosition);
       },
       onAnswered: () => {
         webRtcIncoming.value = false;
         incomingCall.value = false;
+        stopWebRtcFirstLegWaiting();
         stopRingTone();
         callActive.value = true;
         agentStatus.value = 'busy';
@@ -336,6 +398,7 @@ const registerWebRtcPhone = async () => {
       },
       onHangup: () => {
         webRtcIncoming.value = false;
+        stopWebRtcFirstLegWaiting();
         markCallEnded(activeCallId.value);
         clearActiveCallState();
         void restoreIdleAfterWebRtcHangup();
@@ -371,6 +434,7 @@ const registerWebRtcPhone = async () => {
 
 const disconnectWebRtcPhone = async () => {
   webRtcIncoming.value = false;
+  stopWebRtcFirstLegWaiting();
   webRtcRegistered.value = false;
   webRtcConnecting.value = false;
   await webRtcPhone.disconnect();
@@ -378,6 +442,10 @@ const disconnectWebRtcPhone = async () => {
 
 const changePhoneMode = async (mode: PhoneMode) => {
   if (mode !== 'EXTERNAL_SOFTPHONE' && mode !== 'WEBRTC') return;
+  if (mode === 'WEBRTC' && WEBRTC_MODE_DISABLED) {
+    ElMessage.warning('WebRTC 软电话暂未开放，请使用外置软电话模式');
+    return;
+  }
   if (callActive.value || incomingCall.value) {
     ElMessage.warning('通话中不能切换电话模式');
     return;
@@ -429,18 +497,55 @@ const appendNumber = (value: string) => {
   if (dialNumber.value.length < 20) dialNumber.value += value;
 };
 
+const appendDtmfDigit = (value: string) => {
+  if (dtmfDigits.value.length < 32) dtmfDigits.value += value;
+};
+
+const sendDtmf = async () => {
+  const digits = dtmfDigits.value.trim();
+  if (!activeCallId.value || !digits) return;
+  try {
+    callActionLoading.value = true;
+    await sendCallDtmf(activeCallId.value, { digits });
+    dtmfDigits.value = '';
+    ElMessage.success('DTMF 已发送');
+  } finally {
+    callActionLoading.value = false;
+  }
+};
+
+const saveNote = async () => {
+  const content = callNoteContent.value.trim();
+  if (!activeCallId.value || !content) return;
+  try {
+    noteSaving.value = true;
+    await saveCallNote(activeCallId.value, { content });
+    callNoteContent.value = '';
+    notePanelOpen.value = false;
+    ElMessage.success('通话备注已保存');
+  } finally {
+    noteSaving.value = false;
+  }
+};
+
 const makeCall = async () => {
   void unlockRingAudio();
   if (!phoneRegistered.value || !dialNumber.value) return;
+  if (webRtcPhoneEnabled.value && !webRtcRegistered.value) {
+    ElMessage.warning('WebRTC 未注册，请检查 WSS 配置或切换为外置软电话模式');
+    return;
+  }
   try {
     suppressIncomingCallUntil = webRtcPhoneEnabled.value ? 0 : Date.now() + 15000;
     const response = await originateCall({ destination: dialNumber.value });
     activeCallId.value = response.data.callId;
     resetCallControls();
     const current = await getCurrentAgent();
-    if (webRtcRegistered.value) {
+    if (webRtcPhoneEnabled.value) {
+      webRtcFirstLegWaiting.value = true;
       panelOpen.value = true;
-      ElMessage.success('外呼命令已发送，请接听 WebRTC 软电话来电');
+      startWebRtcFirstLegTimeout();
+      ElMessage.success('外呼命令已发送，请在浏览器软电话接听来电');
     } else {
       callActive.value = true;
       startCallTimer();
@@ -505,11 +610,32 @@ const toggleHold = async () => {
   }
 };
 
+const toggleMute = async () => {
+  if (!activeCallId.value) return;
+  try {
+    callActionLoading.value = true;
+    if (callMuted.value) {
+      await unmuteCall(activeCallId.value);
+      callMuted.value = false;
+      ElMessage.success('已取消静音');
+    } else {
+      await muteCall(activeCallId.value);
+      callMuted.value = true;
+      ElMessage.success('已静音，客户将听不到坐席声音');
+    }
+  } finally {
+    callActionLoading.value = false;
+  }
+};
+
 const answerWebRtcCall = async () => {
   if (!webRtcIncoming.value || !webRtcRegistered.value) return;
   try {
     callActionLoading.value = true;
     await webRtcPhone.answer();
+  } catch (error) {
+    console.error('[WebRTC] answer failed', error);
+    ElMessage.error('WebRTC 接听失败，请查看浏览器控制台错误');
   } finally {
     callActionLoading.value = false;
   }
@@ -538,12 +664,12 @@ const startConsult = async () => {
   if (!activeCallId.value || !consultTarget.value) return;
   try {
     callActionLoading.value = true;
-    const response = await startConsultTransfer(activeCallId.value, consultTarget.value);
+    const response = await startConsultTransfer(activeCallId.value, consultTarget.value, phoneMode.value);
     consultCallId.value = response.data.callId;
     consultActive.value = true;
     callHeld.value = true;
     transferPanelOpen.value = false;
-    ElMessage.success('客户通话已保持，请用外置软电话拨打目标分机咨询');
+    ElMessage.success('客户通话已保持，正在呼叫咨询目标分机');
   } finally {
     callActionLoading.value = false;
   }
@@ -553,7 +679,7 @@ const cancelConsult = async () => {
   if (!activeCallId.value) return;
   try {
     callActionLoading.value = true;
-    await cancelConsultTransfer(activeCallId.value);
+    await cancelConsultTransfer(activeCallId.value, phoneMode.value);
     consultActive.value = false;
     consultCallId.value = '';
     consultPanelOpen.value = false;
@@ -569,7 +695,7 @@ const completeConsult = async () => {
   if (!activeCallId.value) return;
   try {
     callActionLoading.value = true;
-    await completeConsultTransfer(activeCallId.value);
+    await completeConsultTransfer(activeCallId.value, phoneMode.value);
     ElMessage.success('咨询转接已完成');
     clearActiveCallState();
     const current = await getCurrentAgent();
@@ -587,6 +713,7 @@ const cancelConsultPanel = () => {
 
 const resetCallControls = () => {
   callHeld.value = false;
+  callMuted.value = false;
   callActionLoading.value = false;
   transferPanelOpen.value = false;
   transferTarget.value = '';
@@ -594,6 +721,11 @@ const resetCallControls = () => {
   consultTarget.value = '';
   consultActive.value = false;
   consultCallId.value = '';
+  dtmfPanelOpen.value = false;
+  dtmfDigits.value = '';
+  notePanelOpen.value = false;
+  callNoteContent.value = '';
+  noteSaving.value = false;
 };
 
 const createCustomer = () => {
@@ -726,12 +858,16 @@ const showIncomingCall = (event: Record<string, unknown>) => {
   nextTick(constrainPosition);
 };
 
+const isSourceConsultLegEvent = (eventCallId: string, callerNumber: string) =>
+  consultActive.value && eventCallId === consultCallId.value && callerNumber === currentAgent.value.extension;
+
 const showActiveCall = (event: Record<string, unknown>) => {
   if (isWebRtcLocalIdle()) return;
   const eventCallId = String(event.callId || '');
   const callerNumber = String(event.callerNumber || '');
   const calledNumber = String(event.calledNumber || '');
   if (eventCallId && recentlyEndedCallIds.has(eventCallId)) return;
+  if (isSourceConsultLegEvent(eventCallId, callerNumber)) return;
   if (eventCallId) activeCallId.value = eventCallId;
   dialNumber.value = callerNumber === currentAgent.value.extension ? calledNumber : callerNumber;
   incomingCall.value = false;
@@ -764,8 +900,11 @@ const handleCallEvent = (event: Record<string, unknown>) => {
   if (type === 'CALL_HANGUP_COMPLETE') {
     const extension = currentAgent.value.extension || '';
     const matchedCurrentLeg = callerNumber === extension || calledNumber === extension;
-    const relatedToCurrentCall = activeCallId.value ? eventCallId === activeCallId.value && matchedCurrentLeg : relatedToCurrentAgent;
+    const relatedToCurrentCall = activeCallId.value
+      ? relatedToCurrentAgent && (eventCallId === activeCallId.value || matchedCurrentLeg)
+      : relatedToCurrentAgent;
     if (!relatedToCurrentCall) return;
+    markCallEnded(eventCallId || activeCallId.value);
     clearActiveCallState();
     void loadCurrentAgent();
     return;
@@ -780,6 +919,7 @@ const handleCallEvent = (event: Record<string, unknown>) => {
     return;
   }
   if (type === 'CALL_ANSWER' || type === 'CALL_BRIDGE') {
+    if (isSourceConsultLegEvent(eventCallId, callerNumber)) return;
     showActiveCall(event);
     return;
   }
@@ -799,6 +939,8 @@ const clearActiveCallState = () => {
   incomingNumber.value = '';
   callActive.value = false;
   activeCallId.value = '';
+  webRtcIncoming.value = false;
+  stopWebRtcFirstLegWaiting();
   resetCallControls();
   stopCallTimer();
   stopRingTone();
@@ -818,12 +960,15 @@ const markCallEnded = (callId?: string) => {
 const isWebRtcLocalIdle = () => webRtcPhoneEnabled.value && !webRtcIncoming.value && !webRtcPhone.hasActiveCall();
 
 const restoreIdleAfterWebRtcHangup = async () => {
-  if (!signedIn.value || agentStatus.value === 'idle') return;
+  if (!signedIn.value || agentStatus.value === 'idle' || restoringIdleAfterHangup) return;
+  restoringIdleAfterHangup = true;
   try {
     const response = await changeCurrentAgentStatus('IDLE');
     applyCurrentAgent(response.data);
   } catch (error) {
     console.warn('[WebRTC] 挂断后自动示闲失败', error);
+  } finally {
+    restoringIdleAfterHangup = false;
   }
 };
 
@@ -1164,6 +1309,17 @@ button {
   opacity: 0.5;
 }
 
+.webrtc-first-leg-tip {
+  margin: -2px 0 0;
+  padding: 8px 10px;
+  color: #8a5a00;
+  font-size: 11px;
+  line-height: 1.5;
+  border: 1px solid #ffe3a3;
+  border-radius: 8px;
+  background: #fff8e6;
+}
+
 .active-call {
   display: flex;
   align-items: center;
@@ -1283,6 +1439,103 @@ button {
   }
 }
 
+.dtmf-panel,
+.note-panel {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #dce5f1;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+
+.dtmf-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px;
+  gap: 7px;
+
+  input {
+    min-width: 0;
+    height: 32px;
+    padding: 0 10px;
+    color: #253149;
+    font-size: 11px;
+    border: 1px solid #dce5f1;
+    border-radius: 7px;
+    outline: 0;
+    background: #fff;
+  }
+
+  button {
+    height: 32px;
+    color: #fff;
+    font-size: 9px;
+    cursor: pointer;
+    border: 0;
+    border-radius: 7px;
+    background: #053b70;
+  }
+}
+
+.dtmf-pad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+
+  button {
+    height: 30px;
+    color: #344057;
+    font-size: 10px;
+    cursor: pointer;
+    border: 1px solid #e1e7f0;
+    border-radius: 7px;
+    background: #fff;
+  }
+
+  button:hover:not(:disabled) {
+    color: #053b70;
+    border-color: #9bb9dc;
+  }
+}
+
+.note-panel {
+  textarea {
+    min-height: 72px;
+    padding: 9px 10px;
+    resize: vertical;
+    color: #253149;
+    font-size: 11px;
+    line-height: 1.5;
+    border: 1px solid #dce5f1;
+    border-radius: 8px;
+    outline: 0;
+    background: #fff;
+  }
+
+  > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  span {
+    color: #8b96a8;
+    font-size: 10px;
+  }
+
+  button {
+    height: 30px;
+    padding: 0 12px;
+    color: #fff;
+    font-size: 9px;
+    cursor: pointer;
+    border: 0;
+    border-radius: 7px;
+    background: #053b70;
+  }
+}
+
 .consult-panel {
   grid-template-columns: minmax(0, 1fr) 78px 62px;
 
@@ -1377,5 +1630,11 @@ button {
   80% {
     transform: translateX(2px);
   }
+}
+
+:global(.agent-phone-mode-dropdown .el-dropdown-menu__item:nth-child(2)) {
+  color: #a8abb2;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 </style>
