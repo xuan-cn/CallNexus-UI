@@ -1,4 +1,4 @@
-export type MediaAssetCategory = 'IVR_PROMPT' | 'QUEUE_WAIT_MUSIC' | 'RINGBACK_TONE' | 'USER_MUSIC' | 'CALL_RECORDING';
+export type MediaAssetCategory = 'IVR_PROMPT' | 'QUEUE_WAIT_MUSIC' | 'RINGBACK_TONE' | 'USER_MUSIC' | 'CALL_RECORDING' | 'AGENT_PROMPT';
 export type MediaAssetSourceType = 'UPLOAD' | 'TTS' | 'RECORDING' | 'AI_GENERATED';
 
 export interface MediaAssetVO {

@@ -84,7 +84,12 @@
               </el-button>
               <span v-else>-</span>
             </el-descriptions-item>
-            <el-descriptions-item label="关联工单ID">{{ detail.ticketId || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="关联工单ID">
+              <el-button v-if="detail.ticketId" link type="primary" class="id-link" @click="openTicketDetail(detail.ticketId)">
+                {{ detail.ticketId }}
+              </el-button>
+              <span v-else>-</span>
+            </el-descriptions-item>
             <el-descriptions-item label="开始时间">{{ detail.startedAt || '-' }}</el-descriptions-item>
             <el-descriptions-item label="振铃时间">{{ detail.ringingAt || '-' }}</el-descriptions-item>
             <el-descriptions-item label="接听时间">{{ detail.answeredAt || '-' }}</el-descriptions-item>
@@ -140,9 +145,9 @@
             <div class="timeline-list">
               <div v-for="event in timelineEvents" :key="String(event.id)" class="timeline-row">
                 <time>{{ formatClock(event.occurredAt) }}</time>
-                <div class="timeline-marker" :class="eventTone(event.eventType)"></div>
+                <div class="timeline-marker" :class="event.tone || eventTone(event.eventType)"></div>
                 <div class="timeline-content">
-                  <strong>{{ eventLabel(event.eventType) }}</strong>
+                  <strong>{{ event.title || eventLabel(event.eventType) }}</strong>
                   <span>{{ event.fromTarget || '-' }} → {{ event.toTarget || '-' }}</span>
                 </div>
               </div>
@@ -193,10 +198,92 @@
             </el-table-column>
           </el-table>
         </el-tab-pane>
+        <el-tab-pane label="技术诊断" name="diagnostics">
+          <el-alert
+            class="diagnostic-tip"
+            type="info"
+            show-icon
+            :closable="false"
+            title="这里展示业务通话、FreeSWITCH 通话腿 UUID、桥接关系和坐席参与记录，主要用于排查转接、静音、DTMF、无声和状态残留问题。"
+          />
+          <el-collapse class="diagnostic-collapse" model-value="legs">
+            <el-collapse-item title="通话腿" name="legs">
+              <el-table :data="detail.diagnosticLegs || []" size="small" border>
+                <el-table-column label="角色" width="110">
+                  <template #default="{ row }">{{ legRoleLabel(row.legRole) }}</template>
+                </el-table-column>
+                <el-table-column label="UUID" prop="legUuid" min-width="260" show-overflow-tooltip />
+                <el-table-column label="坐席" width="120">
+                  <template #default="{ row }">{{ row.agentExtension || row.agentId || '-' }}</template>
+                </el-table-column>
+                <el-table-column label="主叫" prop="callerNumber" min-width="120" />
+                <el-table-column label="被叫" prop="calledNumber" min-width="120" />
+                <el-table-column label="状态" prop="legState" width="110" />
+                <el-table-column label="活跃" width="80">
+                  <template #default="{ row }">
+                    <el-tag :type="row.active ? 'success' : 'info'" size="small">{{ row.active ? '是' : '否' }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="振铃" prop="ringingAt" min-width="165" />
+                <el-table-column label="接听" prop="answeredAt" min-width="165" />
+                <el-table-column label="桥接" prop="bridgedAt" min-width="165" />
+                <el-table-column label="保持" prop="heldAt" min-width="165" />
+                <el-table-column label="结束" prop="endedAt" min-width="165" />
+                <el-table-column label="挂断原因" min-width="180" show-overflow-tooltip>
+                  <template #default="{ row }">{{ hangupCauseLabel(row.hangupCause) }}</template>
+                </el-table-column>
+              </el-table>
+            </el-collapse-item>
+            <el-collapse-item title="桥接关系" name="bridges">
+              <el-table :data="detail.diagnosticBridges || []" size="small" border>
+                <el-table-column label="类型" width="110">
+                  <template #default="{ row }">{{ bridgeTypeLabel(row.bridgeType) }}</template>
+                </el-table-column>
+                <el-table-column label="状态" prop="bridgeState" width="120" />
+                <el-table-column label="左腿 UUID" prop="leftLegUuid" min-width="260" show-overflow-tooltip />
+                <el-table-column label="右腿 UUID" prop="rightLegUuid" min-width="260" show-overflow-tooltip />
+                <el-table-column label="开始时间" prop="startedAt" min-width="165" />
+                <el-table-column label="结束时间" prop="endedAt" min-width="165" />
+              </el-table>
+            </el-collapse-item>
+            <el-collapse-item title="坐席参与" name="agents">
+              <el-table :data="detail.agentSessions || []" size="small" border>
+                <el-table-column label="角色" width="130">
+                  <template #default="{ row }">{{ agentRoleLabel(row.role) }}</template>
+                </el-table-column>
+                <el-table-column label="坐席" width="150">
+                  <template #default="{ row }">{{ row.agentExtension || row.agentId || '-' }}</template>
+                </el-table-column>
+                <el-table-column label="坐席腿 UUID" prop="agentLegUuid" min-width="260" show-overflow-tooltip />
+                <el-table-column label="状态" prop="sessionState" width="110" />
+                <el-table-column label="前端可见" width="90">
+                  <template #default="{ row }">
+                    <el-tag :type="row.visible ? 'success' : 'info'" size="small">{{ row.visible ? '是' : '否' }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="加入时间" prop="joinedAt" min-width="165" />
+                <el-table-column label="离开时间" prop="leftAt" min-width="165" />
+              </el-table>
+            </el-collapse-item>
+            <el-collapse-item title="原始事件" name="events">
+              <el-table :data="detail.events || []" size="small" border>
+                <el-table-column label="事件" width="150">
+                  <template #default="{ row }">{{ eventLabel(row.eventType) }}</template>
+                </el-table-column>
+                <el-table-column label="通道 UUID" prop="channelUuid" min-width="260" show-overflow-tooltip />
+                <el-table-column label="关联 UUID" prop="relatedChannelUuid" min-width="260" show-overflow-tooltip />
+                <el-table-column label="来源" prop="fromTarget" min-width="120" />
+                <el-table-column label="目标" prop="toTarget" min-width="120" />
+                <el-table-column label="时间" prop="occurredAt" min-width="165" />
+              </el-table>
+            </el-collapse-item>
+          </el-collapse>
+        </el-tab-pane>
       </el-tabs>
     </el-dialog>
 
     <CallCenterBusinessDetail v-model="customerDetailVisible" business-type="CUSTOMER" :business-id="customerDetailId" />
+    <CallCenterBusinessDetail v-model="ticketDetailVisible" business-type="TICKET" :business-id="ticketDetailId" />
   </div>
 </template>
 
@@ -207,16 +294,7 @@ import { handleVoiceMailMessage } from '@/api/callcenter/voicemail';
 import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/index.vue';
 import { CallDirection, CallRecordQuery, CallRecordVO, CallStatus } from '@/api/callcenter/call-record/types';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import {
-  Connection,
-  Bell,
-  CircleCheck,
-  SwitchButton,
-  Download,
-  Upload,
-  Warning,
-  CircleClose
-} from '@element-plus/icons-vue';
+import { Connection, Bell, CircleCheck, SwitchButton, Download, Upload, Warning, CircleClose } from '@element-plus/icons-vue';
 
 const loading = ref(false);
 const total = ref(0);
@@ -228,6 +306,8 @@ const queryFormRef = ref<ElFormInstance>();
 // 客户详情弹窗：点击「关联客户ID」后展示客户详细资料
 const customerDetailVisible = ref(false);
 const customerDetailId = ref<string | number>();
+const ticketDetailVisible = ref(false);
+const ticketDetailId = ref<string | number>();
 let recordingPollTimer: ReturnType<typeof setTimeout> | undefined;
 const directionOptions: Array<{ label: string; value: CallDirection }> = [
   { label: '呼入', value: 'INBOUND' },
@@ -256,7 +336,8 @@ const directionLabel = (value: CallDirection) => directionOptions.find((item) =>
 const statusLabel = (value: CallStatus) => statusOptions.find((item) => item.value === value)?.label || value;
 const recordingStatusLabel = (value?: CallRecordVO['recordingStatus']) =>
   ({ NONE: '暂无录音', PENDING: '录音正在上传', UPLOADED: '录音已上传', FAILED: '录音上传失败' })[value || 'NONE'];
-const voicemailStatusLabel = (value?: string) => ({ UNHANDLED: '未处理', HANDLED: '已处理', INVALID: '无效留言' })[value || 'UNHANDLED'] || value || '-';
+const voicemailStatusLabel = (value?: string) =>
+  ({ UNHANDLED: '未处理', HANDLED: '已处理', INVALID: '无效留言' })[value || 'UNHANDLED'] || value || '-';
 const voicemailStatusTag = (value?: string) => ({ UNHANDLED: 'warning', HANDLED: 'success', INVALID: 'info' })[value || 'UNHANDLED'] as any;
 const directionTag = (value: CallDirection) => ({ INBOUND: 'success', OUTBOUND: 'primary', INTERNAL: 'warning', UNKNOWN: 'info' })[value] as any;
 const eventLabel = (eventType: string) =>
@@ -279,6 +360,32 @@ const eventLabel = (eventType: string) =>
     ABANDON: '主叫放弃',
     VOICEMAIL_RECORDED: '语音留言已录制'
   })[eventType] || eventType;
+const legRoleLabel = (role?: string) =>
+  ({
+    CUSTOMER: '客户腿',
+    AGENT: '坐席腿',
+    CONSULT_AGENT: '咨询腿',
+    TRANSFER_AGENT: '转接腿'
+  })[role || ''] ||
+  role ||
+  '-';
+const bridgeTypeLabel = (type?: string) =>
+  ({
+    NORMAL: '普通桥接',
+    CONSULT: '咨询桥接',
+    TRANSFER: '转接桥接',
+    BLIND_TRANSFER: '盲转桥接'
+  })[type || ''] ||
+  type ||
+  '-';
+const agentRoleLabel = (role?: string) =>
+  ({
+    OWNER: '主控坐席',
+    CONSULT_TARGET: '咨询目标',
+    TRANSFER_TARGET: '转接目标'
+  })[role || ''] ||
+  role ||
+  '-';
 const formatDuration = (seconds?: number) => {
   const value = Math.max(0, seconds || 0);
   const minutes = Math.floor(value / 60);
@@ -305,7 +412,18 @@ const summaryMetrics = computed(() => [
   { label: '队列等待', value: queueWaitSeconds.value > 0 ? formatDuration(queueWaitSeconds.value) : '-' },
   { label: '挂断原因', value: hangupCauseLabel(detail.value?.hangupCause) }
 ]);
-const timelineEvents = computed(() => detail.value?.events || []);
+const timelineEvents = computed(() => {
+  const businessTimeline = detail.value?.businessTimeline || [];
+  if (businessTimeline.length) {
+    return businessTimeline.map((event) => ({
+      ...event,
+      eventType: event.type,
+      fromTarget: event.actor,
+      toTarget: event.target
+    }));
+  }
+  return detail.value?.events || [];
+});
 // 流程图节点定义：主链路事件类型 → 节点图标、色调、文案映射。
 // 顺序即展示顺序，多个 AGENT_RING 在组装阶段合并为一个节点。
 const FLOW_NODE_META: Record<string, { icon: any; tone: string; label: string }> = {
@@ -448,6 +566,10 @@ const handleVoiceMail = async (id: string | number) => {
 const openCustomerDetail = (id: string | number) => {
   customerDetailId.value = id;
   customerDetailVisible.value = true;
+};
+const openTicketDetail = (id: string | number) => {
+  ticketDetailId.value = id;
+  ticketDetailVisible.value = true;
 };
 watch(detailVisible, (visible) => {
   if (!visible) stopRecordingPoll();
@@ -704,6 +826,16 @@ onBeforeUnmount(stopRecordingPoll);
   margin-top: 12px;
   color: #606266;
   font-size: 13px;
+}
+.diagnostic-tip {
+  margin-bottom: 12px;
+}
+.diagnostic-collapse {
+  border-top: 1px solid #ebeef5;
+  border-bottom: 1px solid #ebeef5;
+}
+.diagnostic-collapse :deep(.el-collapse-item__content) {
+  padding-bottom: 18px;
 }
 /* 描述项内的可点击 ID 链接：去除 button 默认内边距，贴合单元格 */
 .id-link {

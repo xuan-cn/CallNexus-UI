@@ -129,6 +129,13 @@
                 </el-form-item>
               </el-col>
               <el-col :span="12">
+                <el-form-item label="入队前提示音">
+                  <el-select v-model="form.forceWaitMediaId" clearable placeholder="请选择入队前提示音" style="width: 100%">
+                    <el-option v-for="item in mediaOptions" :key="item.id" :label="item.assetName" :value="item.id" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
                 <el-form-item label="超时处理">
                   <el-select v-model="form.timeoutAction" style="width: 100%" @change="form.timeoutTarget = undefined">
                     <el-option label="直接挂机" value="HANGUP" />
@@ -164,6 +171,12 @@
                     <el-option label="转固定分机" value="EXTENSION" />
                     <el-option label="转其他队列" value="QUEUE" />
                   </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="无坐席等待">
+                  <el-input-number v-model="form.noAgentWaitSeconds" :min="0" :max="3600" />
+                  <span class="unit">秒后执行无坐席处理</span>
                 </el-form-item>
               </el-col>
               <el-col v-if="needsTarget(form.noAgentAction)" :span="12">
@@ -211,7 +224,7 @@
                     <el-option label="播报工号" value="PLAY_AGENT_NUMBER" />
                     <el-option label="播放语音" value="PLAY_MEDIA" />
                   </el-select>
-                  <span class="form-tip">第一版保存配置，后续接通事件链路执行</span>
+                  <span class="form-tip">坐席接通后由 CallNexus 根据通话腿 UUID 执行，不影响正常通话。</span>
                 </el-form-item>
               </el-col>
               <el-col v-if="form.answerAction === 'PLAY_MEDIA'" :span="12">
@@ -360,6 +373,7 @@ const initialForm = (): CallQueueForm => ({
   busyTransferMobile: false,
   busyTransferNumber: '',
   forceWaitSeconds: 0,
+  forceWaitMediaId: undefined,
   answerAction: 'NONE',
   answerMediaId: undefined,
   hangupKeyAction: 'NONE',
@@ -367,6 +381,7 @@ const initialForm = (): CallQueueForm => ({
   timeoutTarget: undefined,
   noAgentAction: 'WAIT',
   noAgentTarget: undefined,
+  noAgentWaitSeconds: 5,
   agentNoAnswerAction: 'NEXT_AGENT',
   agentTimeoutTransferMobile: false,
   agentTimeoutTransferNumber: '',
@@ -412,7 +427,9 @@ const actionLabelMap: Record<string, string> = {
   WAIT: '继续等待'
 };
 const selectedWaitMediaName = computed(() => mediaOptions.value.find((item) => item.id === form.waitMediaId)?.assetName);
+const selectedForceWaitMediaName = computed(() => mediaOptions.value.find((item) => item.id === form.forceWaitMediaId)?.assetName);
 const selectedQueueAnnounceName = computed(() => mediaOptions.value.find((item) => item.id === form.queueAnnounceMediaId)?.assetName);
+const selectedAnswerMediaName = computed(() => promptMediaOptions.value.find((item) => item.id === form.answerMediaId)?.assetName);
 const targetName = (action?: string, target?: string) => {
   if (!target) return '';
   if (action === 'VOICEMAIL') return voiceMailBoxes.value.find((item) => String(item.id) === String(target))?.boxName || target;
@@ -445,13 +462,16 @@ const noAgentGuide = computed(() => {
   if (form.noAgentAction === 'WAIT') {
     return '没有可用坐席时继续播放等待音，等待坐席签入或示闲。';
   }
-  return `没有可用坐席时，计划执行「${action}${suffix}」。第一版已保存配置并校验目标，运行时精确分流需要结合队列事件继续增强。`;
+  return `没有可用坐席时，等待 ${form.noAgentWaitSeconds || 0} 秒后执行「${action}${suffix}」。`;
 });
 const activeCapabilities = computed(() => {
   const items = ['等待音', '坐席分配', '最大等待超时'];
   if (form.maskCallerNumber) items.push('隐藏来电');
   if ((form.forceWaitSeconds || 0) > 0) items.push('强制等待');
+  if (form.forceWaitMediaId) items.push('入队前提示音');
   if (form.queueAnnounceEnabled) items.push('排队提醒');
+  if (form.answerAction === 'PLAY_AGENT_NUMBER') items.push('接通播报工号');
+  if (form.answerAction === 'PLAY_MEDIA') items.push('接通播放语音');
   if (form.agentNoAnswerAction === 'BREAK_AGENT') items.push('未接置忙');
   if (form.timeoutAction !== 'HANGUP') items.push('超时转接');
   return items;
@@ -465,6 +485,9 @@ const queueExecutionSteps = computed(() => {
   if ((form.forceWaitSeconds || 0) > 0) {
     steps.push(`进入队列前先强制等待 ${form.forceWaitSeconds} 秒。`);
   }
+  if (selectedForceWaitMediaName.value) {
+    steps.push(`播放入队前提示音「${selectedForceWaitMediaName.value}」，播放完成后才进入队列。`);
+  }
   steps.push(selectedWaitMediaName.value ? `客户开始听等待音「${selectedWaitMediaName.value}」。` : '客户开始听 FreeSWITCH 默认等待音。');
   if (form.queueAnnounceEnabled) {
     steps.push(queueAnnounceGuide.value);
@@ -472,6 +495,11 @@ const queueExecutionSteps = computed(() => {
   steps.push(`系统按「${strategyLabel(form.strategy)}」把来电分配给技能组内可用坐席。`);
   steps.push(noAgentGuide.value);
   steps.push(`每个坐席最多振铃 ${form.ringTimeoutSeconds} 秒；未接时${form.agentNoAnswerAction === 'BREAK_AGENT' ? '将该坐席置忙/暂停分配' : '继续找下一个坐席'}。`);
+  if (form.answerAction === 'PLAY_AGENT_NUMBER') {
+    steps.push('坐席接通后，系统向客户腿播放该坐席已同步的工号提示音；未生成或未同步时只记录告警，不中断通话。');
+  } else if (form.answerAction === 'PLAY_MEDIA') {
+    steps.push(selectedAnswerMediaName.value ? `坐席接通后，系统向客户腿播放接通语音「${selectedAnswerMediaName.value}」。` : '坐席接通后，系统向客户腿播放接通语音；请先选择已发布并同步的提示音。');
+  }
   steps.push(timeoutGuide.value);
   return steps;
 });

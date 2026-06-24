@@ -10,6 +10,7 @@ export interface CreateCustomerForm {
 
 export interface UpdateCustomerForm {
   customerName?: string;
+  sourceCallId?: string;
   templateId?: string | number;
   formData: Record<string, unknown>;
 }

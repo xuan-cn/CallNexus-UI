@@ -204,7 +204,8 @@ const categoryOptions: Array<{ label: string; value: MediaAssetCategory }> = [
   { label: 'IVR 提示音', value: 'IVR_PROMPT' },
   { label: '队列等待音乐', value: 'QUEUE_WAIT_MUSIC' },
   { label: '振铃音', value: 'RINGBACK_TONE' },
-  { label: '用户音乐', value: 'USER_MUSIC' }
+  { label: '用户音乐', value: 'USER_MUSIC' },
+  { label: '坐席提示音', value: 'AGENT_PROMPT' }
 ];
 const uploadCategoryOptions = categoryOptions;
 const sourceOptions: Array<{ label: string; value: MediaAssetSourceType }> = [

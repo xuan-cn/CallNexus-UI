@@ -22,6 +22,7 @@ export interface CallQueueVO {
   busyTransferMobile: boolean;
   busyTransferNumber?: string;
   forceWaitSeconds: number;
+  forceWaitMediaId?: string | number;
   answerAction: QueueAnswerAction;
   answerMediaId?: string | number;
   hangupKeyAction: QueueHangupKeyAction;
@@ -29,6 +30,7 @@ export interface CallQueueVO {
   timeoutTarget?: string;
   noAgentAction: QueueNoAgentAction;
   noAgentTarget?: string;
+  noAgentWaitSeconds: number;
   agentNoAnswerAction: QueueAgentNoAnswerAction;
   agentTimeoutTransferMobile: boolean;
   agentTimeoutTransferNumber?: string;

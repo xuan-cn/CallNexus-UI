@@ -8,6 +8,10 @@ export interface AgentVO {
   sipExtension?: string;
   sipDisplayName?: string;
   sipDomain?: string;
+  promptMediaId?: string | number;
+  promptGenerationStatus?: string;
+  promptFailureReason?: string;
+  promptSyncedPath?: string;
   enabled: boolean;
   version: number;
   createTime: string;

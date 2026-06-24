@@ -108,6 +108,10 @@
           <strong>{{ dialNumber }}</strong>
           <span>{{ callDuration }}<em v-if="callHeld"> · 已保持</em><em v-if="callMuted"> · 已静音</em></span>
         </div>
+        <button v-if="matchedCustomer" type="button" class="matched-customer-card" @click="matchedCustomerDetailVisible = true">
+          <span>已匹配客户</span>
+          <strong>{{ matchedCustomer.customerName || matchedCustomer.primaryPhone }}</strong>
+        </button>
         <div class="call-control-actions">
           <button type="button" :disabled="callActionLoading" @click="toggleHold">{{ callHeld ? '恢复通话' : '保持通话' }}</button>
           <button type="button" :disabled="callActionLoading" @click="toggleMute">{{ callMuted ? '取消静音' : '静音' }}</button>
@@ -169,6 +173,7 @@
 
     <dynamic-business-form-dialog v-model="customerDialogVisible" business-type="CUSTOMER" :phone-number="dialNumber" :call-id="activeCallId" />
     <dynamic-business-form-dialog v-model="ticketDialogVisible" business-type="TICKET" :phone-number="dialNumber" :call-id="activeCallId" />
+    <CallCenterBusinessDetail v-model="matchedCustomerDetailVisible" business-type="CUSTOMER" :business-id="matchedCustomer?.id" />
     <audio ref="remoteAudioRef" autoplay playsinline></audio>
   </div>
 </template>
@@ -200,6 +205,8 @@ import {
 } from '@/api/callcenter/call';
 import { subscribeCallEvents } from '@/utils/websocket';
 import { webRtcPhone } from '@/utils/webrtcPhone';
+import { CustomerVO, getCustomerByPhone } from '@/api/callcenter/customer';
+import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/index.vue';
 import DynamicBusinessFormDialog from './DynamicBusinessFormDialog.vue';
 
 type AgentStatus = 'idle' | 'busy' | 'afterCall';
@@ -241,6 +248,8 @@ const activeCallId = ref('');
 const callSeconds = ref(0);
 const customerDialogVisible = ref(false);
 const ticketDialogVisible = ref(false);
+const matchedCustomer = ref<CustomerVO>();
+const matchedCustomerDetailVisible = ref(false);
 const webRtcRegistered = ref(false);
 const webRtcConnecting = ref(false);
 const webRtcIncoming = ref(false);
@@ -256,6 +265,7 @@ let callTimer: ReturnType<typeof setInterval> | undefined;
 let ringTimer: ReturnType<typeof setInterval> | undefined;
 let ringAudioContext: AudioContext | undefined;
 let presenceTimer: ReturnType<typeof setInterval> | undefined;
+let matchedCustomerLookupTimer: ReturnType<typeof setTimeout> | undefined;
 let unsubscribeCallEvents: (() => void) | undefined;
 let syncingCallPresence = false;
 let restoringIdleAfterHangup = false;
@@ -939,6 +949,7 @@ const clearActiveCallState = () => {
   incomingNumber.value = '';
   callActive.value = false;
   activeCallId.value = '';
+  matchedCustomer.value = undefined;
   webRtcIncoming.value = false;
   stopWebRtcFirstLegWaiting();
   resetCallControls();
@@ -984,6 +995,30 @@ const syncActiveCallPresence = async () => {
   }
 };
 
+const lookupMatchedCustomer = async () => {
+  const number = (incomingCall.value ? incomingNumber.value : dialNumber.value).trim();
+  if ((!callActive.value && !incomingCall.value) || !number) {
+    matchedCustomer.value = undefined;
+    return;
+  }
+  const queriedNumber = number;
+  try {
+    const response = await getCustomerByPhone(queriedNumber);
+    const currentNumber = (incomingCall.value ? incomingNumber.value : dialNumber.value).trim();
+    if (currentNumber === queriedNumber) {
+      matchedCustomer.value = response.data || undefined;
+    }
+  } catch {
+    matchedCustomer.value = undefined;
+  }
+};
+
+watch([dialNumber, incomingNumber, callActive, incomingCall], () => {
+  matchedCustomer.value = undefined;
+  if (matchedCustomerLookupTimer) clearTimeout(matchedCustomerLookupTimer);
+  matchedCustomerLookupTimer = setTimeout(() => void lookupMatchedCustomer(), 300);
+});
+
 onMounted(async () => {
   unsubscribeCallEvents = subscribeCallEvents(handleCallEvent);
   await loadCurrentAgent();
@@ -1000,6 +1035,7 @@ onBeforeUnmount(() => {
   stopCallTimer();
   stopRingTone();
   if (presenceTimer) clearInterval(presenceTimer);
+  if (matchedCustomerLookupTimer) clearTimeout(matchedCustomerLookupTimer);
   window.removeEventListener('resize', constrainPosition);
   window.removeEventListener('pointermove', handleDrag);
 });
@@ -1374,6 +1410,33 @@ button {
   border-radius: 50%;
   background: #20b68b;
   box-shadow: 0 0 0 5px rgba(32, 182, 139, 0.13);
+}
+
+.matched-customer-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 34px;
+  padding: 7px 10px;
+  color: #053b70;
+  cursor: pointer;
+  border: 1px solid #c9d9ef;
+  border-radius: 8px;
+  background: #f7fbff;
+
+  span {
+    color: #7b8798;
+    font-size: 10px;
+  }
+
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 .call-actions,

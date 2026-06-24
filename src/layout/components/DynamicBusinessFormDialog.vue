@@ -4,7 +4,7 @@
       <div class="default-field-section">
         <div class="section-title">默认信息</div>
         <el-alert
-          v-if="existingCustomer"
+          v-if="businessType === 'CUSTOMER' && existingCustomer"
           class="existing-customer-alert"
           type="success"
           :closable="false"
@@ -107,7 +107,7 @@ const populateFormData = (template?: FormTemplate) => {
 };
 
 const lookupCustomer = async () => {
-  if (props.businessType !== 'CUSTOMER' || !phone.value.trim()) {
+  if (!phone.value.trim()) {
     existingCustomer.value = undefined;
     return;
   }
@@ -115,6 +115,7 @@ const lookupCustomer = async () => {
   const response = await getCustomerByPhone(queriedPhone);
   if (phone.value.trim() !== queriedPhone) return;
   existingCustomer.value = response.data || undefined;
+  if (props.businessType !== 'CUSTOMER') return;
   if (!existingCustomer.value) {
     customerName.value = '';
     templateId.value = enabledTemplates.value.length === 1 ? enabledTemplates.value[0].id : undefined;
@@ -144,7 +145,6 @@ watch(selectedTemplate, (template) => {
 });
 
 watch(phone, () => {
-  if (props.businessType !== 'CUSTOMER') return;
   existingCustomer.value = undefined;
   clearTimeout(lookupTimer);
   lookupTimer = setTimeout(lookupCustomer, 400);
@@ -161,6 +161,7 @@ const submit = async () => {
       if (existingCustomer.value) {
         await updateCustomer(existingCustomer.value.id, {
           customerName: customerName.value || undefined,
+          sourceCallId: props.callId,
           templateId: templateId.value,
           formData
         });
@@ -174,7 +175,13 @@ const submit = async () => {
         });
       }
     } else {
-      await createTicket({ callerNumber: phone.value, templateId: templateId.value, sourceCallId: props.callId, formData });
+      await createTicket({
+        customerId: existingCustomer.value?.id,
+        callerNumber: phone.value,
+        templateId: templateId.value,
+        sourceCallId: props.callId,
+        formData
+      });
     }
     ElMessage.success(props.businessType === 'CUSTOMER' ? (existingCustomer.value ? '客户更新成功' : '客户创建成功') : '工单创建成功');
     visible.value = false;
