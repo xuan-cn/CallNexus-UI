@@ -108,6 +108,54 @@
           </div>
           <el-empty v-else :description="recordingStatusLabel(detail.recordingStatus)" :image-size="70" />
         </el-tab-pane>
+        <el-tab-pane label="语音转写" name="transcript">
+          <div class="transcript-toolbar">
+            <div>
+              <strong>通话录音转写</strong>
+              <span>第一版基于整段录音转写，说话人暂不区分。</span>
+            </div>
+            <el-button
+              type="primary"
+              :loading="transcriptLoading"
+              :disabled="!detail.recordingUrl"
+              @click="handleTranscribe"
+            >
+              {{ transcript?.status === 'SUCCESS' ? '重新转写' : '开始转写' }}
+            </el-button>
+          </div>
+          <el-alert
+            v-if="!detail.recordingUrl"
+            type="warning"
+            show-icon
+            :closable="false"
+            title="当前通话还没有可播放录音，录音上传完成后才能转写。"
+          />
+          <el-alert
+            v-else-if="transcript?.status === 'FAILED'"
+            class="mb-2"
+            type="error"
+            show-icon
+            :closable="false"
+            :title="transcript.failureReason || '转写失败'"
+          />
+          <div v-if="transcript?.status === 'SUCCESS'" class="transcript-content">
+            <el-card shadow="never" class="transcript-full-text">
+              <template #header>完整文本</template>
+              <div>{{ transcript.fullText || '无转写文本' }}</div>
+            </el-card>
+            <el-table :data="transcript.segments || []" size="small" border>
+              <el-table-column label="序号" prop="sentenceIndex" width="80" />
+              <el-table-column label="时间" width="140">
+                <template #default="{ row }">{{ formatMilliseconds(row.startMs) }} - {{ formatMilliseconds(row.endMs) }}</template>
+              </el-table-column>
+              <el-table-column label="说话人" width="100">
+                <template #default="{ row }">{{ speakerLabel(row.speaker) }}</template>
+              </el-table-column>
+              <el-table-column label="内容" prop="textContent" min-width="360" />
+            </el-table>
+          </div>
+          <el-empty v-else-if="!transcriptLoading && detail.recordingUrl && !transcript" description="暂无转写结果" :image-size="70" />
+        </el-tab-pane>
         <el-tab-pane label="语音留言" name="voicemail">
           <div v-if="detail.voicemailMessages?.length" class="voicemail-list">
             <el-card v-for="message in detail.voicemailMessages" :key="String(message.id)" class="voicemail-card" shadow="never">
@@ -290,6 +338,8 @@
 <script setup name="CallRecord" lang="ts">
 import { getCallRecord, listCallRecords } from '@/api/callcenter/call-record';
 import { hangupCauseLabel } from '@/api/callcenter/call-record/display';
+import { getCallTranscript, transcribeCallRecording } from '@/api/callcenter/ai-speech';
+import { AiCallTranscriptVO } from '@/api/callcenter/ai-speech/types';
 import { handleVoiceMailMessage } from '@/api/callcenter/voicemail';
 import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/index.vue';
 import { CallDirection, CallRecordQuery, CallRecordVO, CallStatus } from '@/api/callcenter/call-record/types';
@@ -301,6 +351,8 @@ const total = ref(0);
 const detailVisible = ref(false);
 const detail = ref<CallRecordVO>();
 const detailTab = ref('basic');
+const transcript = ref<AiCallTranscriptVO>();
+const transcriptLoading = ref(false);
 const recordList = ref<CallRecordVO[]>([]);
 const queryFormRef = ref<ElFormInstance>();
 // 客户详情弹窗：点击「关联客户ID」后展示客户详细资料
@@ -339,6 +391,7 @@ const recordingStatusLabel = (value?: CallRecordVO['recordingStatus']) =>
 const voicemailStatusLabel = (value?: string) =>
   ({ UNHANDLED: '未处理', HANDLED: '已处理', INVALID: '无效留言' })[value || 'UNHANDLED'] || value || '-';
 const voicemailStatusTag = (value?: string) => ({ UNHANDLED: 'warning', HANDLED: 'success', INVALID: 'info' })[value || 'UNHANDLED'] as any;
+const speakerLabel = (value?: string) => ({ CUSTOMER: '客户', AGENT: '坐席', UNKNOWN: '未知' })[value || 'UNKNOWN'] || value || '-';
 const directionTag = (value: CallDirection) => ({ INBOUND: 'success', OUTBOUND: 'primary', INTERNAL: 'warning', UNKNOWN: 'info' })[value] as any;
 const eventLabel = (eventType: string) =>
   ({
@@ -356,6 +409,7 @@ const eventLabel = (eventType: string) =>
     AGENT_RING: '坐席振铃',
     AGENT_ANSWER: '坐席接听',
     AGENT_NO_ANSWER: '坐席未接',
+    QUEUE_DTMF: '队列按键采集',
     QUEUE_TIMEOUT: '队列超时',
     ABANDON: '主叫放弃',
     VOICEMAIL_RECORDED: '语音留言已录制'
@@ -511,6 +565,7 @@ const eventTone = (eventType: string) => {
   if (['ANSWERED', 'BRIDGED', 'AGENT_ANSWER'].includes(eventType)) return 'success';
   if (['CALL_LEG_ENDED', 'QUEUE_TIMEOUT', 'ABANDON', 'AGENT_NO_ANSWER'].includes(eventType)) return 'danger';
   if (['RINGING', 'AGENT_RING', 'QUEUE_IN'].includes(eventType)) return 'warning';
+  if (eventType === 'QUEUE_DTMF') return 'primary';
   return 'primary';
 };
 const getList = async () => {
@@ -538,15 +593,36 @@ const stopRecordingPoll = () => {
 const loadDetail = async (id: string | number) => {
   const res = await getCallRecord(id);
   detail.value = res.data;
+  await loadTranscript(id);
   stopRecordingPoll();
   if (detailVisible.value && detail.value.recordingStatus === 'PENDING') {
     recordingPollTimer = setTimeout(() => loadDetail(id), 3000);
   }
 };
+const loadTranscript = async (id: string | number) => {
+  try {
+    const res = await getCallTranscript(id);
+    transcript.value = res.data;
+  } catch {
+    transcript.value = undefined;
+  }
+};
 const handleDetail = async (row: CallRecordVO) => {
   detailTab.value = 'basic';
+  transcript.value = undefined;
   detailVisible.value = true;
   await loadDetail(row.id);
+};
+const handleTranscribe = async () => {
+  if (!detail.value?.id) return;
+  transcriptLoading.value = true;
+  try {
+    const res = await transcribeCallRecording(detail.value.id);
+    transcript.value = res.data;
+    ElMessage.success('语音转写完成');
+  } finally {
+    transcriptLoading.value = false;
+  }
 };
 const handleVoiceMail = async (id: string | number) => {
   const { value } = await ElMessageBox.prompt('填写本次留言处理备注', '标记语音留言已处理', {
@@ -790,6 +866,36 @@ onBeforeUnmount(stopRecordingPoll);
 }
 .recording-player {
   padding: 20px 0;
+}
+.transcript-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  border: 1px solid #e4e7ed;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+.transcript-toolbar > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.transcript-toolbar span {
+  color: #909399;
+  font-size: 13px;
+}
+.transcript-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.transcript-full-text :deep(.el-card__body) {
+  white-space: pre-wrap;
+  line-height: 1.8;
+  color: #303133;
 }
 .voicemail-list {
   display: flex;

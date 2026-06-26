@@ -109,6 +109,7 @@
               <el-select v-model="providerForm.providerType" style="width: 100%" @change="handleProviderTypeChange">
                 <el-option label="通用HTTP" value="CUSTOM_HTTP" />
                 <el-option label="阿里云百炼" value="ALIYUN_DASHSCOPE" />
+                <el-option label="阿里云NLS" value="ALIYUN_NLS" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -161,6 +162,14 @@
               show-icon
               :closable="false"
               title="阿里云百炼配置：Token 填 DashScope API Key，推荐地址使用 /compatible-mode/v1/audio/speech，备注填写 {&quot;model&quot;:&quot;qwen-tts&quot;}，默认音色可填 Cherry。"
+            />
+          </el-col>
+          <el-col v-if="providerForm.providerType === 'ALIYUN_NLS'" :span="24">
+            <el-alert
+              type="info"
+              show-icon
+              :closable="false"
+              title="阿里云NLS配置：Header名称填写 AccessKey ID，Token填写 AccessKey Secret，备注填写 {&quot;appKey&quot;:&quot;你的AppKey&quot;,&quot;region&quot;:&quot;cn-shanghai&quot;}，默认音色手动填写。"
             />
           </el-col>
         </el-row>
@@ -319,6 +328,16 @@ const openProviderDialog = (row?: AiTtsProviderVO) => {
   providerDialog.visible = true;
 };
 const handleProviderTypeChange = (type: string) => {
+  if (type === 'ALIYUN_NLS') {
+    providerForm.value.endpointUrl = providerForm.value.endpointUrl || 'wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1';
+    providerForm.value.authType = 'HEADER';
+    providerForm.value.authHeaderName = providerForm.value.authHeaderName || '';
+    providerForm.value.defaultVoice = providerForm.value.defaultVoice && providerForm.value.defaultVoice !== 'default' ? providerForm.value.defaultVoice : 'xiaoyun';
+    providerForm.value.defaultFormat = providerForm.value.defaultFormat || 'wav';
+    providerForm.value.defaultSampleRate = providerForm.value.defaultSampleRate || 8000;
+    providerForm.value.remark = providerForm.value.remark || '{"appKey":"","region":"cn-shanghai"}';
+    return;
+  }
   if (type !== 'ALIYUN_DASHSCOPE') {
     return;
   }

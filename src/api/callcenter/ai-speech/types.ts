@@ -102,3 +102,31 @@ export interface AiGeneratedMediaVO {
   failureReason?: string;
   syncedPath?: string;
 }
+
+export interface AiCallTranscriptSegmentVO {
+  id: string | number;
+  speaker: string;
+  sentenceIndex?: number;
+  startMs?: number;
+  endMs?: number;
+  textContent: string;
+  finalResult: boolean;
+  confidence?: number;
+}
+
+export interface AiCallTranscriptVO {
+  id: string | number;
+  callSessionId: string | number;
+  businessCallId: string;
+  providerId?: string | number;
+  providerType?: string;
+  inputMediaId?: string | number;
+  recordingOssId?: string | number;
+  status: 'PROCESSING' | 'SUCCESS' | 'FAILED';
+  fullText?: string;
+  failureReason?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  createTime?: string;
+  segments?: AiCallTranscriptSegmentVO[];
+}

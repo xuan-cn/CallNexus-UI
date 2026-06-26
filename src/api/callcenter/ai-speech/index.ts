@@ -5,6 +5,7 @@ import {
   AiSpeechTaskVO,
   AiSpeechTemplateForm,
   AiSpeechTemplateVO,
+  AiCallTranscriptVO,
   AiTtsProviderForm,
   AiTtsProviderVO,
   TtsTestForm,
@@ -35,3 +36,9 @@ export const deleteSpeechTemplate = (id: string | number) => request({ url: `/ap
 
 export const listSpeechTasks = (query: AiSpeechTaskQuery): AxiosPromise<AiSpeechTaskVO[]> =>
   request({ url: '/api/v1/ai/speech-tasks', method: 'get', params: query });
+
+export const getCallTranscript = (callSessionId: string | number): AxiosPromise<AiCallTranscriptVO> =>
+  request({ url: `/api/v1/ai/call-transcripts/${callSessionId}`, method: 'get' });
+
+export const transcribeCallRecording = (callSessionId: string | number): AxiosPromise<AiCallTranscriptVO> =>
+  request({ url: `/api/v1/ai/call-transcripts/${callSessionId}/transcribe`, method: 'post' });

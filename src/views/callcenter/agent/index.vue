@@ -129,7 +129,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="promptDialog.visible" title="生成工号提示音" width="520px" append-to-body>
+    <el-dialog v-model="promptDialog.visible" title="生成工号提示音" width="820px" append-to-body>
       <el-alert class="mb-3" type="info" :closable="false" show-icon>
         <template #title>{{ promptDialog.scopeText }}</template>
       </el-alert>

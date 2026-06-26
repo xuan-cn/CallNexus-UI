@@ -57,7 +57,7 @@
           <template #default="{ row }"><el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag></template>
         </el-table-column>
         <el-table-column label="创建时间" prop="createTime" min-width="165" />
-        <el-table-column label="操作" width="260" align="center">
+        <el-table-column label="操作" width="260" align="center" fixed="right">
           <template #default="{ row }">
             <el-button  v-hasPermi="['callcenter:media-asset:query']" link type="primary" icon="VideoPlay" @click="handlePreview(row)" />
 
