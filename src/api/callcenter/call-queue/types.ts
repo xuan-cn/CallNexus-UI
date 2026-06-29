@@ -26,6 +26,9 @@ export interface CallQueueVO {
   answerAction: QueueAnswerAction;
   answerMediaId?: string | number;
   hangupKeyAction: QueueHangupKeyAction;
+  satisfactionEnabled: boolean;
+  satisfactionMediaId?: string | number;
+  satisfactionTimeoutSeconds: number;
   timeoutAction: QueueExitAction;
   timeoutTarget?: string;
   noAgentAction: QueueNoAgentAction;

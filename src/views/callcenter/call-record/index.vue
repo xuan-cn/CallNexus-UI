@@ -98,7 +98,10 @@
           <div class="metric-grid">
             <div v-for="item in summaryMetrics" :key="item.label" class="metric-item">
               <span>{{ item.label }}</span>
-              <strong>{{ item.value }}</strong>
+              <div v-if="item.rating !== undefined" class="satisfaction-rating">
+                <el-rate :model-value="item.rating" :max="5" disabled />
+              </div>
+              <strong v-else>{{ item.value }}</strong>
             </div>
           </div>
         </el-tab-pane>
@@ -225,7 +228,10 @@
           <div class="metric-grid timeline-metrics">
             <div v-for="item in summaryMetrics" :key="`timeline-${item.label}`" class="metric-item">
               <span>{{ item.label }}</span>
-              <strong>{{ item.value }}</strong>
+              <div v-if="item.rating !== undefined" class="satisfaction-rating">
+                <el-rate :model-value="item.rating" :max="5" disabled />
+              </div>
+              <strong v-else>{{ item.value }}</strong>
             </div>
           </div>
         </el-tab-pane>
@@ -410,6 +416,7 @@ const eventLabel = (eventType: string) =>
     AGENT_ANSWER: '坐席接听',
     AGENT_NO_ANSWER: '坐席未接',
     QUEUE_DTMF: '队列按键采集',
+    QUEUE_SATISFACTION: '满意度评价',
     QUEUE_TIMEOUT: '队列超时',
     ABANDON: '主叫放弃',
     VOICEMAIL_RECORDED: '语音留言已录制'
@@ -464,7 +471,19 @@ const summaryMetrics = computed(() => [
   { label: '接通时长', value: formatDuration(detail.value?.billableSeconds) },
   { label: '等待时长', value: formatDuration(secondsBetween(detail.value?.startedAt, detail.value?.answeredAt || detail.value?.endedAt)) },
   { label: '队列等待', value: queueWaitSeconds.value > 0 ? formatDuration(queueWaitSeconds.value) : '-' },
-  { label: '挂断原因', value: hangupCauseLabel(detail.value?.hangupCause) }
+  { label: '挂断原因', value: hangupCauseLabel(detail.value?.hangupCause) },
+  {
+    label: '满意度评价',
+    value: detail.value?.satisfaction
+      ? detail.value.satisfaction.status === 'SUBMITTED'
+        ? `${detail.value.satisfaction.score} 分`
+        : '未评价'
+      : '-',
+    rating:
+      detail.value?.satisfaction?.status === 'SUBMITTED' && detail.value.satisfaction.score
+        ? detail.value.satisfaction.score
+        : undefined
+  }
 ]);
 const timelineEvents = computed(() => {
   const businessTimeline = detail.value?.businessTimeline || [];
@@ -491,6 +510,7 @@ const FLOW_NODE_META: Record<string, { icon: any; tone: string; label: string }>
   QUEUE_TIMEOUT: { icon: Warning, tone: 'danger', label: '队列超时' },
   ABANDON: { icon: CircleClose, tone: 'danger', label: '主叫放弃' },
   VOICEMAIL_RECORDED: { icon: Upload, tone: 'primary', label: '语音留言' },
+  QUEUE_SATISFACTION: { icon: CircleCheck, tone: 'success', label: '满意度评价' },
   CALL_LEG_ENDED: { icon: SwitchButton, tone: 'danger', label: '通话结束' }
 };
 // 耗时药丸文案：相邻两种事件类型之间的耗时展示文案。
@@ -566,6 +586,7 @@ const eventTone = (eventType: string) => {
   if (['CALL_LEG_ENDED', 'QUEUE_TIMEOUT', 'ABANDON', 'AGENT_NO_ANSWER'].includes(eventType)) return 'danger';
   if (['RINGING', 'AGENT_RING', 'QUEUE_IN'].includes(eventType)) return 'warning';
   if (eventType === 'QUEUE_DTMF') return 'primary';
+  if (eventType === 'QUEUE_SATISFACTION') return 'success';
   return 'primary';
 };
 const getList = async () => {
@@ -675,6 +696,15 @@ onBeforeUnmount(stopRecordingPoll);
 }
 .metric-item strong {
   color: #303133;
+}
+.satisfaction-rating {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+}
+.satisfaction-rating :deep(.el-rate__icon) {
+  margin-right: 2px;
+  font-size: 20px;
 }
 .timeline-layout {
   display: grid;

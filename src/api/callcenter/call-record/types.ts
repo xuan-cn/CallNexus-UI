@@ -38,6 +38,14 @@ export interface CallRecordVO {
   diagnosticLegs?: CallDiagnosticLegVO[];
   diagnosticBridges?: CallDiagnosticBridgeVO[];
   agentSessions?: AgentCallSessionVO[];
+  satisfaction?: CallSatisfactionVO;
+}
+
+export interface CallSatisfactionVO {
+  score?: number;
+  digit?: string;
+  status: 'SUBMITTED' | 'NO_INPUT';
+  submittedAt?: string;
 }
 
 export interface CallLegVO {

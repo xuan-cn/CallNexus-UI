@@ -319,6 +319,25 @@
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
+                  <el-form-item label="挂机评价">
+                    <el-switch v-model="form.satisfactionEnabled" />
+                    <span class="form-tip">坐席先挂机后，客户按 1-5 分评价</span>
+                  </el-form-item>
+                </el-col>
+                <el-col v-if="form.satisfactionEnabled" :span="12">
+                  <el-form-item label="评价提示音">
+                    <el-select v-model="form.satisfactionMediaId" clearable style="width: 100%">
+                      <el-option v-for="item in promptMediaOptions" :key="item.id" :label="item.assetName" :value="item.id" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col v-if="form.satisfactionEnabled" :span="12">
+                  <el-form-item label="等待评价">
+                    <el-input-number v-model="form.satisfactionTimeoutSeconds" :min="3" :max="60" />
+                    <span class="unit">秒</span>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
                   <el-form-item label="遇忙转手机"><el-switch v-model="form.busyTransferMobile" /></el-form-item>
                 </el-col>
                 <el-col v-if="form.busyTransferMobile" :span="12">
@@ -463,6 +482,9 @@ const initialForm = (): CallQueueForm => ({
   answerAction: 'NONE',
   answerMediaId: undefined,
   hangupKeyAction: 'NONE',
+  satisfactionEnabled: false,
+  satisfactionMediaId: undefined,
+  satisfactionTimeoutSeconds: 8,
   timeoutAction: 'HANGUP',
   timeoutTarget: undefined,
   noAgentAction: 'WAIT',
@@ -516,6 +538,9 @@ const selectedWaitMediaName = computed(() => mediaOptions.value.find((item) => i
 const selectedForceWaitMediaName = computed(() => mediaOptions.value.find((item) => item.id === form.forceWaitMediaId)?.assetName);
 const selectedQueueAnnounceName = computed(() => mediaOptions.value.find((item) => item.id === form.queueAnnounceMediaId)?.assetName);
 const selectedAnswerMediaName = computed(() => promptMediaOptions.value.find((item) => item.id === form.answerMediaId)?.assetName);
+const selectedSatisfactionMediaName = computed(() =>
+  promptMediaOptions.value.find((item) => item.id === form.satisfactionMediaId)?.assetName
+);
 const targetName = (action?: string, target?: string) => {
   if (!target) return '';
   if (action === 'VOICEMAIL') return voiceMailBoxes.value.find((item) => String(item.id) === String(target))?.boxName || target;
@@ -561,6 +586,7 @@ const activeCapabilities = computed(() => {
   if (form.answerAction === 'PLAY_MEDIA') items.push('接通播放语音');
   if (form.agentNoAnswerAction === 'BREAK_AGENT') items.push('未接置忙');
   if (form.hangupKeyAction === 'AGENT' || form.hangupKeyAction === 'CALLER') items.push('按键采集');
+  if (form.satisfactionEnabled) items.push('挂机评价');
   if (form.stickyAgentEnabled) items.push('记忆坐席');
   if (form.busyTransferMobile && form.busyTransferNumber) items.push('遇忙转手机');
   if (form.agentTimeoutTransferMobile && form.agentTimeoutTransferNumber) items.push('超时转手机');
@@ -598,6 +624,13 @@ const queueExecutionSteps = computed(() => {
   }
   if (form.hangupKeyAction === 'AGENT' || form.hangupKeyAction === 'CALLER') {
     steps.push(`通话过程中${form.hangupKeyAction === 'AGENT' ? '坐席侧' : '客户侧'}的按键将作为时间线事件记录到通话详情，便于事后回溯，不影响正常通话。`);
+  }
+  if (form.satisfactionEnabled) {
+    steps.push(
+      selectedSatisfactionMediaName.value
+        ? `坐席先挂机后，客户继续听评价提示音「${selectedSatisfactionMediaName.value}」，可在 ${form.satisfactionTimeoutSeconds || 8} 秒内按 1-5 分评价；客户先挂机或转接通话不进入评价。`
+        : '坐席先挂机后进入满意度评价；请先选择已发布并同步到 FreeSWITCH 节点的评价提示音。'
+    );
   }
   if (form.stickyAgentEnabled) {
     steps.push('系统会先按客户主叫号码查询记忆坐席，命中且坐席在线空闲时跳过队列分配，直接桥接到上次接听坐席的分机。');
@@ -679,6 +712,10 @@ const submit = () =>
     if (!valid) return;
     if (form.strategy !== 'RING_ALL' && form.maxWaitSeconds <= form.ringTimeoutSeconds) {
       proxy?.$modal.msgError('逐个分配坐席时，队列最大等待时间必须大于单个坐席振铃超时时间');
+      return;
+    }
+    if (form.satisfactionEnabled && !form.satisfactionMediaId) {
+      proxy?.$modal.msgError('启用挂机评价时必须选择评价提示音');
       return;
     }
     form.id ? await updateCallQueue(form) : await createCallQueue(form);

@@ -40,6 +40,5 @@ const HANGUP_CAUSE_LABELS: Record<string, string> = {
 
 export const hangupCauseLabel = (cause?: string) => {
   if (!cause) return '-';
-  const label = HANGUP_CAUSE_LABELS[cause];
-  return label ? `${label}（${cause}）` : cause;
+  return HANGUP_CAUSE_LABELS[cause] || '未知原因';
 };
