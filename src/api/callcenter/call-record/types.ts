@@ -94,6 +94,7 @@ export interface CallDiagnosticLegVO {
   nodeId?: string | number;
   legUuid: string;
   legRole?: string;
+  endpointExtension?: string;
   agentId?: string | number;
   agentExtension?: string;
   callerNumber?: string;

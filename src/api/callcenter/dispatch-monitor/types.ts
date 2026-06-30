@@ -2,7 +2,7 @@ import type { AgentCallSessionVO, CallDiagnosticBridgeVO, CallDiagnosticLegVO } 
 
 export type DispatchTopologyStatus = 'NORMAL' | 'SYNCING' | 'STALE';
 export type DispatchRegistrationStatus = 'REGISTERED' | 'UNREGISTERED' | 'DISABLED' | 'NODE_UNAVAILABLE';
-export type DispatchExtensionCallStatus = 'IDLE' | 'RINGING' | 'TALKING' | 'HELD';
+export type DispatchExtensionCallStatus = 'IDLE' | 'DIALING' | 'RINGING' | 'TALKING' | 'HELD';
 
 export interface DispatchExtensionStatusVO {
   sipAccountId: string | number;
@@ -18,6 +18,17 @@ export interface DispatchExtensionStatusVO {
   agentPresenceStatus?: string;
   callStatus: DispatchExtensionCallStatus;
   businessCallId?: string;
+}
+
+export interface DispatchOperatorExtensionVO {
+  configured: boolean;
+  userId?: string | number;
+  sipAccountId?: string | number;
+  nodeId?: string | number;
+  nodeName?: string;
+  extension?: string;
+  displayName?: string;
+  domain?: string;
 }
 
 export interface DispatchActiveCallVO {
