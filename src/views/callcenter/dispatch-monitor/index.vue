@@ -3,12 +3,12 @@
     <el-card shadow="never" class="overview-card">
       <div class="page-header">
         <div>
-          <h2>调度通话监控</h2>
-          <p>第一阶段测试页：以业务通话为入口查看实时电话腿、桥接关系和坐席参与状态。</p>
+          <h2>调度台</h2>
+          <p>统一查看分机注册、坐席状态、通话状态和实时通话拓扑。</p>
         </div>
         <div class="header-actions">
           <el-switch v-model="autoRefresh" active-text="5秒自动刷新" />
-          <el-button type="primary" :loading="loading" @click="loadCalls">刷新</el-button>
+          <el-button type="primary" :loading="loading || extensionLoading" @click="loadDispatchData">刷新</el-button>
         </div>
       </div>
       <div class="overview-grid">
@@ -17,6 +17,75 @@
         <div><span>活动电话腿</span><strong>{{ activeLegCount }}</strong></div>
         <div><span>拓扑异常</span><strong :class="{ danger: staleCount > 0 }">{{ staleCount }}</strong></div>
       </div>
+    </el-card>
+
+    <el-card shadow="never" class="extension-card">
+      <template #header>
+        <div class="section-header">
+          <strong>分机资源</strong>
+          <div class="extension-summary">
+            <span>总数 {{ extensions.length }}</span>
+            <span class="success">已注册 {{ registeredExtensionCount }}</span>
+            <span>空闲 {{ idleExtensionCount }}</span>
+            <span class="danger">未注册 {{ unregisteredExtensionCount }}</span>
+          </div>
+        </div>
+      </template>
+      <el-table v-loading="extensionLoading" :data="extensions" row-key="sipAccountId" max-height="380">
+        <el-table-column label="节点" min-width="150" prop="nodeName" />
+        <el-table-column label="分机" width="110" prop="extension" />
+        <el-table-column label="显示名称" min-width="150" prop="displayName" />
+        <el-table-column label="配置" width="90" align="center">
+          <template #default="{ row }"><el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag></template>
+        </el-table-column>
+        <el-table-column label="SIP 状态" width="120" align="center">
+          <template #default="{ row }">
+            <el-tag :type="registrationTagType(row.registrationStatus)">{{ registrationLabel(row.registrationStatus) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="绑定坐席" min-width="150">
+          <template #default="{ row }">{{ row.agentName || '未绑定' }}</template>
+        </el-table-column>
+        <el-table-column label="坐席状态" width="110" align="center">
+          <template #default="{ row }">{{ presenceLabel(row.agentPresenceStatus) }}</template>
+        </el-table-column>
+        <el-table-column label="通话状态" width="110" align="center">
+          <template #default="{ row }"><el-tag :type="extensionCallTagType(row.callStatus)">{{ extensionCallLabel(row.callStatus) }}</el-tag></template>
+        </el-table-column>
+        <el-table-column label="操作" width="230" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              v-if="row.businessCallId && row.callStatus === 'TALKING' && row.agentId"
+              v-hasPermi="['callcenter:dispatch-control:monitor']"
+              link
+              type="warning"
+              @click="handleMonitor(row.businessCallId, row.extension)"
+            >
+              监听
+            </el-button>
+            <el-button
+              v-if="row.businessCallId && row.callStatus === 'TALKING' && row.agentId"
+              v-hasPermi="['callcenter:dispatch-control:whisper']"
+              link
+              type="warning"
+              @click="handleWhisper(row.businessCallId, row.extension)"
+            >
+              耳语
+            </el-button>
+            <el-button
+              v-if="row.businessCallId && row.callStatus === 'TALKING' && row.agentId"
+              v-hasPermi="['callcenter:dispatch-control:barge']"
+              link
+              type="danger"
+              @click="handleBarge(row.businessCallId, row.extension)"
+            >
+              强插
+            </el-button>
+            <el-button v-if="row.businessCallId" link type="primary" @click="openTopologyById(row.businessCallId)">通话拓扑</el-button>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+      </el-table>
     </el-card>
 
     <el-card shadow="never">
@@ -47,8 +116,43 @@
           </template>
         </el-table-column>
         <el-table-column label="开始时间" width="175" prop="startedAt" />
-        <el-table-column label="操作" width="90" fixed="right">
-          <template #default="{ row }"><el-button link type="primary" @click="openTopology(row)">拓扑</el-button></template>
+        <el-table-column label="操作" width="370" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openTopology(row)">拓扑</el-button>
+            <el-button
+              v-if="row.agentExtensions?.length === 1"
+              v-hasPermi="['callcenter:dispatch-control:monitor']"
+              link
+              type="warning"
+              @click="handleMonitor(row.businessCallId, row.agentExtensions[0])"
+            >
+              监听
+            </el-button>
+            <el-button
+              v-if="row.agentExtensions?.length === 1"
+              v-hasPermi="['callcenter:dispatch-control:whisper']"
+              link
+              type="warning"
+              @click="handleWhisper(row.businessCallId, row.agentExtensions[0])"
+            >
+              耳语
+            </el-button>
+            <el-button
+              v-if="row.agentExtensions?.length === 1"
+              v-hasPermi="['callcenter:dispatch-control:barge']"
+              link
+              type="danger"
+              @click="handleBarge(row.businessCallId, row.agentExtensions[0])"
+            >
+              强插
+            </el-button>
+            <el-button v-hasPermi="['callcenter:dispatch-control:transfer']" link type="warning" @click="handleForceTransfer(row)">
+              强制转接
+            </el-button>
+            <el-button v-hasPermi="['callcenter:dispatch-control:hangup']" link type="danger" @click="handleForceHangup(row)">
+              强制挂断
+            </el-button>
+          </template>
         </el-table-column>
       </el-table>
       <el-empty v-if="!loading && calls.length === 0" description="当前没有活动通话" />
@@ -112,20 +216,50 @@
 </template>
 
 <script setup name="DispatchMonitor" lang="ts">
-import { getDispatchCallTopology, listDispatchActiveCalls } from '@/api/callcenter/dispatch-monitor';
-import type { DispatchActiveCallVO, DispatchCallTopologyVO, DispatchTopologyStatus } from '@/api/callcenter/dispatch-monitor/types';
+import { getDispatchCallTopology, listDispatchActiveCalls, listDispatchExtensionStatuses } from '@/api/callcenter/dispatch-monitor';
+import type {
+  DispatchActiveCallVO,
+  DispatchCallTopologyVO,
+  DispatchExtensionStatusVO,
+  DispatchRegistrationStatus,
+  DispatchTopologyStatus
+} from '@/api/callcenter/dispatch-monitor/types';
+import {
+  forceHangupDispatchCall,
+  forceTransferDispatchCallToExtension,
+  startDispatchMonitor,
+  startDispatchWhisper,
+  startDispatchBarge
+} from '@/api/callcenter/dispatch-control';
 
 const loading = ref(false);
+const extensionLoading = ref(false);
 const detailLoading = ref(false);
 const autoRefresh = ref(true);
 const drawerVisible = ref(false);
 const calls = ref<DispatchActiveCallVO[]>([]);
+const extensions = ref<DispatchExtensionStatusVO[]>([]);
 const topology = ref<DispatchCallTopologyVO>();
 let timer: ReturnType<typeof setInterval> | undefined;
 
 const bridgedCount = computed(() => calls.value.filter((item) => item.activeBridgeCount > 0).length);
 const activeLegCount = computed(() => calls.value.reduce((total, item) => total + (item.activeLegCount || 0), 0));
 const staleCount = computed(() => calls.value.filter((item) => item.topologyStatus === 'STALE').length);
+const registeredExtensionCount = computed(() => extensions.value.filter((item) => item.registrationStatus === 'REGISTERED').length);
+const unregisteredExtensionCount = computed(() => extensions.value.filter((item) => item.registrationStatus === 'UNREGISTERED').length);
+const idleExtensionCount = computed(() => extensions.value.filter((item) => item.callStatus === 'IDLE').length);
+
+const loadExtensions = async () => {
+  extensionLoading.value = true;
+  try {
+    const response = await listDispatchExtensionStatuses();
+    extensions.value = response.data || [];
+  } finally {
+    extensionLoading.value = false;
+  }
+};
+
+const loadDispatchData = async () => Promise.all([loadCalls(), loadExtensions()]);
 
 const loadCalls = async () => {
   loading.value = true;
@@ -156,6 +290,65 @@ const openTopology = async (row: DispatchActiveCallVO) => {
   await loadTopology(row.businessCallId);
 };
 
+const openTopologyById = async (businessCallId: string) => {
+  drawerVisible.value = true;
+  topology.value = undefined;
+  await loadTopology(businessCallId);
+};
+
+const handleForceHangup = async (row: DispatchActiveCallVO) => {
+  await ElMessageBox.confirm(
+    `确认强制挂断业务通话 ${row.businessCallId} 吗？该操作会结束客户和全部坐席电话腿。`,
+    '强制挂断确认',
+    { type: 'warning', confirmButtonText: '确认挂断', cancelButtonText: '取消' }
+  );
+  await forceHangupDispatchCall(row.businessCallId);
+  ElMessage.success('强制挂断命令已提交');
+  await loadCalls();
+};
+
+const handleMonitor = async (businessCallId: string, targetExtension: string) => {
+  await ElMessageBox.confirm(
+    `确认使用当前调度员绑定分机监听坐席 ${targetExtension} 吗？提交后请在调度员软电话上接听。`,
+    '调度监听确认',
+    { type: 'warning', confirmButtonText: '开始监听', cancelButtonText: '取消' }
+  );
+  await startDispatchMonitor(businessCallId, { targetExtension });
+  ElMessage.success('监听呼叫已发送到当前调度员分机，请接听');
+};
+
+const handleWhisper = async (businessCallId: string, targetExtension: string) => {
+  await ElMessageBox.confirm(
+    `确认使用当前调度员绑定分机向坐席 ${targetExtension} 耳语吗？客户不会听到调度员声音。`,
+    '调度耳语确认',
+    { type: 'warning', confirmButtonText: '开始耳语', cancelButtonText: '取消' }
+  );
+  await startDispatchWhisper(businessCallId, { targetExtension });
+  ElMessage.success('耳语呼叫已发送到当前调度员分机，请接听');
+};
+
+const handleBarge = async (businessCallId: string, targetExtension: string) => {
+  await ElMessageBox.confirm(
+    `确认强插坐席 ${targetExtension} 的当前通话吗？接听后调度员、坐席和客户三方均可互相通话。`,
+    '调度强插确认',
+    { type: 'error', confirmButtonText: '确认强插', cancelButtonText: '取消' }
+  );
+  await startDispatchBarge(businessCallId, { targetExtension });
+  ElMessage.success('强插呼叫已发送到当前调度员分机，请接听');
+};
+
+const handleForceTransfer = async (row: DispatchActiveCallVO) => {
+  const result = await ElMessageBox.prompt('请输入目标 SIP 分机号', '强制转接', {
+    confirmButtonText: '确认转接',
+    cancelButtonText: '取消',
+    inputPattern: /^[0-9*#+]{2,32}$/,
+    inputErrorMessage: '请输入 2-32 位有效分机号'
+  });
+  await forceTransferDispatchCallToExtension(row.businessCallId, { targetExtension: result.value });
+  ElMessage.success('强制转接命令已提交');
+  await loadCalls();
+};
+
 const formatSeconds = (seconds?: number) => {
   const value = Math.max(0, seconds || 0);
   const minutes = Math.floor(value / 60);
@@ -167,11 +360,19 @@ const directionLabel = (value?: string) => ({ INBOUND: '呼入', OUTBOUND: '呼�
 const callStatusLabel = (value?: string) => ({ CREATED: '创建', RINGING: '振铃', ANSWERED: '已接听', BRIDGED: '通话中' })[value || ''] || value || '-';
 const topologyLabel = (value: DispatchTopologyStatus) => ({ NORMAL: '正常', SYNCING: '同步中', STALE: '疑似残留' })[value] || value;
 const topologyTagType = (value: DispatchTopologyStatus) => (value === 'NORMAL' ? 'success' : value === 'SYNCING' ? 'warning' : 'danger');
+const registrationLabel = (value: DispatchRegistrationStatus) =>
+  ({ REGISTERED: '已注册', UNREGISTERED: '未注册', DISABLED: '已停用', NODE_UNAVAILABLE: '节点不可达' })[value] || value;
+const registrationTagType = (value: DispatchRegistrationStatus) =>
+  value === 'REGISTERED' ? 'success' : value === 'UNREGISTERED' ? 'danger' : value === 'NODE_UNAVAILABLE' ? 'warning' : 'info';
+const presenceLabel = (value?: string) =>
+  ({ OFFLINE: '未签入', IDLE: '示闲', BUSY: '示忙', AFTER_CALL: '话后处理' })[value || ''] || (value ? value : '未绑定');
+const extensionCallLabel = (value?: string) => ({ IDLE: '空闲', RINGING: '振铃', TALKING: '通话中', HELD: '保持' })[value || ''] || '-';
+const extensionCallTagType = (value?: string) => (value === 'TALKING' ? 'danger' : value === 'RINGING' ? 'warning' : value === 'HELD' ? 'primary' : 'info');
 
 const startTimer = () => {
   stopTimer();
   timer = setInterval(() => {
-    if (autoRefresh.value && !document.hidden) loadCalls();
+    if (autoRefresh.value && !document.hidden) loadDispatchData();
   }, 5000);
 };
 const stopTimer = () => {
@@ -180,7 +381,7 @@ const stopTimer = () => {
 };
 
 onMounted(() => {
-  loadCalls();
+  loadDispatchData();
   startTimer();
 });
 onBeforeUnmount(stopTimer);
@@ -189,6 +390,11 @@ onBeforeUnmount(stopTimer);
 <style scoped lang="scss">
 .dispatch-monitor-page { padding: 16px; }
 .overview-card { margin-bottom: 16px; }
+.extension-card { margin-bottom: 16px; }
+.section-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.extension-summary { display: flex; flex-wrap: wrap; gap: 18px; color: #606266; font-size: 13px; }
+.extension-summary .success { color: #67c23a; }
+.extension-summary .danger { color: #f56c6c; }
 .page-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .page-header h2 { margin: 0 0 8px; color: #053b70; }
 .page-header p { margin: 0; color: #909399; }
