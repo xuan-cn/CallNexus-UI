@@ -1,6 +1,6 @@
 import type { IvrNodeType } from '@/api/callcenter/ivr-flow/types';
 
-export type IvrPropertyEditorType = 'MEDIA_SELECT' | 'EXTENSION_INPUT' | 'QUEUE_SELECT' | 'BUSINESS_HOURS_SELECT' | 'VOICEMAIL_SELECT';
+export type IvrPropertyEditorType = 'MEDIA_SELECT' | 'EXTENSION_INPUT' | 'QUEUE_SELECT' | 'BUSINESS_HOURS_SELECT' | 'VOICEMAIL_SELECT' | 'AI_AGENT_SELECT';
 export type IvrEdgeEditorType = 'DTMF_DIGIT' | 'BUSINESS_HOURS_BRANCH';
 
 export interface IvrPropertyDefinition {
@@ -102,6 +102,14 @@ const definitions: IvrNodeDefinition[] = [
     description: '播放提示音并录制客户留言',
     terminal: true,
     propertySchema: [{ key: 'boxId', label: '留言箱', component: 'VOICEMAIL_SELECT', required: true }]
+  },
+  {
+    type: 'AI_AGENT',
+    label: 'AI 语音助手',
+    color: '#2563eb',
+    description: '将来电交给指定 AI 助手进行知识库语音对话',
+    terminal: true,
+    propertySchema: [{ key: 'aiAgentId', label: 'AI 助手', component: 'AI_AGENT_SELECT', required: true }]
   },
   {
     type: 'HANGUP',

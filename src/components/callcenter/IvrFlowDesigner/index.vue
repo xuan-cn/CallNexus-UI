@@ -49,6 +49,7 @@
               :queue-options="queueOptions"
               :business-hours-options="businessHoursOptions"
               :voicemail-options="voicemailOptions"
+              :ai-agent-options="aiAgentOptions"
               :placeholder="property.placeholder"
               @update:model-value="updateNodeProperty(property.key, $event)"
             />
@@ -89,15 +90,17 @@ import { MediaAssetVO } from '@/api/callcenter/media-asset/types';
 import { CallQueueVO } from '@/api/callcenter/call-queue/types';
 import type { BusinessHoursPlan } from '@/api/callcenter/business-hours/types';
 import type { VoiceMailBoxVO } from '@/api/callcenter/voicemail/types';
+import type { AiAgentVO } from '@/api/callcenter/ai-knowledge/types';
 import { getIvrNodeDefinition, IvrNodeDefinition, ivrPaletteDefinitions } from './nodeRegistry';
 import { getIvrPropertyEditor } from './propertyEditors';
 
 const props = withDefaults(
-  defineProps<{ modelValue: IvrGraph; mediaOptions: MediaAssetVO[]; queueOptions?: CallQueueVO[]; businessHoursOptions?: BusinessHoursPlan[]; voicemailOptions?: VoiceMailBoxVO[]; readonly?: boolean }>(),
+  defineProps<{ modelValue: IvrGraph; mediaOptions: MediaAssetVO[]; queueOptions?: CallQueueVO[]; businessHoursOptions?: BusinessHoursPlan[]; voicemailOptions?: VoiceMailBoxVO[]; aiAgentOptions?: AiAgentVO[]; readonly?: boolean }>(),
   {
     queueOptions: () => [],
     businessHoursOptions: () => [],
     voicemailOptions: () => [],
+    aiAgentOptions: () => [],
     readonly: false
   }
 );

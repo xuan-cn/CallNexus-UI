@@ -84,7 +84,7 @@
           >
         </div>
       </div>
-      <IvrFlowDesigner ref="designerRef" v-model="graph" :media-options="mediaOptions" :queue-options="availableQueueOptions" :business-hours-options="businessHoursOptions" :voicemail-options="voicemailOptions" />
+      <IvrFlowDesigner ref="designerRef" v-model="graph" :media-options="mediaOptions" :queue-options="availableQueueOptions" :business-hours-options="businessHoursOptions" :voicemail-options="voicemailOptions" :ai-agent-options="aiAgentOptions" />
     </el-dialog>
 
     <el-drawer v-model="versionDrawerVisible" title="IVR 发布版本历史" size="960px" append-to-body>
@@ -125,7 +125,7 @@
     </el-drawer>
 
     <el-dialog v-model="previewVisible" :title="`IVR 版本预览：v${previewVersionNo}`" fullscreen append-to-body destroy-on-close>
-      <IvrFlowDesigner v-model="previewGraph" :media-options="mediaOptions" :queue-options="queueOptions" :business-hours-options="businessHoursOptions" :voicemail-options="voicemailOptions" readonly />
+      <IvrFlowDesigner v-model="previewGraph" :media-options="mediaOptions" :queue-options="queueOptions" :business-hours-options="businessHoursOptions" :voicemail-options="voicemailOptions" :ai-agent-options="aiAgentOptions" readonly />
     </el-dialog>
   </div>
 </template>
@@ -154,6 +154,8 @@ import { listBusinessHoursPlans } from '@/api/callcenter/business-hours';
 import type { BusinessHoursPlan } from '@/api/callcenter/business-hours/types';
 import { listVoiceMailBoxes } from '@/api/callcenter/voicemail';
 import type { VoiceMailBoxVO } from '@/api/callcenter/voicemail/types';
+import { listAiAgents } from '@/api/callcenter/ai-knowledge';
+import type { AiAgentVO } from '@/api/callcenter/ai-knowledge/types';
 import IvrFlowDesigner from '@/components/callcenter/IvrFlowDesigner/index.vue';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
@@ -174,6 +176,7 @@ const mediaOptions = ref<MediaAssetVO[]>([]);
 const queueOptions = ref<CallQueueVO[]>([]);
 const businessHoursOptions = ref<BusinessHoursPlan[]>([]);
 const voicemailOptions = ref<VoiceMailBoxVO[]>([]);
+const aiAgentOptions = ref<AiAgentVO[]>([]);
 const editing = reactive<Partial<IvrFlowVO>>({});
 const graph = ref<IvrGraph>({ nodes: [], edges: [] });
 const previewGraph = ref<IvrGraph>({ nodes: [], edges: [] });
@@ -187,6 +190,7 @@ const nodeTypeLabels: Record<IvrNodeType, string> = {
   QUEUE: '队列',
   BUSINESS_HOURS: '工作时间',
   VOICEMAIL: '语音留言',
+  AI_AGENT: 'AI 语音助手',
   HANGUP: '挂断'
 };
 const availableQueueOptions = computed(() => {
@@ -212,13 +216,14 @@ const defaultGraph = (): IvrGraph => ({
 const load = async () => {
   loading.value = true;
   try {
-    const [flowRes, groupRes, mediaRes, queueRes, businessHoursRes, voicemailRes] = await Promise.all([
+    const [flowRes, groupRes, mediaRes, queueRes, businessHoursRes, voicemailRes, aiAgentRes] = await Promise.all([
       listIvrFlows(),
       listNodeGroups(),
       listMediaAssets({ pageNum: 1, pageSize: 1000, category: 'IVR_PROMPT', enabled: true }),
       listCallQueues(),
       listBusinessHoursPlans(),
-      listVoiceMailBoxes({ pageNum: 1, pageSize: 1000, enabled: true })
+      listVoiceMailBoxes({ pageNum: 1, pageSize: 1000, enabled: true }),
+      listAiAgents()
     ]);
     flows.value = flowRes.data;
     groups.value = groupRes.data.filter((item) => item.enabled);
@@ -226,6 +231,7 @@ const load = async () => {
     queueOptions.value = queueRes.data.filter((item) => item.enabled && item.syncStatus === 'SYNCED');
     businessHoursOptions.value = businessHoursRes.data.filter((item) => item.enabled);
     voicemailOptions.value = voicemailRes.rows.filter((item) => item.enabled);
+    aiAgentOptions.value = aiAgentRes.data.filter((item) => item.enabled);
   } finally {
     loading.value = false;
   }

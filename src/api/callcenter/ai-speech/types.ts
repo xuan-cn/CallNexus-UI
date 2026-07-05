@@ -1,25 +1,49 @@
-export interface AiTtsProviderVO {
+export interface AiSpeechProviderVO {
   id: string | number;
   providerCode: string;
   providerName: string;
   providerType: string;
+  ttsEnabled: boolean;
+  recordingAsrEnabled: boolean;
+  streamingAsrEnabled: boolean;
+  defaultTts: boolean;
+  defaultRecordingAsr: boolean;
+  defaultStreamingAsr: boolean;
   endpointUrl: string;
   httpMethod: string;
   authType: string;
   authHeaderName?: string;
+  authConfigured?: boolean;
   defaultVoice?: string;
   defaultFormat: string;
   defaultSampleRate: number;
   timeoutSeconds: number;
+  recordingAsrEndpointUrl?: string;
+  streamingAsrEndpointUrl?: string;
+  asrLanguage: string;
+  asrFormat: string;
+  asrSampleRate: number;
+  asrEnablePunctuation: boolean;
+  asrEnableItn: boolean;
+  asrEnableIntermediateResult: boolean;
+  asrSilenceTimeoutMs: number;
+  asrMaxSentenceMs: number;
+  asrOptionsJson?: string;
   enabled: boolean;
   remark?: string;
 }
 
-export interface AiTtsProviderForm {
+export interface AiSpeechProviderForm {
   id?: string | number;
   providerCode: string;
   providerName: string;
   providerType: string;
+  ttsEnabled: boolean;
+  recordingAsrEnabled: boolean;
+  streamingAsrEnabled: boolean;
+  defaultTts: boolean;
+  defaultRecordingAsr: boolean;
+  defaultStreamingAsr: boolean;
   endpointUrl: string;
   httpMethod: string;
   authType: string;
@@ -29,6 +53,17 @@ export interface AiTtsProviderForm {
   defaultFormat: string;
   defaultSampleRate: number;
   timeoutSeconds: number;
+  recordingAsrEndpointUrl?: string;
+  streamingAsrEndpointUrl?: string;
+  asrLanguage: string;
+  asrFormat: string;
+  asrSampleRate: number;
+  asrEnablePunctuation: boolean;
+  asrEnableItn: boolean;
+  asrEnableIntermediateResult: boolean;
+  asrSilenceTimeoutMs: number;
+  asrMaxSentenceMs: number;
+  asrOptionsJson?: string;
   enabled: boolean;
   remark?: string;
 }
@@ -88,8 +123,22 @@ export interface TtsTestForm {
 export interface TtsTestVO {
   mediaId?: string | number;
   playbackUrl?: string;
-  status: string;
+  status?: string;
   failureReason?: string;
+}
+
+export interface AsrTestSegmentVO {
+  sentenceIndex?: number;
+  startMs?: number;
+  endMs?: number;
+  text: string;
+  confidence?: number;
+  finalResult: boolean;
+}
+
+export interface AsrTestVO {
+  fullText: string;
+  segments: AsrTestSegmentVO[];
 }
 
 export interface AiGeneratedMediaVO {
