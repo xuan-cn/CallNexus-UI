@@ -17,7 +17,20 @@ export interface DispatchGroupCallRequest {
   targetExtensions: string[];
 }
 
-export type DispatchCallTaskType = 'SINGLE' | 'GROUP';
+export interface DispatchBroadcastRequest {
+  mediaAssetId: string | number;
+  targetExtensions: string[];
+}
+
+export interface DispatchIntercomRequest {
+  targetExtension: string;
+}
+
+export interface DispatchIntercomTalkRequest {
+  talking: boolean;
+}
+
+export type DispatchCallTaskType = 'SINGLE' | 'GROUP' | 'BROADCAST' | 'INTERCOM';
 export type DispatchCallTaskState = 'STARTING' | 'RUNNING' | 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'CANCELLED';
 export type DispatchCallTargetState = 'PENDING' | 'SUBMITTED' | 'RINGING' | 'ANSWERED' | 'ENDED' | 'FAILED' | 'CANCELLED';
 
@@ -40,7 +53,11 @@ export interface DispatchCallTaskVO {
   businessCallId: string;
   nodeId: string | number;
   operatorExtension: string;
-  operatorLegUuid: string;
+  operatorLegUuid?: string;
+  mediaAssetId?: string | number;
+  mediaName?: string;
+  mediaPath?: string;
+  intercomTalking?: boolean;
   taskType: DispatchCallTaskType;
   taskState: DispatchCallTaskState;
   totalCount: number;
@@ -115,6 +132,22 @@ export const startDispatchGroupCall = (data: DispatchGroupCallRequest): AxiosPro
     data
   });
 
+/** 向选中分机播放已同步到 FreeSWITCH 节点的预录音媒体。 */
+export const startDispatchBroadcast = (data: DispatchBroadcastRequest): AxiosPromise<DispatchCallTaskVO> =>
+  request({
+    url: '/api/v1/dispatch/calls/broadcast',
+    method: 'post',
+    data
+  });
+
+/** 向单个目标分机发起半双工调度对讲。 */
+export const startDispatchIntercom = (data: DispatchIntercomRequest): AxiosPromise<DispatchCallTaskVO> =>
+  request({
+    url: '/api/v1/dispatch/calls/intercom',
+    method: 'post',
+    data
+  });
+
 /** 查询最近的调度单呼和组呼任务。 */
 export const listDispatchCallTasks = (): AxiosPromise<DispatchCallTaskVO[]> =>
   request({
@@ -133,5 +166,27 @@ export const getDispatchCallTask = (taskId: string | number): AxiosPromise<Dispa
 export const stopDispatchUnansweredTargets = (taskId: string | number): AxiosPromise<void> =>
   request({
     url: `/api/v1/dispatch/calls/tasks/${taskId}/stop-unanswered`,
+    method: 'post'
+  });
+
+/** 立即终止广播任务中所有尚未结束的目标电话腿。 */
+export const terminateDispatchBroadcast = (taskId: string | number): AxiosPromise<void> =>
+  request({
+    url: `/api/v1/dispatch/calls/tasks/${taskId}/terminate-broadcast`,
+    method: 'post'
+  });
+
+/** 设置对讲调度分机是否开放发言。 */
+export const setDispatchIntercomTalking = (taskId: string | number, data: DispatchIntercomTalkRequest): AxiosPromise<void> =>
+  request({
+    url: `/api/v1/dispatch/calls/tasks/${taskId}/intercom/talk`,
+    method: 'post',
+    data
+  });
+
+/** 结束对讲会议及其全部电话腿。 */
+export const terminateDispatchIntercom = (taskId: string | number): AxiosPromise<void> =>
+  request({
+    url: `/api/v1/dispatch/calls/tasks/${taskId}/terminate-intercom`,
     method: 'post'
   });

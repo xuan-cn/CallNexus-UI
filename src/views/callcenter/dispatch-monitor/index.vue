@@ -26,11 +26,25 @@
             >单呼</el-button
           >
           <el-button
+            v-hasPermi="['callcenter:dispatch-control:intercom']"
+            type="primary"
+            :disabled="selectedExtensions.length !== 1"
+            @click="handleStartIntercom"
+            >对讲</el-button
+          >
+          <el-button
             v-hasPermi="['callcenter:dispatch-control:group-call']"
             type="success"
             :disabled="selectedExtensions.length < 2"
             @click="handleGroupCall"
             >组呼</el-button
+          >
+          <el-button
+            v-hasPermi="['callcenter:dispatch-control:broadcast']"
+            type="warning"
+            :disabled="selectedExtensions.length === 0"
+            @click="openBroadcastDialog"
+            >预录音广播</el-button
           >
           <el-switch v-model="autoRefresh" active-text="5秒自动刷新" />
           <el-button type="primary" :loading="loading || extensionLoading" @click="loadDispatchData">刷新</el-button>
@@ -145,14 +159,15 @@
       <template #header>
         <div class="section-header">
           <strong>最近调度呼叫</strong>
-          <span class="task-tip">单呼和组呼使用独立电话腿 UUID，点击详情可查看每个目标的振铃、接听和失败状态。</span>
+          <span class="task-tip">单呼、组呼和广播都使用独立目标电话腿 UUID，广播不会创建组呼会议。</span>
         </div>
       </template>
       <el-table v-loading="taskLoading" :data="tasks" row-key="id" max-height="320">
         <el-table-column label="类型" width="90">
-          <template #default="{ row }">{{ row.taskType === 'GROUP' ? '组呼' : '单呼' }}</template>
+          <template #default="{ row }">{{ taskTypeLabel(row.taskType) }}</template>
         </el-table-column>
         <el-table-column label="调度分机" width="110" prop="operatorExtension" />
+        <el-table-column label="广播媒体" min-width="150" show-overflow-tooltip prop="mediaName" />
         <el-table-column label="状态" width="110">
           <template #default="{ row }">
             <el-tag :type="taskStateTagType(row.taskState)">{{ taskStateLabel(row.taskState) }}</el-tag>
@@ -169,7 +184,35 @@
           <template #default="{ row }">
             <el-button link type="primary" @click="openTaskDetail(row.id)">详情</el-button>
             <el-button
-              v-if="row.taskState === 'STARTING' || row.taskState === 'RUNNING' || row.taskState === 'PARTIAL'"
+              v-if="row.taskType === 'INTERCOM' && (row.taskState === 'STARTING' || row.taskState === 'RUNNING')"
+              v-hasPermi="['callcenter:dispatch-control:intercom-talk']"
+              link
+              type="primary"
+              @click="openIntercomTask(row.id)"
+              >打开对讲</el-button
+            >
+            <el-button
+              v-if="row.taskType === 'BROADCAST' && (row.taskState === 'STARTING' || row.taskState === 'RUNNING')"
+              v-hasPermi="['callcenter:dispatch-control:stop-broadcast']"
+              link
+              type="danger"
+              @click="handleTerminateBroadcast(row)"
+              >终止广播</el-button
+            >
+            <el-button
+              v-if="row.taskType === 'INTERCOM' && (row.taskState === 'STARTING' || row.taskState === 'RUNNING')"
+              v-hasPermi="['callcenter:dispatch-control:stop-intercom']"
+              link
+              type="danger"
+              @click="handleTerminateIntercom(row)"
+              >结束对讲</el-button
+            >
+            <el-button
+              v-if="
+                row.taskType !== 'BROADCAST' &&
+                row.taskType !== 'INTERCOM' &&
+                (row.taskState === 'STARTING' || row.taskState === 'RUNNING' || row.taskState === 'PARTIAL')
+              "
               v-hasPermi="['callcenter:dispatch-control:stop-group']"
               link
               type="danger"
@@ -181,6 +224,69 @@
       </el-table>
       <el-empty v-if="!taskLoading && tasks.length === 0" description="暂无调度呼叫任务" />
     </el-card>
+
+    <el-dialog v-model="broadcastDialogVisible" title="发起预录音广播" width="620px" append-to-body destroy-on-close>
+      <el-alert title="目标分机接听后将播放节点本地音频，播放结束后自动挂断。" type="info" :closable="false" show-icon />
+      <el-form label-width="100px" class="broadcast-form">
+        <el-form-item label="广播声音" required>
+          <el-select v-model="broadcastMediaAssetId" filterable placeholder="选择已发布声音媒体" style="width: 100%">
+            <el-option
+              v-for="item in broadcastMediaOptions"
+              :key="item.id"
+              :label="`${item.assetName} (v${item.latestVersionNo || 1})`"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="目标分机">
+          <el-tag v-for="item in selectedExtensions" :key="item.sipAccountId" class="broadcast-target-tag">{{ item.extension }}</el-tag>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="broadcastDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="broadcastSubmitting" :disabled="!broadcastMediaAssetId" @click="handleStartBroadcast">开始广播</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="intercomDialogVisible"
+      title="单目标调度对讲"
+      width="520px"
+      append-to-body
+      destroy-on-close
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      :before-close="handleIntercomDialogClose"
+    >
+      <div v-if="intercomTask" class="intercom-panel">
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="调度分机">{{ intercomTask.operatorExtension }}</el-descriptions-item>
+          <el-descriptions-item label="目标分机">{{ intercomTarget?.targetExtension || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="连接状态">
+            <el-tag :type="intercomReady ? 'success' : intercomTaskEnded ? 'info' : 'warning'">
+              {{ intercomTaskEnded ? '已结束' : intercomReady ? '已连接' : '等待双方接听' }}
+            </el-tag>
+          </el-descriptions-item>
+        </el-descriptions>
+        <el-button
+          v-hasPermi="['callcenter:dispatch-control:intercom-talk']"
+          class="ptt-button"
+          :class="{ talking: intercomTalkDesired }"
+          :disabled="!intercomReady || intercomTaskEnded"
+          @pointerdown.prevent="handleIntercomPress"
+          @pointerup.prevent="handleIntercomRelease"
+          @pointercancel.prevent="handleIntercomRelease"
+          @pointerleave="handleIntercomRelease"
+        >
+          {{ intercomTalkDesired ? '正在讲话，松开静音' : intercomReady ? '按住说话' : '等待连接' }}
+        </el-button>
+        <p class="intercom-tip">目标分机默认静音；终端支持自动应答时会直接接通，否则请在目标话机手动接听。</p>
+      </div>
+      <template #footer>
+        <el-button v-if="intercomTaskEnded" @click="closeEndedIntercomDialog">关闭</el-button>
+        <el-button v-else type="danger" :loading="intercomTerminating" @click="handleTerminateIntercomTask">结束对讲</el-button>
+      </template>
+    </el-dialog>
 
     <el-card shadow="never">
       <el-table v-loading="loading" :data="calls" row-key="businessCallId">
@@ -321,11 +427,18 @@
     <el-drawer v-model="taskDrawerVisible" title="调度呼叫任务详情" size="68%" append-to-body destroy-on-close>
       <template v-if="currentTask">
         <el-descriptions :column="3" border>
-          <el-descriptions-item label="任务类型">{{ currentTask.taskType === 'GROUP' ? '组呼' : '单呼' }}</el-descriptions-item>
+          <el-descriptions-item label="任务类型">{{ taskTypeLabel(currentTask.taskType) }}</el-descriptions-item>
           <el-descriptions-item label="任务状态">{{ taskStateLabel(currentTask.taskState) }}</el-descriptions-item>
           <el-descriptions-item label="调度分机">{{ currentTask.operatorExtension }}</el-descriptions-item>
           <el-descriptions-item label="业务通话ID" :span="2">{{ currentTask.businessCallId }}</el-descriptions-item>
           <el-descriptions-item label="调度电话腿UUID">{{ currentTask.operatorLegUuid }}</el-descriptions-item>
+          <el-descriptions-item v-if="currentTask.taskType === 'BROADCAST'" label="广播媒体">{{ currentTask.mediaName || '-' }}</el-descriptions-item>
+          <el-descriptions-item v-if="currentTask.taskType === 'BROADCAST'" label="节点本地路径" :span="2">{{
+            currentTask.mediaPath || '-'
+          }}</el-descriptions-item>
+          <el-descriptions-item v-if="currentTask.taskType === 'INTERCOM'" label="发言状态">{{
+            currentTask.intercomTalking ? '调度分机发言中' : '静音'
+          }}</el-descriptions-item>
           <el-descriptions-item label="开始时间">{{ currentTask.startedAt }}</el-descriptions-item>
           <el-descriptions-item label="结束时间">{{ currentTask.endedAt || '-' }}</el-descriptions-item>
           <el-descriptions-item label="目标统计">
@@ -375,11 +488,18 @@ import {
   pickupDispatchCall,
   startDispatchSingleCall,
   startDispatchGroupCall,
+  startDispatchBroadcast,
+  startDispatchIntercom,
   listDispatchCallTasks,
   getDispatchCallTask,
-  stopDispatchUnansweredTargets
+  stopDispatchUnansweredTargets,
+  terminateDispatchBroadcast,
+  setDispatchIntercomTalking,
+  terminateDispatchIntercom
 } from '@/api/callcenter/dispatch-control';
 import type { DispatchCallTaskVO } from '@/api/callcenter/dispatch-control';
+import { listMediaAssets } from '@/api/callcenter/media-asset';
+import type { MediaAssetVO } from '@/api/callcenter/media-asset/types';
 
 const loading = ref(false);
 const extensionLoading = ref(false);
@@ -397,7 +517,18 @@ const tasks = ref<DispatchCallTaskVO[]>([]);
 const selectedExtensions = ref<DispatchExtensionStatusVO[]>([]);
 const taskDrawerVisible = ref(false);
 const currentTask = ref<DispatchCallTaskVO>();
+const broadcastDialogVisible = ref(false);
+const broadcastSubmitting = ref(false);
+const broadcastMediaAssetId = ref<string | number>();
+const broadcastMediaOptions = ref<MediaAssetVO[]>([]);
+const intercomDialogVisible = ref(false);
+const intercomTerminating = ref(false);
+const intercomTalkDesired = ref(false);
+const intercomTask = ref<DispatchCallTaskVO>();
+let intercomCommandQueue: Promise<void> = Promise.resolve();
 let timer: ReturnType<typeof setInterval> | undefined;
+let intercomTimer: ReturnType<typeof setInterval> | undefined;
+let intercomPolling = false;
 
 const bridgedCount = computed(() => calls.value.filter((item) => item.activeBridgeCount > 0).length);
 const activeLegCount = computed(() => calls.value.reduce((total, item) => total + (item.activeLegCount || 0), 0));
@@ -406,6 +537,11 @@ const registeredExtensionCount = computed(() => extensions.value.filter((item) =
 const unregisteredExtensionCount = computed(() => extensions.value.filter((item) => item.registrationStatus === 'UNREGISTERED').length);
 const idleExtensionCount = computed(() => extensions.value.filter((item) => item.callStatus === 'IDLE').length);
 const availableOperatorExtensions = computed(() => extensions.value.filter((item) => item.enabled && item.registrationStatus === 'REGISTERED'));
+const intercomTarget = computed(() => intercomTask.value?.targets?.[0]);
+const intercomTaskEnded = computed(() => ['SUCCESS', 'PARTIAL', 'FAILED', 'CANCELLED'].includes(intercomTask.value?.taskState || ''));
+const intercomReady = computed(
+  () => !intercomTaskEnded.value && Boolean(intercomTarget.value?.answered) && intercomTarget.value?.targetState === 'ANSWERED'
+);
 
 const loadOperatorExtension = async () => {
   const response = await getDispatchOperatorExtension();
@@ -443,6 +579,9 @@ const loadTasks = async () => {
     tasks.value = response.data || [];
     if (taskDrawerVisible.value && currentTask.value?.id) {
       await loadTaskDetail(currentTask.value.id);
+    }
+    if (intercomDialogVisible.value && intercomTask.value?.id) {
+      await loadIntercomTask(intercomTask.value.id);
     }
   } finally {
     taskLoading.value = false;
@@ -525,6 +664,115 @@ const handleGroupCall = async () => {
   await loadDispatchData();
 };
 
+const handleStartIntercom = async () => {
+  if (!requireOperatorExtension() || selectedExtensions.value.length !== 1) return;
+  const target = selectedExtensions.value[0];
+  await ElMessageBox.confirm(`确认向分机 ${target.extension} 发起对讲吗？目标支持自动应答时会直接接通，否则需要手动接听。`, '发起单目标对讲', {
+    type: 'warning',
+    confirmButtonText: '开始对讲',
+    cancelButtonText: '取消'
+  });
+  const response = await startDispatchIntercom({ targetExtension: target.extension });
+  intercomTask.value = response.data;
+  intercomTalkDesired.value = false;
+  intercomDialogVisible.value = true;
+  startIntercomTimer();
+  await loadDispatchData();
+};
+
+const loadIntercomTask = async (taskId: string | number) => {
+  if (intercomPolling) return;
+  intercomPolling = true;
+  try {
+    const response = await getDispatchCallTask(taskId);
+    intercomTask.value = response.data;
+    if (intercomTaskEnded.value) {
+      intercomTalkDesired.value = false;
+      stopIntercomTimer();
+    }
+  } finally {
+    intercomPolling = false;
+  }
+};
+
+const openIntercomTask = async (taskId: string | number) => {
+  await loadIntercomTask(taskId);
+  intercomTalkDesired.value = Boolean(intercomTask.value?.intercomTalking);
+  intercomDialogVisible.value = true;
+  startIntercomTimer();
+};
+
+const startIntercomTimer = () => {
+  stopIntercomTimer();
+  intercomTimer = setInterval(() => {
+    if (intercomDialogVisible.value && intercomTask.value?.id && !document.hidden) {
+      void loadIntercomTask(intercomTask.value.id);
+    }
+  }, 1000);
+};
+
+const stopIntercomTimer = () => {
+  if (intercomTimer) clearInterval(intercomTimer);
+  intercomTimer = undefined;
+};
+
+const queueIntercomTalk = (talking: boolean) => {
+  const taskId = intercomTask.value?.id;
+  if (!taskId || intercomTaskEnded.value) return Promise.resolve();
+  intercomTalkDesired.value = talking;
+  intercomCommandQueue = intercomCommandQueue
+    .catch(() => undefined)
+    .then(async () => {
+      await setDispatchIntercomTalking(taskId, { talking });
+      if (intercomTask.value?.id === taskId) intercomTask.value.intercomTalking = talking;
+    })
+    .catch(() => {
+      intercomTalkDesired.value = false;
+    });
+  return intercomCommandQueue;
+};
+
+const handleIntercomPress = (event: PointerEvent) => {
+  if (event.pointerType === 'mouse' && event.button !== 0) return;
+  if (!intercomReady.value || intercomTalkDesired.value) return;
+  void queueIntercomTalk(true);
+};
+
+const handleIntercomRelease = () => {
+  if (!intercomTalkDesired.value) return;
+  void queueIntercomTalk(false);
+};
+
+const openBroadcastDialog = async () => {
+  if (!requireOperatorExtension() || selectedExtensions.value.length === 0) return;
+  const response = await listMediaAssets({ pageNum: 1, pageSize: 1000, enabled: true });
+  broadcastMediaOptions.value = (response.rows || []).filter(
+    (item) => item.category !== 'CALL_RECORDING' && item.publishStatus !== undefined && ['PUBLISHED', 'PARTIAL'].includes(item.publishStatus)
+  );
+  if (broadcastMediaOptions.value.length === 0) {
+    ElMessage.warning('暂无可用的已发布声音媒体，请先完成媒体发布和节点同步');
+    return;
+  }
+  broadcastMediaAssetId.value = undefined;
+  broadcastDialogVisible.value = true;
+};
+
+const handleStartBroadcast = async () => {
+  if (!broadcastMediaAssetId.value || selectedExtensions.value.length === 0) return;
+  broadcastSubmitting.value = true;
+  try {
+    const response = await startDispatchBroadcast({
+      mediaAssetId: broadcastMediaAssetId.value,
+      targetExtensions: selectedExtensions.value.map((item) => item.extension)
+    });
+    broadcastDialogVisible.value = false;
+    ElMessage.success(`广播任务已提交，目标 ${response.data.totalCount} 个`);
+    await loadDispatchData();
+  } finally {
+    broadcastSubmitting.value = false;
+  }
+};
+
 const loadTaskDetail = async (taskId: string | number) => {
   taskDetailLoading.value = true;
   try {
@@ -550,6 +798,74 @@ const handleStopUnanswered = async (row: DispatchCallTaskVO) => {
   await stopDispatchUnansweredTargets(row.id);
   ElMessage.success('未接听目标停止命令已提交');
   await loadDispatchData();
+};
+
+const handleTerminateBroadcast = async (row: DispatchCallTaskVO) => {
+  await ElMessageBox.confirm('确认立即终止该广播吗？正在振铃或播放的目标分机都会被挂断。', '终止预录音广播', {
+    type: 'warning',
+    confirmButtonText: '确认终止',
+    cancelButtonText: '取消'
+  });
+  await terminateDispatchBroadcast(row.id);
+  ElMessage.success('广播终止命令已提交');
+  await loadDispatchData();
+};
+
+const terminateCurrentIntercom = async () => {
+  if (!intercomTask.value?.id || intercomTaskEnded.value) return;
+  intercomTerminating.value = true;
+  try {
+    if (intercomTalkDesired.value) await queueIntercomTalk(false);
+    await terminateDispatchIntercom(intercomTask.value.id);
+    await loadIntercomTask(intercomTask.value.id);
+    await loadDispatchData();
+  } finally {
+    intercomTerminating.value = false;
+  }
+};
+
+const handleTerminateIntercomTask = async () => {
+  await ElMessageBox.confirm('确认结束当前对讲吗？调度分机和目标分机都会挂断。', '结束调度对讲', {
+    type: 'warning',
+    confirmButtonText: '确认结束',
+    cancelButtonText: '取消'
+  });
+  await terminateCurrentIntercom();
+};
+
+const handleTerminateIntercom = async (row: DispatchCallTaskVO) => {
+  await ElMessageBox.confirm('确认结束该对讲任务吗？', '结束调度对讲', {
+    type: 'warning',
+    confirmButtonText: '确认结束',
+    cancelButtonText: '取消'
+  });
+  await terminateDispatchIntercom(row.id);
+  if (intercomTask.value?.id === row.id) await loadIntercomTask(row.id);
+  await loadDispatchData();
+};
+
+const handleIntercomDialogClose = async (done: () => void) => {
+  if (intercomTaskEnded.value) {
+    done();
+    return;
+  }
+  try {
+    await ElMessageBox.confirm('关闭面板前需要结束当前对讲，是否继续？', '结束调度对讲', {
+      type: 'warning',
+      confirmButtonText: '结束并关闭',
+      cancelButtonText: '继续对讲'
+    });
+    await terminateCurrentIntercom();
+    stopIntercomTimer();
+    done();
+  } catch {
+    // 用户选择继续对讲时保留面板。
+  }
+};
+
+const closeEndedIntercomDialog = () => {
+  stopIntercomTimer();
+  intercomDialogVisible.value = false;
 };
 
 const handleForceHangup = async (row: DispatchActiveCallVO) => {
@@ -643,6 +959,7 @@ const taskStateLabel = (value?: string) =>
   '-';
 const taskStateTagType = (value?: string) =>
   value === 'SUCCESS' ? 'success' : value === 'FAILED' ? 'danger' : value === 'PARTIAL' ? 'warning' : value === 'CANCELLED' ? 'info' : 'primary';
+const taskTypeLabel = (value?: string) => ({ SINGLE: '单呼', GROUP: '组呼', BROADCAST: '预录音广播', INTERCOM: '对讲' })[value || ''] || value || '-';
 const targetStateLabel = (value?: string) =>
   ({ PENDING: '待提交', SUBMITTED: '已提交', RINGING: '振铃中', ANSWERED: '已接听', ENDED: '已结束', FAILED: '失败', CANCELLED: '已取消' })[
     value || ''
@@ -668,7 +985,10 @@ onMounted(() => {
   loadOperatorExtension();
   startTimer();
 });
-onBeforeUnmount(stopTimer);
+onBeforeUnmount(() => {
+  stopTimer();
+  stopIntercomTimer();
+});
 </script>
 
 <style scoped lang="scss">
@@ -707,6 +1027,42 @@ onBeforeUnmount(stopTimer);
   color: #909399;
   font-size: 13px;
   font-weight: 400;
+}
+.broadcast-form {
+  margin-top: 20px;
+}
+.broadcast-target-tag {
+  margin: 0 8px 8px 0;
+}
+.intercom-panel {
+  text-align: center;
+}
+.ptt-button {
+  width: 220px;
+  height: 220px;
+  margin: 28px auto 16px;
+  border-radius: 50%;
+  border: 8px solid #d9e7f5;
+  background: #053b70;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 600;
+  touch-action: none;
+  user-select: none;
+}
+.ptt-button:hover,
+.ptt-button:focus {
+  background: #064a8c;
+  color: #fff;
+}
+.ptt-button.talking {
+  border-color: #fbc4c4;
+  background: #e34d59;
+}
+.intercom-tip {
+  margin: 0;
+  color: #909399;
+  line-height: 1.7;
 }
 .page-header {
   display: flex;

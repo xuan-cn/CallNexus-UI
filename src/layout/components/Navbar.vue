@@ -59,6 +59,7 @@
         <el-tooltip :content="proxy.$t('navbar.layoutSize')" effect="dark" placement="bottom">
           <size-select id="size-select" class="right-menu-item hover-effect" />
         </el-tooltip>
+        <AiAssistantDrawer v-if="canUseAiAssistant" />
       </template>
       <div class="avatar-container">
         <el-dropdown class="right-menu-item hover-effect" trigger="click" @command="handleCommand">
@@ -100,6 +101,7 @@ import { ElMessageBoxOptions } from 'element-plus/es/components/message-box/src/
 import { NavTypeEnum } from '@/enums/NavTypeEnum';
 import Logo from '@/layout/components/Sidebar/Logo.vue';
 import TopBar from './TopBar';
+import AiAssistantDrawer from './AiAssistantDrawer.vue';
 
 const appStore = useAppStore();
 const userStore = useUserStore();
@@ -110,6 +112,7 @@ const newNotice = ref(<number>0);
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 
 const userId = ref(userStore.userId);
+const canUseAiAssistant = computed(() => userStore.permissions.includes('*:*:*') || userStore.permissions.includes('callcenter:ai-conversation:chat'));
 const navType = computed(() => settingsStore.navType);
 const showLogo = computed(() => settingsStore.sidebarLogo);
 
