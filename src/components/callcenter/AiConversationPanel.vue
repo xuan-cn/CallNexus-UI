@@ -39,7 +39,15 @@
             </div>
           </el-collapse-item>
         </el-collapse>
-        <div class="message-content" v-html="safeMarkdown(message.content || (sending ? '正在生成回答...' : ''))"></div>
+        <div
+          v-if="message.role === 'ASSISTANT' && message.status === 'PROCESSING' && !message.content"
+          class="message-content typing-indicator"
+          role="status"
+          aria-label="正在生成回答"
+        >
+          <span></span><span></span><span></span>
+        </div>
+        <div v-else class="message-content" v-html="safeMarkdown(message.content || '')"></div>
       </div>
     </div>
     <div class="composer">
@@ -79,6 +87,46 @@ const messages = ref<AiMessageVO[]>([]);
 const conversationId = ref<Id>();
 const messageBox = ref<HTMLElement>();
 let controller: AbortController | undefined;
+let typingTimer: ReturnType<typeof setInterval> | undefined;
+let typingTarget: AiMessageVO | undefined;
+const typingQueue: string[] = [];
+const typingWaiters: Array<() => void> = [];
+
+const finishTyping = () => {
+  if (typingTimer) clearInterval(typingTimer);
+  typingTimer = undefined;
+  typingTarget = undefined;
+  typingWaiters.splice(0).forEach((resolve) => resolve());
+};
+
+const startTyping = () => {
+  if (typingTimer) return;
+  typingTimer = setInterval(() => {
+    const character = typingQueue.shift();
+    if (character !== undefined && typingTarget) {
+      typingTarget.content += character;
+      scroll();
+    }
+    if (!typingQueue.length) finishTyping();
+  }, 16);
+};
+
+const enqueueTyping = (target: AiMessageVO, content: string) => {
+  if (!content) return;
+  typingTarget = target;
+  typingQueue.push(...Array.from(content));
+  startTyping();
+};
+
+const waitForTyping = () => {
+  if (!typingTimer && !typingQueue.length) return Promise.resolve();
+  return new Promise<void>((resolve) => typingWaiters.push(resolve));
+};
+
+const resetTyping = () => {
+  typingQueue.splice(0);
+  finishTyping();
+};
 
 const loadConversations = async () => {
   conversations.value = (await listAiConversations(props.agentId)).data || [];
@@ -98,6 +146,7 @@ const beginConversation = async () => {
 const reset = async () => {
   controller?.abort();
   controller = undefined;
+  resetTyping();
   conversationId.value = undefined;
   conversations.value = [];
   messages.value = [];
@@ -147,7 +196,7 @@ const send = async () => {
     status: 'COMPLETED',
     citations: []
   });
-  const answer: AiMessageVO = {
+  const answer = reactive<AiMessageVO>({
     id: `a-${Date.now()}`,
     conversationId: conversationId.value || '',
     role: 'ASSISTANT',
@@ -155,7 +204,7 @@ const send = async () => {
     sourceType: '',
     status: 'PROCESSING',
     citations: []
-  };
+  });
   messages.value.push(answer);
   sending.value = true;
   controller = new AbortController();
@@ -172,7 +221,7 @@ const send = async () => {
           answer.sourceType = data.sourceType;
           answer.retrievalInfo = data;
         } else if (event === 'delta') {
-          answer.content += data.content || '';
+          enqueueTyping(answer, data.content || '');
         } else if (event === 'citation') {
           answer.citations.push({
             sourceType: data.sourceType,
@@ -185,6 +234,7 @@ const send = async () => {
           answer.id = data.messageId;
           answer.status = 'COMPLETED';
         } else if (event === 'error') {
+          resetTyping();
           answer.content = data.message;
           answer.status = 'FAILED';
         }
@@ -192,9 +242,11 @@ const send = async () => {
       },
       controller.signal
     );
+    await waitForTyping();
     await loadConversations();
   } catch (error: any) {
     if (error?.name !== 'AbortError') {
+      resetTyping();
       answer.content = error?.message || 'AI 对话失败';
       answer.status = 'FAILED';
     }
@@ -207,6 +259,7 @@ const send = async () => {
 const abort = () => {
   controller?.abort();
   controller = undefined;
+  resetTyping();
 };
 const scroll = () =>
   nextTick(() => {
@@ -289,6 +342,35 @@ onBeforeUnmount(abort);
   font-size: 14px;
   line-height: 1.7;
   word-break: break-word;
+}
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 46px;
+}
+.typing-indicator span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #b8c0cc;
+  animation: typing-bounce 1.1s ease-in-out infinite;
+}
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.14s;
+}
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.28s;
+}
+@keyframes typing-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-5px);
+  }
 }
 .user .message-content {
   background: #053b70;

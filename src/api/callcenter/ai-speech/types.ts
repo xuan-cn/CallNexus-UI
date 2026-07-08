@@ -4,9 +4,11 @@ export interface AiSpeechProviderVO {
   providerName: string;
   providerType: string;
   ttsEnabled: boolean;
+  streamingTtsEnabled: boolean;
   recordingAsrEnabled: boolean;
   streamingAsrEnabled: boolean;
   defaultTts: boolean;
+  defaultStreamingTts: boolean;
   defaultRecordingAsr: boolean;
   defaultStreamingAsr: boolean;
   endpointUrl: string;
@@ -18,6 +20,8 @@ export interface AiSpeechProviderVO {
   defaultFormat: string;
   defaultSampleRate: number;
   timeoutSeconds: number;
+  streamingTtsEndpointUrl?: string;
+  streamingTtsOptionsJson?: string;
   recordingAsrEndpointUrl?: string;
   streamingAsrEndpointUrl?: string;
   asrLanguage: string;
@@ -39,9 +43,11 @@ export interface AiSpeechProviderForm {
   providerName: string;
   providerType: string;
   ttsEnabled: boolean;
+  streamingTtsEnabled: boolean;
   recordingAsrEnabled: boolean;
   streamingAsrEnabled: boolean;
   defaultTts: boolean;
+  defaultStreamingTts: boolean;
   defaultRecordingAsr: boolean;
   defaultStreamingAsr: boolean;
   endpointUrl: string;
@@ -53,6 +59,8 @@ export interface AiSpeechProviderForm {
   defaultFormat: string;
   defaultSampleRate: number;
   timeoutSeconds: number;
+  streamingTtsEndpointUrl?: string;
+  streamingTtsOptionsJson?: string;
   recordingAsrEndpointUrl?: string;
   streamingAsrEndpointUrl?: string;
   asrLanguage: string;
