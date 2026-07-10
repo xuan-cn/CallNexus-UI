@@ -214,6 +214,8 @@ export interface AiAgentVO {
   systemAssistant: boolean;
   enabled: boolean;
   version?: number;
+  voiceTransport?: 'HTTP' | 'WS';
+  voiceTransportWsUrl?: string;
   knowledgeBaseIds: Id[];
   knowledgeBaseNames: string[];
 }

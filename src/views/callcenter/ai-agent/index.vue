@@ -33,7 +33,7 @@
         ></el-table
       >
     </el-card>
-    <el-drawer v-model="drawer" :title="form.id ? '修改 AI 助手' : '新增 AI 助手'" size="720px"
+    <el-drawer v-model="drawer" :title="form.id ? '修改 AI 助手' : '新增 AI 助手'" size="1080px"
       ><el-form :model="form" label-width="120px"
         ><el-row :gutter="16"
           ><el-col :span="12"
@@ -59,6 +59,20 @@
         ><el-form-item label="开场白"
           ><el-input v-model="form.welcomeMessage" type="textarea" :rows="3" placeholder="创建新对话时，作为 AI 的第一条消息" />
           <div class="mt-1 text-xs text-gray-400">开场白不参与知识检索，后续电话 AI 将复用该内容。</div></el-form-item
+        ><el-form-item label="语音传输"
+          ><el-radio-group v-model="form.voiceTransport"
+            ><el-radio value="HTTP">HTTP：整段合成后一次回传（兼容旧插件）</el-radio
+            ><el-radio value="WS">WS：按句流式回传（首字延迟更低，需 UniMRCP 插件支持）</el-radio></el-radio-group
+          >
+          <el-input
+            v-if="form.voiceTransport === 'WS'"
+            v-model="form.voiceTransportWsUrl"
+            class="mt-2"
+            placeholder="ws://<callnexus-host>:8080/api/internal/ai/realtime/tts-stream（留空使用系统默认）"
+            maxlength="256" />
+          <div class="mt-1 text-xs text-gray-400">
+            仅对话 AI 通话（callnexussynth 插件）生效；HTTP 兼容所有现网插件，WS 需要插件按新协议改造。
+          </div></el-form-item
         ><el-form-item label="知识库回答"
           ><el-radio-group v-model="form.retrievalMode"
             ><el-radio value="RAG">智能混合：FAQ 直返，文档由模型整理</el-radio
@@ -134,6 +148,8 @@ const defaults = (): AiAgentForm => ({
   historyMessageLimit: 10,
   systemAssistant: false,
   enabled: true,
+  voiceTransport: 'HTTP',
+  voiceTransportWsUrl: '',
   knowledgeBaseIds: []
 });
 const form = ref(defaults());

@@ -191,7 +191,7 @@
                 <el-input v-model="providerForm.endpointUrl" placeholder="HTTP TTS 接口地址" />
               </el-form-item>
             </el-col>
-            <el-col :span="8">
+            <el-col :span="6">
               <el-form-item label="请求方法">
                 <el-select v-model="providerForm.httpMethod">
                   <el-option label="POST" value="POST" />
@@ -199,12 +199,12 @@
                 </el-select>
               </el-form-item>
             </el-col>
-            <el-col :span="8">
+            <el-col :span="6">
               <el-form-item label="默认音色">
                 <el-input v-model="providerForm.defaultVoice" />
               </el-form-item>
             </el-col>
-            <el-col :span="4">
+            <el-col :span="6">
               <el-form-item label="格式">
                 <el-select v-model="providerForm.defaultFormat">
                   <el-option label="wav" value="wav" />
@@ -213,9 +213,9 @@
                 </el-select>
               </el-form-item>
             </el-col>
-            <el-col :span="4">
+            <el-col :span="6">
               <el-form-item label="采样率">
-                <el-input-number v-model="providerForm.defaultSampleRate" :min="8000" :max="48000" :step="1000" />
+                <el-input-number v-model="providerForm.defaultSampleRate" :min="8000" :max="48000" :step="1000" style="width: 100%" />
               </el-form-item>
             </el-col>
             <el-col :span="12">
