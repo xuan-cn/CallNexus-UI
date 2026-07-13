@@ -56,8 +56,9 @@
         type="textarea"
         :rows="3"
         resize="none"
-        placeholder="输入问题，Ctrl + Enter 发送"
+        placeholder="输入问题，按 Ctrl + Enter 或 Enter 发送消息"
         @keydown.ctrl.enter.prevent="send"
+        @keyup.enter="send"
       />
       <div class="composer-actions">
         <span class="text-gray-400">回答将标明知识来源</span>

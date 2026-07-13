@@ -48,3 +48,29 @@ export interface OutboundLinePolicyQuery extends PageQuery {
   defaultPolicy?: boolean;
   enabled?: boolean;
 }
+
+export interface SkillGroupOutboundPolicyVO {
+  id: string | number;
+  nodeId: string | number;
+  nodeName?: string;
+  skillGroupId: string | number;
+  skillGroupName?: string;
+  outboundLinePolicyId: string | number;
+  policyCode?: string;
+  policyName?: string;
+  policyType?: OutboundLinePolicyType;
+  enabled: boolean;
+  remark?: string;
+  version?: number;
+  createTime?: string;
+}
+
+export interface SkillGroupOutboundPolicyForm {
+  id?: string | number;
+  nodeId?: string | number;
+  skillGroupId?: string | number;
+  outboundLinePolicyId?: string | number;
+  enabled: boolean;
+  remark?: string;
+  version?: number;
+}

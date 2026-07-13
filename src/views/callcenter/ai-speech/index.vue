@@ -23,9 +23,9 @@
                 </el-space>
               </template>
             </el-table-column>
-            <el-table-column label="默认用途" min-width="320">
+            <el-table-column label="默认用途" min-width="430">
               <template #default="{ row }">
-                <el-space wrap>
+                <el-space class="default-purpose-tags">
                   <el-tag v-if="row.defaultTts" effect="dark" type="success">默认 TTS</el-tag>
                   <el-tag v-if="row.defaultStreamingTts" effect="dark" type="success">默认实时 TTS</el-tag>
                   <el-tag v-if="row.defaultRecordingAsr" effect="dark">默认录音 ASR</el-tag>
@@ -123,58 +123,43 @@
       </el-tabs>
     </el-card>
 
-    <el-drawer v-model="providerDrawer.visible" :title="providerForm.id ? '修改语音服务商' : '新增语音服务商'" size="1080px">
-      <el-form ref="providerFormRef" :model="providerForm" :rules="providerRules" label-width="140px">
-        <section class="provider-section">
-          <h3>基础信息与认证</h3>
+    <el-drawer v-model="providerDrawer.visible" :title="providerForm.id ? '修改语音服务商' : '新增语音服务商'" size="1040px">
+      <el-form ref="providerFormRef" class="speech-provider-form" :model="providerForm" :rules="providerRules" label-width="112px">
+        <el-alert
+          class="mb-3"
+          type="info"
+          show-icon
+          :closable="false"
+          title="常用项优先配置；厂商地址、模型参数和扩展 JSON 收在高级配置里。"
+        />
+
+        <section class="provider-section provider-summary">
+          <div class="section-title">
+            <div>
+              <h3>基础信息</h3>
+              <p>一条语音服务商可以同时承担 TTS、录音 ASR、实时 ASR，多厂商后续仍按这里统一维护。</p>
+            </div>
+            <el-switch v-model="providerForm.enabled" active-text="启用" inactive-text="停用" />
+          </div>
           <el-row :gutter="16">
-            <el-col :span="12">
+            <el-col :span="8">
               <el-form-item label="服务商编码" prop="providerCode">
                 <el-input v-model="providerForm.providerCode" placeholder="如 ALIYUN_DASHSCOPE" />
               </el-form-item>
             </el-col>
-            <el-col :span="12">
+            <el-col :span="8">
               <el-form-item label="服务商名称" prop="providerName">
-                <el-input v-model="providerForm.providerName" />
+                <el-input v-model="providerForm.providerName" placeholder="如 阿里云百炼" />
               </el-form-item>
             </el-col>
-            <el-col :span="12">
+            <el-col :span="8">
               <el-form-item label="服务商类型" prop="providerType">
-                <el-select v-model="providerForm.providerType" @change="handleProviderTypeChange">
+                <el-select v-model="providerForm.providerType" style="width: 100%" @change="handleProviderTypeChange">
                   <el-option label="通用HTTP" value="CUSTOM_HTTP" />
+                  <el-option label="OpenAI兼容" value="OPENAI_COMPATIBLE" />
                   <el-option label="阿里云百炼 DashScope" value="ALIYUN_DASHSCOPE" />
                   <el-option label="阿里云智能语音 NLS" value="ALIYUN_NLS" />
                 </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="认证方式" prop="authType">
-                <el-select v-model="providerForm.authType">
-                  <el-option label="无" value="NONE" />
-                  <el-option label="Bearer Token" value="BEARER" />
-                  <el-option label="Header Token" value="HEADER" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col v-if="providerForm.authType === 'HEADER'" :span="12">
-              <el-form-item label="Header名称">
-                <el-input v-model="providerForm.authHeaderName" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="Token/API Key">
-                <el-input v-model="providerForm.authToken" type="password" show-password placeholder="修改时留空表示不变" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="超时时间">
-                <el-input-number v-model="providerForm.timeoutSeconds" :min="5" :max="300" />
-                <span class="ml-2 text-gray-500">秒</span>
-              </el-form-item>
-            </el-col>
-            <el-col :span="24">
-              <el-form-item label="备注/扩展JSON">
-                <el-input v-model="providerForm.remark" type="textarea" :rows="3" placeholder='百炼可填 {"workspaceId":"xxx"}' />
               </el-form-item>
             </el-col>
           </el-row>
@@ -182,158 +167,210 @@
 
         <section class="provider-section">
           <div class="section-title">
-            <h3>TTS 语音合成</h3>
-            <el-switch v-model="providerForm.ttsEnabled" active-text="启用" inactive-text="停用" />
+            <div>
+              <h3>能力与默认用途</h3>
+              <p>打开能力代表这个服务商可用于对应场景；默认用途决定业务自动选择哪一条服务商。</p>
+            </div>
+          </div>
+          <div class="capability-grid">
+            <div class="capability-card">
+              <div>
+                <strong>TTS 语音合成</strong>
+                <p>坐席提示音、普通语音合成。</p>
+              </div>
+              <el-switch v-model="providerForm.ttsEnabled" />
+              <el-checkbox v-model="providerForm.defaultTts" :disabled="!providerForm.ttsEnabled">设为默认</el-checkbox>
+            </div>
+            <div class="capability-card">
+              <div>
+                <strong>实时 TTS</strong>
+                <p>AI 实时对话时按分句流式合成。</p>
+              </div>
+              <el-switch v-model="providerForm.streamingTtsEnabled" />
+              <el-checkbox v-model="providerForm.defaultStreamingTts" :disabled="!providerForm.streamingTtsEnabled">设为默认</el-checkbox>
+            </div>
+            <div class="capability-card">
+              <div>
+                <strong>录音 ASR</strong>
+                <p>通话录音、上传文件转文字。</p>
+              </div>
+              <el-switch v-model="providerForm.recordingAsrEnabled" />
+              <el-checkbox v-model="providerForm.defaultRecordingAsr" :disabled="!providerForm.recordingAsrEnabled">设为默认</el-checkbox>
+            </div>
+            <div class="capability-card">
+              <div>
+                <strong>实时 ASR</strong>
+                <p>AI 通话实时识别客户语音。</p>
+              </div>
+              <el-switch v-model="providerForm.streamingAsrEnabled" />
+              <el-checkbox v-model="providerForm.defaultStreamingAsr" :disabled="!providerForm.streamingAsrEnabled">设为默认</el-checkbox>
+            </div>
+          </div>
+        </section>
+
+        <section class="provider-section">
+          <div class="section-title">
+            <div>
+              <h3>常用参数</h3>
+              <p>日常最常改的是音色、格式、采样率和 ASR 语言，地址和 JSON 通常不需要频繁动。</p>
+            </div>
           </div>
           <el-row :gutter="16">
-            <el-col :span="24">
-              <el-form-item label="TTS地址">
-                <el-input v-model="providerForm.endpointUrl" placeholder="HTTP TTS 接口地址" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="6">
-              <el-form-item label="请求方法">
-                <el-select v-model="providerForm.httpMethod">
-                  <el-option label="POST" value="POST" />
-                  <el-option label="GET" value="GET" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="6">
+            <el-col :span="8">
               <el-form-item label="默认音色">
-                <el-input v-model="providerForm.defaultVoice" />
+                <el-input v-model="providerForm.defaultVoice" placeholder="如 Cherry、longxiaochun" />
               </el-form-item>
             </el-col>
-            <el-col :span="6">
-              <el-form-item label="格式">
-                <el-select v-model="providerForm.defaultFormat">
+            <el-col :span="8">
+              <el-form-item label="TTS格式">
+                <el-select v-model="providerForm.defaultFormat" style="width: 100%">
                   <el-option label="wav" value="wav" />
                   <el-option label="mp3" value="mp3" />
                   <el-option label="pcm" value="pcm" />
                 </el-select>
               </el-form-item>
             </el-col>
-            <el-col :span="6">
-              <el-form-item label="采样率">
+            <el-col :span="8">
+              <el-form-item label="TTS采样率">
                 <el-input-number v-model="providerForm.defaultSampleRate" :min="8000" :max="48000" :step="1000" style="width: 100%" />
               </el-form-item>
             </el-col>
-            <el-col :span="12">
-              <el-form-item label="默认TTS">
-                <el-switch v-model="providerForm.defaultTts" />
+            <el-col :span="8">
+              <el-form-item label="ASR语言">
+                <el-input v-model="providerForm.asrLanguage" placeholder="zh-CN" />
               </el-form-item>
             </el-col>
-          </el-row>
-        </section>
-
-        <section class="provider-section">
-          <div class="section-title">
-            <h3>实时 TTS</h3>
-            <el-switch v-model="providerForm.streamingTtsEnabled" active-text="启用" inactive-text="停用" />
-          </div>
-          <el-row :gutter="16">
-            <el-col :span="24">
-              <el-form-item label="实时TTS地址">
-                <el-input v-model="providerForm.streamingTtsEndpointUrl" placeholder="wss://dashscope.aliyuncs.com/api-ws/v1/realtime" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="24">
-              <el-form-item label="实时TTS参数">
-                <el-input
-                  v-model="providerForm.streamingTtsOptionsJson"
-                  type="textarea"
-                  :rows="3"
-                  placeholder='{"model":"qwen3-tts-flash-realtime","speech_rate":1.0,"volume":50}'
-                />
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="默认实时TTS">
-                <el-switch v-model="providerForm.defaultStreamingTts" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-        </section>
-
-        <section class="provider-section">
-          <div class="section-title">
-            <h3>ASR 语音识别</h3>
-            <el-space>
-              <span>录音ASR</span><el-switch v-model="providerForm.recordingAsrEnabled" />
-              <span>流式ASR</span><el-switch v-model="providerForm.streamingAsrEnabled" />
-            </el-space>
-          </div>
-          <el-row :gutter="16">
-            <el-col :span="24">
-              <el-form-item label="录音ASR地址">
-                <el-input v-model="providerForm.recordingAsrEndpointUrl" placeholder="录音文件识别地址，可留空使用服务商默认值" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="24">
-              <el-form-item label="流式ASR地址">
-                <el-input v-model="providerForm.streamingAsrEndpointUrl" placeholder="wss://dashscope.aliyuncs.com/api-ws/v1/realtime" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="6">
-              <el-form-item label="语言">
-                <el-input v-model="providerForm.asrLanguage" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="6">
-              <el-form-item label="音频格式">
-                <el-select v-model="providerForm.asrFormat">
+            <el-col :span="8">
+              <el-form-item label="ASR格式">
+                <el-select v-model="providerForm.asrFormat" style="width: 100%">
                   <el-option label="wav" value="wav" />
                   <el-option label="pcm" value="pcm" />
                   <el-option label="opus" value="opus" />
                 </el-select>
               </el-form-item>
             </el-col>
-            <el-col :span="6">
-              <el-form-item label="采样率">
-                <el-input-number v-model="providerForm.asrSampleRate" :min="8000" :max="48000" :step="1000" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="6">
-              <el-form-item label="静音断句">
-                <el-input-number v-model="providerForm.asrSilenceTimeoutMs" :min="200" :max="10000" :step="100" />
-              </el-form-item>
-            </el-col>
             <el-col :span="8">
-              <el-form-item label="标点">
-                <el-switch v-model="providerForm.asrEnablePunctuation" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="数字格式化">
-                <el-switch v-model="providerForm.asrEnableItn" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="中间结果">
-                <el-switch v-model="providerForm.asrEnableIntermediateResult" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="默认录音ASR">
-                <el-switch v-model="providerForm.defaultRecordingAsr" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="默认流式ASR">
-                <el-switch v-model="providerForm.defaultStreamingAsr" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="24">
-              <el-form-item label="ASR扩展参数">
-                <el-input v-model="providerForm.asrOptionsJson" type="textarea" :rows="3" placeholder='{"model":"qwen3-asr-flash","enable_itn":false}' />
+              <el-form-item label="ASR采样率">
+                <el-input-number v-model="providerForm.asrSampleRate" :min="8000" :max="48000" :step="1000" style="width: 100%" />
               </el-form-item>
             </el-col>
           </el-row>
         </section>
 
-        <el-form-item label="状态">
-          <el-switch v-model="providerForm.enabled" active-text="启用" inactive-text="停用" />
-        </el-form-item>
+        <el-collapse class="provider-advanced" :model-value="['auth', 'tts']">
+          <el-collapse-item title="认证配置" name="auth">
+            <el-row :gutter="16">
+              <el-col :span="8">
+                <el-form-item label="认证方式" prop="authType">
+                  <el-select v-model="providerForm.authType" style="width: 100%">
+                    <el-option label="无" value="NONE" />
+                    <el-option label="Bearer Token" value="BEARER" />
+                    <el-option label="Header Token" value="HEADER" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col v-if="providerForm.authType === 'HEADER'" :span="8">
+                <el-form-item label="Header名称">
+                  <el-input v-model="providerForm.authHeaderName" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="Token/API Key">
+                  <el-input v-model="providerForm.authToken" type="password" show-password placeholder="修改时留空表示不变" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="超时时间">
+                  <el-input-number v-model="providerForm.timeoutSeconds" :min="5" :max="300" style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-collapse-item>
+
+          <el-collapse-item title="TTS 地址与实时参数" name="tts">
+            <el-row :gutter="16">
+              <el-col :span="6">
+                <el-form-item label="请求方法">
+                  <el-select v-model="providerForm.httpMethod" style="width: 100%">
+                    <el-option label="POST" value="POST" />
+                    <el-option label="GET" value="GET" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="18">
+                <el-form-item label="TTS地址">
+                  <el-input v-model="providerForm.endpointUrl" placeholder="HTTP TTS 接口地址" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="24">
+                <el-form-item label="实时TTS地址">
+                  <el-input v-model="providerForm.streamingTtsEndpointUrl" placeholder="wss://dashscope.aliyuncs.com/api-ws/v1/realtime" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="24">
+                <el-form-item label="实时TTS参数">
+                  <el-input
+                    v-model="providerForm.streamingTtsOptionsJson"
+                    type="textarea"
+                    :rows="3"
+                    placeholder='{"model":"qwen3-tts-flash-realtime","speech_rate":1.0,"volume":50}'
+                  />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-collapse-item>
+
+          <el-collapse-item title="ASR 地址与识别参数" name="asr">
+            <el-row :gutter="16">
+              <el-col :span="24">
+                <el-form-item label="录音ASR地址">
+                  <el-input v-model="providerForm.recordingAsrEndpointUrl" placeholder="录音文件识别地址，可留空使用服务商默认值" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="24">
+                <el-form-item label="流式ASR地址">
+                  <el-input v-model="providerForm.streamingAsrEndpointUrl" placeholder="wss://dashscope.aliyuncs.com/api-ws/v1/realtime" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="6">
+                <el-form-item label="静音断句">
+                  <el-input-number v-model="providerForm.asrSilenceTimeoutMs" :min="200" :max="10000" :step="100" style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="6">
+                <el-form-item label="最长单句">
+                  <el-input-number v-model="providerForm.asrMaxSentenceMs" :min="1000" :max="60000" :step="1000" style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="4">
+                <el-form-item label="标点">
+                  <el-switch v-model="providerForm.asrEnablePunctuation" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="4">
+                <el-form-item label="ITN">
+                  <el-switch v-model="providerForm.asrEnableItn" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="4">
+                <el-form-item label="中间结果">
+                  <el-switch v-model="providerForm.asrEnableIntermediateResult" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="24">
+                <el-form-item label="ASR扩展参数">
+                  <el-input v-model="providerForm.asrOptionsJson" type="textarea" :rows="3" placeholder='{"model":"qwen3-asr-flash","enable_itn":false}' />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-collapse-item>
+
+          <el-collapse-item title="备注与厂商扩展 JSON" name="remark">
+            <el-form-item label="扩展JSON">
+              <el-input v-model="providerForm.remark" type="textarea" :rows="4" placeholder='百炼可填 {"workspaceId":"xxx"}；其他厂商按适配器要求填写。' />
+            </el-form-item>
+          </el-collapse-item>
+        </el-collapse>
       </el-form>
       <template #footer>
         <el-button @click="providerDrawer.visible = false">取消</el-button>
@@ -569,6 +606,29 @@ const openProviderDrawer = (row?: AiSpeechProviderVO) => {
   providerDrawer.visible = true;
 };
 const handleProviderTypeChange = (type: string) => {
+  if (type === 'OPENAI_COMPATIBLE') {
+    providerForm.value = {
+      ...providerForm.value,
+      authType: 'BEARER',
+      ttsEnabled: true,
+      streamingTtsEnabled: false,
+      recordingAsrEnabled: true,
+      streamingAsrEnabled: false,
+      endpointUrl: 'https://api.openai.com/v1/audio/speech',
+      httpMethod: 'POST',
+      defaultVoice: providerForm.value.defaultVoice || 'alloy',
+      defaultFormat: 'wav',
+      defaultSampleRate: 24000,
+      streamingTtsEndpointUrl: '',
+      streamingTtsOptionsJson: '',
+      recordingAsrEndpointUrl: 'https://api.openai.com/v1/audio/transcriptions',
+      streamingAsrEndpointUrl: '',
+      asrFormat: 'wav',
+      asrSampleRate: 16000,
+      asrOptionsJson: '{}',
+      remark: providerForm.value.remark || '{"ttsModel":"gpt-4o-mini-tts","asrModel":"whisper-1"}'
+    };
+  }
   if (type === 'ALIYUN_DASHSCOPE') {
     providerForm.value = {
       ...providerForm.value,
@@ -722,23 +782,86 @@ onMounted(reloadAll);
 <style scoped>
 .provider-section {
   margin-bottom: 20px;
-  padding: 18px 18px 4px;
+  padding: 18px 18px 6px;
+  background: #fff;
   border: 1px solid var(--el-border-color-light);
-  border-radius: 10px;
+  border-radius: 12px;
 }
 .provider-section h3 {
-  margin: 0 0 18px;
+  margin: 0;
   color: var(--el-text-color-primary);
   font-size: 16px;
 }
+.provider-section p {
+  margin: 6px 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.provider-summary {
+  background: linear-gradient(180deg, #f7fbff 0%, #fff 100%);
+}
 .section-title {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   margin-bottom: 18px;
+  gap: 16px;
 }
 .section-title h3 {
   margin: 0;
+}
+.speech-provider-form :deep(.el-form-item) {
+  margin-bottom: 18px;
+}
+.capability-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.capability-card {
+  min-height: 126px;
+  padding: 14px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 12px;
+  background: var(--el-fill-color-extra-light);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+}
+.capability-card strong {
+  display: block;
+  color: var(--el-text-color-primary);
+  font-size: 14px;
+}
+.capability-card p {
+  min-height: 38px;
+  margin: 6px 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.provider-advanced {
+  margin-bottom: 18px;
+  padding: 0 18px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 12px;
+}
+.provider-advanced :deep(.el-collapse-item__header) {
+  font-weight: 600;
+}
+.provider-advanced :deep(.el-collapse-item__content) {
+  padding-bottom: 4px;
+}
+.default-purpose-tags {
+  display: inline-flex;
+  max-width: 100%;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+.default-purpose-tags :deep(.el-space__item) {
+  flex: 0 0 auto;
 }
 .asr-full-text {
   min-height: 70px;
