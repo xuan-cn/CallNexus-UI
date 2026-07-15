@@ -28,10 +28,8 @@ function installRemoteSdpSanitizer() {
   if (remoteSdpSanitizerInstalled || typeof window === 'undefined' || !window.RTCPeerConnection) return;
   remoteSdpSanitizerInstalled = true;
   const originalSetRemoteDescription = window.RTCPeerConnection.prototype.setRemoteDescription;
-  window.RTCPeerConnection.prototype.setRemoteDescription = function (
-    description?: RTCSessionDescriptionInit
-  ): Promise<void> {
-    //@ts-ignore
+  window.RTCPeerConnection.prototype.setRemoteDescription = function (description?: RTCSessionDescriptionInit): Promise<void> {
+    // @ts-expect-error FreeSWITCH SDP sanitizer keeps the browser API contract but narrows the local type.
     return originalSetRemoteDescription.call(this, sanitizeRemoteFreeSwitchDescription(description));
   };
 }
@@ -65,9 +63,8 @@ function sanitizeRemoteFreeSwitchSession(section: string[]) {
 
 function sanitizeRemoteFreeSwitchAudio(sessionSection: string[], section: string[]) {
   const mediaLine = rewriteRemoteAudioMediaLine(section).replace(' RTP/SAVPF ', ' UDP/TLS/RTP/SAVPF ');
-  const connectionLine = section.find((line) => /^c=IN IP4 /i.test(line.trim()))
-    || sessionSection.find((line) => /^c=IN IP4 /i.test(line.trim()))
-    || 'c=IN IP4 0.0.0.0';
+  const connectionLine =
+    section.find((line) => /^c=IN IP4 /i.test(line.trim())) || sessionSection.find((line) => /^c=IN IP4 /i.test(line.trim())) || 'c=IN IP4 0.0.0.0';
   const port = mediaLine.split(' ')[1] || '9';
   const iceUfrag = section.find((line) => /^a=ice-ufrag:/i.test(line.trim()));
   const icePwd = section.find((line) => /^a=ice-pwd:/i.test(line.trim()));
@@ -116,10 +113,12 @@ async function preferPcmAudio(description: RTCSessionDescriptionInit): Promise<R
 
 function rewriteAudioSdp(sdp: string) {
   const sections = splitSdpSections(sdp);
-  return sections.map((section) => {
-    if (!section[0]?.startsWith('m=audio ')) return section.join('\r\n');
-    return rewriteAudioSection(section).join('\r\n');
-  }).join('\r\n');
+  return sections
+    .map((section) => {
+      if (!section[0]?.startsWith('m=audio ')) return section.join('\r\n');
+      return rewriteAudioSection(section).join('\r\n');
+    })
+    .join('\r\n');
 }
 
 function splitSdpSections(sdp: string) {
@@ -182,7 +181,7 @@ export class WebRtcPhone {
   }
 
   async connect(config: AgentWebRtcConfigVO, remoteAudio: HTMLAudioElement) {
-    if (!config.wssUrl || !config.extension || !config.sipDomain || !config.authPassword) {
+    if (!config.wssUrl || !config.extension || !config.authUsername || !config.sipDomain || !config.authPassword) {
       throw new Error('WebRTC 注册配置不完整');
     }
     // installRemoteSdpSanitizer();
@@ -220,14 +219,14 @@ export class WebRtcPhone {
       }
     };
     const options: SimpleUserOptions = {
-      aor: `sip:${config.extension}@${config.sipDomain}`,
+      aor: `sip:${config.authUsername}@${config.sipDomain}`,
       delegate,
       media: {
         constraints: { audio: true, video: false },
         remote: { audio: remoteAudio }
       },
       userAgentOptions: {
-        authorizationUsername: config.extension,
+        authorizationUsername: config.authUsername,
         authorizationPassword: config.authPassword,
         displayName: config.sipDisplayName || config.extension,
         sessionDescriptionHandlerFactoryOptions: {
@@ -301,6 +300,7 @@ export class WebRtcPhone {
   private sameConfig(config: AgentWebRtcConfigVO) {
     return (
       this.config?.extension === config.extension &&
+      this.config?.authUsername === config.authUsername &&
       this.config?.sipDomain === config.sipDomain &&
       this.config?.wssUrl === config.wssUrl &&
       this.config?.authPassword === config.authPassword

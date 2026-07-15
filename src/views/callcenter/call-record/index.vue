@@ -114,15 +114,10 @@
         <el-tab-pane label="语音转写" name="transcript">
           <div class="transcript-toolbar">
             <div>
-              <strong>通话录音转写</strong>
-              <span>第一版基于整段录音转写，说话人暂不区分。</span>
+              <strong>通话语音转写</strong>
+              <span>按说话人展示客户、坐席和 AI 的对话内容；无法识别来源时显示为未知。</span>
             </div>
-            <el-button
-              type="primary"
-              :loading="transcriptLoading"
-              :disabled="!detail.recordingUrl"
-              @click="handleTranscribe"
-            >
+            <el-button type="primary" :loading="transcriptLoading" :disabled="!detail.recordingUrl" @click="handleTranscribe">
               {{ transcript?.status === 'SUCCESS' ? '重新转写' : '开始转写' }}
             </el-button>
           </div>
@@ -142,20 +137,30 @@
             :title="transcript.failureReason || '转写失败'"
           />
           <div v-if="transcript?.status === 'SUCCESS'" class="transcript-content">
-            <el-card shadow="never" class="transcript-full-text">
-              <template #header>完整文本</template>
-              <div>{{ transcript.fullText || '无转写文本' }}</div>
-            </el-card>
-            <el-table :data="transcript.segments || []" size="small" border>
-              <el-table-column label="序号" prop="sentenceIndex" width="80" />
-              <el-table-column label="时间" width="140">
-                <template #default="{ row }">{{ formatMilliseconds(row.startMs) }} - {{ formatMilliseconds(row.endMs) }}</template>
-              </el-table-column>
-              <el-table-column label="说话人" width="100">
-                <template #default="{ row }">{{ speakerLabel(row.speaker) }}</template>
-              </el-table-column>
-              <el-table-column label="内容" prop="textContent" min-width="360" />
-            </el-table>
+            <div v-if="transcriptSegments.length" class="transcript-chat">
+              <div
+                v-for="segment in transcriptSegments"
+                :key="String(segment.id || segment.sentenceIndex || segment.textContent)"
+                class="transcript-message"
+                :class="speakerClass(segment.speaker)"
+              >
+                <div class="transcript-avatar">{{ speakerInitial(segment.speaker) }}</div>
+                <div class="transcript-bubble-wrap">
+                  <div class="transcript-meta">
+                    <span>{{ speakerLabel(segment.speaker) }}</span>
+                    <span>{{ formatMilliseconds(segment.startMs) }} - {{ formatMilliseconds(segment.endMs) }}</span>
+                    <span v-if="segment.confidence !== undefined">置信度 {{ formatConfidence(segment.confidence) }}</span>
+                  </div>
+                  <div class="transcript-bubble">{{ segment.textContent || '-' }}</div>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else description="暂无转写分句" :image-size="70" />
+            <el-collapse v-if="transcript.fullText" class="transcript-raw">
+              <el-collapse-item title="查看完整文本" name="fullText">
+                <div class="transcript-full-text">{{ transcript.fullText }}</div>
+              </el-collapse-item>
+            </el-collapse>
           </div>
           <el-empty v-else-if="!transcriptLoading && detail.recordingUrl && !transcript" description="暂无转写结果" :image-size="70" />
         </el-tab-pane>
@@ -345,7 +350,7 @@
 import { getCallRecord, listCallRecords } from '@/api/callcenter/call-record';
 import { hangupCauseLabel } from '@/api/callcenter/call-record/display';
 import { getCallTranscript, transcribeCallRecording } from '@/api/callcenter/ai-speech';
-import { AiCallTranscriptVO } from '@/api/callcenter/ai-speech/types';
+import { AiCallTranscriptSegmentVO, AiCallTranscriptVO } from '@/api/callcenter/ai-speech/types';
 import { handleVoiceMailMessage } from '@/api/callcenter/voicemail';
 import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/index.vue';
 import { CallDirection, CallRecordQuery, CallRecordVO, CallStatus } from '@/api/callcenter/call-record/types';
@@ -359,6 +364,42 @@ const detail = ref<CallRecordVO>();
 const detailTab = ref('basic');
 const transcript = ref<AiCallTranscriptVO>();
 const transcriptLoading = ref(false);
+const normalizeTranscriptResponse = (response: any): AiCallTranscriptVO | undefined => {
+  const data = response?.data && response?.status === undefined ? response.data : response;
+  if (!data) {
+    return undefined;
+  }
+  return {
+    ...data,
+    segments: Array.isArray(data.segments) ? data.segments : []
+  };
+};
+const transcriptSegments = computed<AiCallTranscriptSegmentVO[]>(() => {
+  const current = transcript.value;
+  const segments =
+    current?.segments && current.segments.length > 0
+      ? current.segments
+      : current?.status === 'SUCCESS' && current.fullText
+        ? [
+            {
+              id: `${current.id || current.callSessionId || 'transcript'}-full`,
+              speaker: 'UNKNOWN',
+              sourceType: 'RECORDING_ASR',
+              sentenceIndex: 0,
+              textContent: current.fullText,
+              finalResult: true
+            } as AiCallTranscriptSegmentVO
+          ]
+        : [];
+  return [...segments].sort((left, right) => {
+    const leftStart = left.startMs ?? Number.MAX_SAFE_INTEGER;
+    const rightStart = right.startMs ?? Number.MAX_SAFE_INTEGER;
+    if (leftStart !== rightStart) {
+      return leftStart - rightStart;
+    }
+    return (left.sentenceIndex ?? 0) - (right.sentenceIndex ?? 0);
+  });
+});
 const recordList = ref<CallRecordVO[]>([]);
 const queryFormRef = ref<ElFormInstance>();
 // 客户详情弹窗：点击「关联客户ID」后展示客户详细资料
@@ -397,7 +438,12 @@ const recordingStatusLabel = (value?: CallRecordVO['recordingStatus']) =>
 const voicemailStatusLabel = (value?: string) =>
   ({ UNHANDLED: '未处理', HANDLED: '已处理', INVALID: '无效留言' })[value || 'UNHANDLED'] || value || '-';
 const voicemailStatusTag = (value?: string) => ({ UNHANDLED: 'warning', HANDLED: 'success', INVALID: 'info' })[value || 'UNHANDLED'] as any;
-const speakerLabel = (value?: string) => ({ CUSTOMER: '客户', AGENT: '坐席', UNKNOWN: '未知' })[value || 'UNKNOWN'] || value || '-';
+const speakerLabel = (value?: string) =>
+  ({ CUSTOMER: '客户', AGENT: '坐席', AI: 'AI', SYSTEM: '系统', UNKNOWN: '未知' })[value || 'UNKNOWN'] || value || '-';
+const speakerInitial = (value?: string) => ({ CUSTOMER: '客', AGENT: '席', AI: 'AI', SYSTEM: '系', UNKNOWN: '?' })[value || 'UNKNOWN'] || '?';
+const speakerClass = (value?: string) =>
+  ({ CUSTOMER: 'is-customer', AGENT: 'is-agent', AI: 'is-ai', SYSTEM: 'is-system', UNKNOWN: 'is-unknown' })[value || 'UNKNOWN'] || 'is-unknown';
+const formatConfidence = (value?: number) => (value === undefined || value === null ? '-' : `${Math.round(value * 100)}%`);
 const directionTag = (value: CallDirection) => ({ INBOUND: 'success', OUTBOUND: 'primary', INTERNAL: 'warning', UNKNOWN: 'info' })[value] as any;
 const eventLabel = (eventType: string) =>
   ({
@@ -474,15 +520,8 @@ const summaryMetrics = computed(() => [
   { label: '挂断原因', value: hangupCauseLabel(detail.value?.hangupCause) },
   {
     label: '满意度评价',
-    value: detail.value?.satisfaction
-      ? detail.value.satisfaction.status === 'SUBMITTED'
-        ? `${detail.value.satisfaction.score} 分`
-        : '未评价'
-      : '-',
-    rating:
-      detail.value?.satisfaction?.status === 'SUBMITTED' && detail.value.satisfaction.score
-        ? detail.value.satisfaction.score
-        : undefined
+    value: detail.value?.satisfaction ? (detail.value.satisfaction.status === 'SUBMITTED' ? `${detail.value.satisfaction.score} 分` : '未评价') : '-',
+    rating: detail.value?.satisfaction?.status === 'SUBMITTED' && detail.value.satisfaction.score ? detail.value.satisfaction.score : undefined
   }
 ]);
 const timelineEvents = computed(() => {
@@ -623,7 +662,7 @@ const loadDetail = async (id: string | number) => {
 const loadTranscript = async (id: string | number) => {
   try {
     const res = await getCallTranscript(id);
-    transcript.value = res.data;
+    transcript.value = normalizeTranscriptResponse(res);
   } catch {
     transcript.value = undefined;
   }
@@ -639,7 +678,7 @@ const handleTranscribe = async () => {
   transcriptLoading.value = true;
   try {
     const res = await transcribeCallRecording(detail.value.id);
-    transcript.value = res.data;
+    transcript.value = normalizeTranscriptResponse(res);
     ElMessage.success('语音转写完成');
   } finally {
     transcriptLoading.value = false;
@@ -922,10 +961,110 @@ onBeforeUnmount(stopRecordingPoll);
   flex-direction: column;
   gap: 14px;
 }
-.transcript-full-text :deep(.el-card__body) {
+.transcript-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 10px;
+  background: #f5f7fb;
+}
+.transcript-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 78%;
+}
+.transcript-message.is-agent,
+.transcript-message.is-ai {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+.transcript-message.is-customer,
+.transcript-message.is-system,
+.transcript-message.is-unknown {
+  align-self: flex-start;
+}
+.transcript-avatar {
+  flex: 0 0 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #909399;
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+}
+.transcript-message.is-customer .transcript-avatar {
+  background: #0b4a7a;
+}
+.transcript-message.is-agent .transcript-avatar {
+  background: #1f9d55;
+}
+.transcript-message.is-ai .transcript-avatar {
+  background: #7c3aed;
+}
+.transcript-message.is-system .transcript-avatar {
+  background: #e6a23c;
+}
+.transcript-bubble-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.transcript-message.is-agent .transcript-bubble-wrap,
+.transcript-message.is-ai .transcript-bubble-wrap {
+  align-items: flex-end;
+}
+.transcript-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: #909399;
+  font-size: 12px;
+}
+.transcript-message.is-agent .transcript-meta,
+.transcript-message.is-ai .transcript-meta {
+  justify-content: flex-end;
+}
+.transcript-meta span:first-child {
+  color: #606266;
+  font-weight: 600;
+}
+.transcript-bubble {
+  padding: 10px 14px;
+  border-radius: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  background: #fff;
+  color: #303133;
+  box-shadow: 0 4px 14px rgba(31, 45, 61, 0.06);
+}
+.transcript-message.is-agent .transcript-bubble {
+  color: #fff;
+  background: #0b4a7a;
+}
+.transcript-message.is-ai .transcript-bubble {
+  color: #fff;
+  background: #7c3aed;
+}
+.transcript-message.is-system .transcript-bubble,
+.transcript-message.is-unknown .transcript-bubble {
+  background: #f4f4f5;
+}
+.transcript-raw {
+  border-radius: 10px;
+  overflow: hidden;
+}
+.transcript-full-text {
   white-space: pre-wrap;
   line-height: 1.8;
   color: #303133;
+  padding: 4px 0;
 }
 .voicemail-list {
   display: flex;

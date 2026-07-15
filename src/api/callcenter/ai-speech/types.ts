@@ -163,6 +163,9 @@ export interface AiGeneratedMediaVO {
 export interface AiCallTranscriptSegmentVO {
   id: string | number;
   speaker: string;
+  sourceType?: string;
+  legUuid?: string;
+  agentId?: string | number;
   sentenceIndex?: number;
   startMs?: number;
   endMs?: number;

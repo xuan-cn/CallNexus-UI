@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="p-2 ai-speech-page">
     <el-card shadow="hover">
       <el-tabs v-model="activeTab">
@@ -90,6 +90,7 @@
             <el-form-item label="任务类型">
               <el-select v-model="taskQuery.taskType" clearable style="width: 150px">
                 <el-option label="TTS生成" value="TTS_GENERATE" />
+                <el-option label="ASR识别" value="ASR" />
                 <el-option label="录音转写" value="CALL_TRANSCRIBE" />
               </el-select>
             </el-form-item>
@@ -119,6 +120,14 @@
             <el-table-column label="创建时间" prop="createTime" width="180" />
             <el-table-column label="完成时间" prop="finishedAt" width="180" />
           </el-table>
+          <pagination
+            v-show="taskTotal > 0"
+            v-model:page="taskQuery.pageNum"
+            v-model:limit="taskQuery.pageSize"
+            :total="taskTotal"
+            :auto-scroll="false"
+            @pagination="loadTasks"
+          />
         </el-tab-pane>
       </el-tabs>
     </el-card>
@@ -130,7 +139,7 @@
           type="info"
           show-icon
           :closable="false"
-          title="常用项优先配置；厂商地址、模型参数和扩展 JSON 收在高级配置里。"
+          title="常用项优先配置；厂商地址、模型参数和扩展 JSON 放在高级配置里。"
         />
 
         <section class="provider-section provider-summary">
@@ -212,13 +221,13 @@
           <div class="section-title">
             <div>
               <h3>常用参数</h3>
-              <p>日常最常改的是音色、格式、采样率和 ASR 语言，地址和 JSON 通常不需要频繁动。</p>
+              <p>日常最常改的是音色、格式、采样率和 ASR 语言，地址和 JSON 通常不需要频繁调整。</p>
             </div>
           </div>
           <el-row :gutter="16">
             <el-col :span="8">
               <el-form-item label="默认音色">
-                <el-input v-model="providerForm.defaultVoice" placeholder="如 Cherry、longxiaochun" />
+                <el-input v-model="providerForm.defaultVoice" placeholder="如 Cherry、longxiaochun、alloy" />
               </el-form-item>
             </el-col>
             <el-col :span="8">
@@ -365,7 +374,7 @@
             </el-row>
           </el-collapse-item>
 
-          <el-collapse-item title="备注与厂商扩展 JSON" name="remark">
+          <el-collapse-item title="备注与厂商扩展JSON" name="remark">
             <el-form-item label="扩展JSON">
               <el-input v-model="providerForm.remark" type="textarea" :rows="4" placeholder='百炼可填 {"workspaceId":"xxx"}；其他厂商按适配器要求填写。' />
             </el-form-item>
@@ -377,7 +386,6 @@
         <el-button type="primary" :loading="providerSubmitting" @click="submitProvider">保存</el-button>
       </template>
     </el-drawer>
-
     <el-dialog v-model="templateDialog.visible" :title="templateForm.id ? '修改语音模板' : '新增语音模板'" width="720px">
       <el-form ref="templateFormRef" :model="templateForm" :rules="templateRules" label-width="110px">
         <el-form-item label="模板编码" prop="templateCode"><el-input v-model="templateForm.templateCode" /></el-form-item>
@@ -441,8 +449,7 @@
         <el-button @click="asrTestDialog.visible = false">关闭</el-button>
         <el-button type="primary" :loading="asrTesting" @click="submitAsrTest">开始识别</el-button>
       </template>
-    </el-dialog>
-  </div>
+    </el-dialog>  </div>
 </template>
 
 <script setup lang="ts">
@@ -484,6 +491,7 @@ const templateSubmitting = ref(false);
 const providers = ref<AiSpeechProviderVO[]>([]);
 const templates = ref<AiSpeechTemplateVO[]>([]);
 const tasks = ref<AiSpeechTaskVO[]>([]);
+const taskTotal = ref(0);
 
 const providerFormRef = ref<FormInstance>();
 const templateFormRef = ref<FormInstance>();
@@ -595,7 +603,8 @@ const loadTasks = async () => {
   taskLoading.value = true;
   try {
     const res = await listSpeechTasks(taskQuery.value);
-    tasks.value = res.data || [];
+    tasks.value = res.rows || [];
+    taskTotal.value = res.total || 0;
   } finally {
     taskLoading.value = false;
   }
@@ -672,7 +681,7 @@ const submitProvider = async () => {
     } else {
       await createSpeechProvider(providerForm.value);
     }
-    proxy?.$modal.msgSuccess('保存成功');
+    proxy?.$modal.msgSuccess('淇濆瓨鎴愬姛');
     providerDrawer.visible = false;
     loadProviders();
   } finally {
@@ -680,9 +689,9 @@ const submitProvider = async () => {
   }
 };
 const removeProvider = async (row: AiSpeechProviderVO) => {
-  await proxy?.$modal.confirm(`确认删除语音服务商“${row.providerName}”？`);
+  await proxy?.$modal.confirm(`纭鍒犻櫎璇煶鏈嶅姟鍟嗏€?{row.providerName}鈥濓紵`);
   await deleteSpeechProvider(row.id);
-  proxy?.$modal.msgSuccess('删除成功');
+  proxy?.$modal.msgSuccess('鍒犻櫎鎴愬姛');
   loadProviders();
 };
 
@@ -699,7 +708,7 @@ const submitTemplate = async () => {
     } else {
       await createSpeechTemplate(templateForm.value);
     }
-    proxy?.$modal.msgSuccess('保存成功');
+    proxy?.$modal.msgSuccess('淇濆瓨鎴愬姛');
     templateDialog.visible = false;
     loadTemplates();
   } finally {
@@ -707,9 +716,9 @@ const submitTemplate = async () => {
   }
 };
 const removeTemplate = async (row: AiSpeechTemplateVO) => {
-  await proxy?.$modal.confirm(`确认删除语音模板“${row.templateName}”？`);
+  await proxy?.$modal.confirm(`纭鍒犻櫎璇煶妯℃澘鈥?{row.templateName}鈥濓紵`);
   await deleteSpeechTemplate(row.id);
-  proxy?.$modal.msgSuccess('删除成功');
+  proxy?.$modal.msgSuccess('鍒犻櫎鎴愬姛');
   loadTemplates();
 };
 
@@ -717,7 +726,7 @@ const openTtsTest = (row: AiSpeechProviderVO) => {
   testingProviderId.value = row.id;
   ttsTestResult.value = undefined;
   ttsTestForm.value = {
-    text: '工号1001为您服务',
+    text: '宸ュ彿1001涓烘偍鏈嶅姟',
     voice: row.defaultVoice,
     format: row.defaultFormat,
     sampleRate: row.defaultSampleRate
@@ -730,7 +739,7 @@ const submitTtsTest = async () => {
   try {
     const res = await testTtsProvider(testingProviderId.value, ttsTestForm.value);
     ttsTestResult.value = res.data;
-    proxy?.$modal.msgSuccess('测试音频生成成功');
+    proxy?.$modal.msgSuccess('娴嬭瘯闊抽鐢熸垚鎴愬姛');
   } finally {
     ttsTesting.value = false;
   }
@@ -772,7 +781,12 @@ const resetTaskQuery = () => {
   loadTasks();
 };
 const taskStatusText = (status: string) => ({ PROCESSING: '处理中', SUCCESS: '成功', FAILED: '失败' })[status] || status;
-const taskStatusType = (status: string) => ({ PROCESSING: 'warning', SUCCESS: 'success', FAILED: 'danger' })[status] || 'info';
+const taskStatusType = (status: string): 'success' | 'warning' | 'danger' | 'info' => {
+  if (status === 'PROCESSING') return 'warning';
+  if (status === 'SUCCESS') return 'success';
+  if (status === 'FAILED') return 'danger';
+  return 'info';
+};
 const formatMs = (value?: number) => (value == null ? '-' : `${(value / 1000).toFixed(2)}s`);
 const formatConfidence = (value?: number) => (value == null ? '-' : `${(Number(value) * 100).toFixed(1)}%`);
 
@@ -869,3 +883,6 @@ onMounted(reloadAll);
   line-height: 1.7;
 }
 </style>
+
+
+

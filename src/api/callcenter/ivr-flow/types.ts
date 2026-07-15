@@ -1,4 +1,19 @@
-export type IvrNodeType = 'START' | 'PLAYBACK' | 'DTMF' | 'EXTENSION' | 'QUEUE' | 'BUSINESS_HOURS' | 'VOICEMAIL' | 'AI_AGENT' | 'HANGUP';
+export type IvrNodeType = 'START' | 'PLAYBACK' | 'DTMF' | 'EXTENSION' | 'QUEUE' | 'BUSINESS_HOURS' | 'VOICEMAIL' | 'AI_AGENT' | 'EXTERNAL_NUMBER' | 'HANGUP';
+
+export interface IvrExternalNumberTarget {
+  number: string;
+  name?: string;
+  sortOrder?: number;
+  enabled?: boolean;
+}
+
+export interface IvrExternalNumberGroupConfig {
+  strategy?: 'ORDER' | 'ROUND_ROBIN' | 'MEMORY';
+  outboundPolicyId?: string | number;
+  ringTimeoutSeconds?: number;
+  failoverEnabled?: boolean;
+  numbers?: IvrExternalNumberTarget[];
+}
 
 export interface IvrNode {
   id: string;
@@ -7,13 +22,14 @@ export interface IvrNode {
   x: number;
   y: number;
   config: {
-    [key: string]: string | number | boolean | undefined;
+    [key: string]: unknown;
     mediaId?: string | number;
     extension?: string;
     queueId?: string | number;
     planId?: string | number;
     boxId?: string | number;
     aiAgentId?: string | number;
+    externalNumberGroup?: IvrExternalNumberGroupConfig;
   };
 }
 

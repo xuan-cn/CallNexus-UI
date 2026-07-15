@@ -1,6 +1,6 @@
 import type { IvrNodeType } from '@/api/callcenter/ivr-flow/types';
 
-export type IvrPropertyEditorType = 'MEDIA_SELECT' | 'EXTENSION_INPUT' | 'QUEUE_SELECT' | 'BUSINESS_HOURS_SELECT' | 'VOICEMAIL_SELECT' | 'AI_AGENT_SELECT';
+export type IvrPropertyEditorType = 'MEDIA_SELECT' | 'EXTENSION_INPUT' | 'QUEUE_SELECT' | 'BUSINESS_HOURS_SELECT' | 'VOICEMAIL_SELECT' | 'AI_AGENT_SELECT' | 'EXTERNAL_NUMBER_GROUP';
 export type IvrEdgeEditorType = 'DTMF_DIGIT' | 'BUSINESS_HOURS_BRANCH';
 
 export interface IvrPropertyDefinition {
@@ -110,6 +110,14 @@ const definitions: IvrNodeDefinition[] = [
     description: '将来电交给指定 AI 助手进行知识库语音对话',
     terminal: true,
     propertySchema: [{ key: 'aiAgentId', label: 'AI 助手', component: 'AI_AGENT_SELECT', required: true }]
+  },
+  {
+    type: 'EXTERNAL_NUMBER',
+    label: '转外线号码组',
+    color: '#16a34a',
+    description: '按顺序、轮询或记忆策略转接多个手机或外线号码',
+    terminal: true,
+    propertySchema: [{ key: 'externalNumberGroup', label: '外线号码组', component: 'EXTERNAL_NUMBER_GROUP', required: true }]
   },
   {
     type: 'HANGUP',

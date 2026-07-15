@@ -19,7 +19,7 @@
           <el-button icon="Right" title="重做" @click="lf?.redo()" />
           <el-button icon="ZoomIn" title="放大" @click="lf?.zoom(true)" />
           <el-button icon="ZoomOut" title="缩小" @click="lf?.zoom(false)" />
-          <el-button icon="FullScreen" title="适应画布" @click="lf?.fitView(40, 40)" />
+          <el-button icon="FullScreen" title="适应画布" @click="fitCanvas" />
         </el-button-group>
         <span class="toolbar-tip">点击节点或连线编辑属性，选中后按 Delete 可删除</span>
       </div>
@@ -109,6 +109,7 @@ const containerRef = ref<HTMLElement>();
 const selectedNode = ref<IvrNode>();
 const selectedEdge = ref<IvrEdge>();
 let lf: LogicFlow | undefined;
+const DEFAULT_CANVAS_ZOOM = 0.82;
 
 class IvrCardModel extends RectNodeModel {
   setAttributes() {
@@ -222,7 +223,7 @@ const updateSelectedNode = () => {
   });
   syncGraph();
 };
-const updateNodeProperty = (key: string, value: string | number) => {
+const updateNodeProperty = (key: string, value: unknown) => {
   if (!selectedNode.value) return;
   selectedNode.value.config[key] = value;
   updateSelectedNode();
@@ -253,6 +254,11 @@ const startDrag = (definition: IvrNodeDefinition) => {
     text: definition.label,
     properties: { ivrType: definition.type, name: definition.label, config: {}, color: definition.color }
   });
+};
+const fitCanvas = () => {
+  if (!lf) return;
+  lf.fitView(40, 40);
+  lf.zoom(DEFAULT_CANVAS_ZOOM);
 };
 const initialize = async () => {
   await nextTick();
@@ -299,7 +305,7 @@ const initialize = async () => {
     selectEdge(data.id, data);
   });
   lf.render(toLogicFlowData(props.modelValue));
-  lf.fitView(40, 40);
+  fitCanvas();
 };
 const getGraph = () => readGraph();
 defineExpose({ getGraph });

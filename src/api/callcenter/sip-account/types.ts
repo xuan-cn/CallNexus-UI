@@ -3,6 +3,7 @@ export interface SipAccountVO {
   nodeId?: string | number;
   nodeName?: string;
   extension: string;
+  authUsername: string;
   displayName: string;
   domain: string;
   enabled: boolean;
@@ -14,6 +15,7 @@ export interface SipAccountForm {
   id?: string | number;
   nodeId?: string | number;
   extension: string;
+  authUsername?: string;
   displayName: string;
   domain: string;
   password?: string;
@@ -23,6 +25,7 @@ export interface SipAccountForm {
 
 export interface SipAccountQuery extends PageQuery {
   extension?: string;
+  authUsername?: string;
   displayName?: string;
   enabled?: boolean;
 }
