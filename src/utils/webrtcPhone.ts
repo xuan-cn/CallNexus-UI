@@ -219,7 +219,7 @@ export class WebRtcPhone {
       }
     };
     const options: SimpleUserOptions = {
-      aor: `sip:${config.authUsername}@${config.sipDomain}`,
+      aor: `sip:${config.extension}@${config.sipDomain}`,
       delegate,
       media: {
         constraints: { audio: true, video: false },

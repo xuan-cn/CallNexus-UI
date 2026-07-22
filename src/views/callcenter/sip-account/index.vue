@@ -6,8 +6,8 @@
           <el-form-item label="分机号" prop="extension">
             <el-input v-model="queryParams.extension" placeholder="请输入分机号" clearable @keyup.enter="handleQuery" />
           </el-form-item>
-          <el-form-item label="鉴权名" prop="authUsername">
-            <el-input v-model="queryParams.authUsername" placeholder="请输入 SIP 鉴权名" clearable @keyup.enter="handleQuery" />
+          <el-form-item label="登录名" prop="authUsername">
+            <el-input v-model="queryParams.authUsername" placeholder="请输入 SIP 登录名" clearable @keyup.enter="handleQuery" />
           </el-form-item>
           <el-form-item label="显示名称" prop="displayName">
             <el-input v-model="queryParams.displayName" placeholder="请输入显示名称" clearable @keyup.enter="handleQuery" />
@@ -37,7 +37,7 @@
       </template>
       <el-table v-loading="loading" :data="accountList">
         <el-table-column label="分机号" prop="extension" min-width="100" />
-        <el-table-column label="SIP 鉴权名" prop="authUsername" min-width="180" />
+        <el-table-column label="SIP 登录名" prop="authUsername" min-width="180" />
         <el-table-column label="显示名称" prop="displayName" min-width="150" />
         <el-table-column label="FreeSWITCH 节点" prop="nodeName" min-width="170">
           <template #default="{ row }">{{ row.nodeName || '未绑定' }}</template>
@@ -65,7 +65,7 @@
         type="info"
         show-icon
         :closable="false"
-        title="分机号用于业务拨号和显示；SIP 鉴权名用于软电话注册，建议不要和分机号相同。"
+        title="软电话注册时：用户名/分机号填写分机号，登录名/认证 ID 填写 SIP 登录名，密码填写认证密码。"
       />
       <el-form ref="formRef" :model="form" :rules="rules" label-width="105px">
         <el-form-item label="节点" prop="nodeId">
@@ -76,7 +76,7 @@
         <el-form-item label="分机号" prop="extension">
           <el-input v-model="form.extension" placeholder="例如 1003" />
         </el-form-item>
-        <el-form-item label="SIP 鉴权名" prop="authUsername">
+        <el-form-item label="SIP 登录名" prop="authUsername">
           <el-input v-model="form.authUsername" placeholder="新建时留空自动生成，例如 cnx_xxxxxxxx" />
         </el-form-item>
         <el-form-item label="显示名称" prop="displayName">
@@ -132,11 +132,11 @@ const authUsernameValidator = (_rule: unknown, value: string, callback: (error?:
     return;
   }
   if (!value) {
-    callback(new Error('SIP 鉴权名不能为空'));
+    callback(new Error('SIP 登录名不能为空'));
     return;
   }
   if (!/^[A-Za-z0-9_.-]{4,64}$/.test(value)) {
-    callback(new Error('鉴权名只能包含字母、数字、下划线、点和横线，长度 4 到 64 位'));
+    callback(new Error('登录名只能包含字母、数字、下划线、点和横线，长度 4 到 64 位'));
     return;
   }
   callback();

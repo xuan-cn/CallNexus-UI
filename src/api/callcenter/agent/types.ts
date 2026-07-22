@@ -45,6 +45,7 @@ export interface CurrentAgentVO {
   sipAccountId?: string | number;
   nodeId?: string | number;
   extension?: string;
+  authUsername?: string;
   sipDisplayName?: string;
   sipDomain?: string;
   wssUrl?: string;

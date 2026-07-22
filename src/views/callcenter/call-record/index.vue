@@ -33,7 +33,13 @@
           </template>
         </el-table-column>
         <el-table-column label="主叫号码" prop="callerNumber" min-width="130" />
+        <el-table-column label="主叫归属地" min-width="150" show-overflow-tooltip>
+          <template #default="{ row }">{{ formatNumberLocation(row, 'caller') }}</template>
+        </el-table-column>
         <el-table-column label="被叫号码" prop="calledNumber" min-width="130" />
+        <el-table-column label="被叫归属地" min-width="150" show-overflow-tooltip>
+          <template #default="{ row }">{{ formatNumberLocation(row, 'called') }}</template>
+        </el-table-column>
         <el-table-column label="坐席分机" prop="agentExtension" width="110" />
         <el-table-column label="接听队列" prop="handlingQueueName" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">
@@ -73,6 +79,8 @@
             <el-descriptions-item label="坐席分机">{{ detail.agentExtension || '-' }}</el-descriptions-item>
             <el-descriptions-item label="主叫号码">{{ detail.callerNumber || '-' }}</el-descriptions-item>
             <el-descriptions-item label="被叫号码">{{ detail.calledNumber || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="主叫归属地">{{ formatNumberLocation(detail, 'caller') }}</el-descriptions-item>
+            <el-descriptions-item label="被叫归属地">{{ formatNumberLocation(detail, 'called') }}</el-descriptions-item>
             <el-descriptions-item label="挂断原因">{{ hangupCauseLabel(detail.hangupCause) }}</el-descriptions-item>
             <el-descriptions-item label="接听队列">
               <el-tag v-if="detail.handlingQueueName" type="info" size="small">{{ detail.handlingQueueName }}</el-tag>
@@ -433,6 +441,19 @@ const queryParams = reactive<CallRecordQuery>({
 
 const directionLabel = (value: CallDirection) => directionOptions.find((item) => item.value === value)?.label || value;
 const statusLabel = (value: CallStatus) => statusOptions.find((item) => item.value === value)?.label || value;
+const formatNumberLocation = (record: Partial<CallRecordVO> | undefined, side: 'caller' | 'called') => {
+  if (!record) return '-';
+  const prefix = side === 'caller' ? 'caller' : 'called';
+  const location = [
+    record[`${prefix}Province` as keyof CallRecordVO],
+    record[`${prefix}City` as keyof CallRecordVO],
+    record[`${prefix}Carrier` as keyof CallRecordVO]
+  ]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .join(' ');
+  return location || '-';
+};
 const recordingStatusLabel = (value?: CallRecordVO['recordingStatus']) =>
   ({ NONE: '暂无录音', PENDING: '录音正在上传', UPLOADED: '录音已上传', FAILED: '录音上传失败' })[value || 'NONE'];
 const voicemailStatusLabel = (value?: string) =>

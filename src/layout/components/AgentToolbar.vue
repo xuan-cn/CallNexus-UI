@@ -64,6 +64,7 @@
           ></span>
           <small>来电振铃中，请在软电话接听</small>
           <strong>{{ incomingNumber }}</strong>
+          <span v-if="incomingLocation" class="number-location">{{ incomingLocation }}</span>
           <span>等待接听</span>
         </div>
         <div class="call-actions">
@@ -106,6 +107,7 @@
           ></span>
           <small>{{ callHeld ? '通话已保持' : callMuted ? '坐席已静音' : '软电话正在呼叫' }}</small>
           <strong>{{ dialNumber }}</strong>
+          <span v-if="activeNumberLocation" class="number-location">{{ activeNumberLocation }}</span>
           <span>{{ callDuration }}<em v-if="callHeld"> · 已保持</em><em v-if="callMuted"> · 已静音</em></span>
         </div>
         <button v-if="matchedCustomer" type="button" class="matched-customer-card" @click="matchedCustomerDetailVisible = true">
@@ -244,6 +246,8 @@ const callNoteContent = ref('');
 const noteSaving = ref(false);
 const incomingCall = ref(false);
 const incomingNumber = ref('');
+const incomingLocation = ref('');
+const activeNumberLocation = ref('');
 const activeCallId = ref('');
 const callSeconds = ref(0);
 const customerDialogVisible = ref(false);
@@ -853,11 +857,11 @@ const stopRingTone = () => {
 
 const showIncomingCall = (event: Record<string, unknown>) => {
   if (Date.now() < suppressIncomingCallUntil) return;
-  if (isWebRtcLocalIdle()) return;
   const eventCallId = String(event.callId || '');
   const callerNumber = String(event.callerNumber || '');
   if (eventCallId) activeCallId.value = eventCallId;
   incomingNumber.value = callerNumber || '未知号码';
+  incomingLocation.value = buildNumberLocation(event);
   dialNumber.value = incomingNumber.value;
   incomingCall.value = true;
   callActive.value = false;
@@ -869,7 +873,7 @@ const showIncomingCall = (event: Record<string, unknown>) => {
 };
 
 const isSourceConsultLegEvent = (eventCallId: string, callerNumber: string) =>
-  consultActive.value && eventCallId === consultCallId.value && callerNumber === currentAgent.value.extension;
+  consultActive.value && eventCallId === consultCallId.value && isCurrentAgentIdentity(callerNumber);
 
 const showActiveCall = (event: Record<string, unknown>) => {
   if (isWebRtcLocalIdle()) return;
@@ -879,7 +883,8 @@ const showActiveCall = (event: Record<string, unknown>) => {
   if (eventCallId && recentlyEndedCallIds.has(eventCallId)) return;
   if (isSourceConsultLegEvent(eventCallId, callerNumber)) return;
   if (eventCallId) activeCallId.value = eventCallId;
-  dialNumber.value = callerNumber === currentAgent.value.extension ? calledNumber : callerNumber;
+  dialNumber.value = isCurrentAgentIdentity(callerNumber) ? calledNumber : callerNumber;
+  activeNumberLocation.value = isCurrentAgentIdentity(callerNumber) ? '' : buildNumberLocation(event);
   incomingCall.value = false;
   stopRingTone();
   callActive.value = true;
@@ -894,12 +899,12 @@ const handleCallEvent = (event: Record<string, unknown>) => {
   const callerNumber = String(event.callerNumber || '');
   const calledNumber = String(event.calledNumber || '');
   const eventCallId = String(event.callId || '');
-  const relatedToCurrentAgent =
-    agentExtension === currentAgent.value.extension || callerNumber === currentAgent.value.extension || calledNumber === currentAgent.value.extension;
+  const relatedToCurrentAgent = isCurrentAgentIdentity(agentExtension) || isCurrentAgentIdentity(callerNumber) || isCurrentAgentIdentity(calledNumber);
   if (import.meta.env.DEV) {
     console.debug('[CallNexus][AgentToolbar] 通话事件判断', {
       type,
       currentExtension: currentAgent.value.extension,
+      currentAuthUsername: currentAgent.value.authUsername,
       agentExtension,
       callerNumber,
       calledNumber,
@@ -908,8 +913,7 @@ const handleCallEvent = (event: Record<string, unknown>) => {
     });
   }
   if (type === 'CALL_HANGUP_COMPLETE') {
-    const extension = currentAgent.value.extension || '';
-    const matchedCurrentLeg = callerNumber === extension || calledNumber === extension;
+    const matchedCurrentLeg = isCurrentAgentIdentity(callerNumber) || isCurrentAgentIdentity(calledNumber);
     const relatedToCurrentCall = activeCallId.value
       ? relatedToCurrentAgent && (eventCallId === activeCallId.value || matchedCurrentLeg)
       : relatedToCurrentAgent;
@@ -934,8 +938,7 @@ const handleCallEvent = (event: Record<string, unknown>) => {
     return;
   }
   if (type === 'CALL_CREATE' || type === 'CALL_PROGRESS' || type === 'CALL_PROGRESS_MEDIA') {
-    const isIncomingToCurrentAgent =
-      agentExtension === currentAgent.value.extension && callerNumber !== currentAgent.value.extension && calledNumber !== '';
+    const isIncomingToCurrentAgent = isCurrentAgentIdentity(agentExtension) && !isCurrentAgentIdentity(callerNumber) && calledNumber !== '';
     if (isIncomingToCurrentAgent) {
       showIncomingCall(event);
     } else {
@@ -947,6 +950,8 @@ const handleCallEvent = (event: Record<string, unknown>) => {
 const clearActiveCallState = () => {
   incomingCall.value = false;
   incomingNumber.value = '';
+  incomingLocation.value = '';
+  activeNumberLocation.value = '';
   callActive.value = false;
   activeCallId.value = '';
   matchedCustomer.value = undefined;
@@ -956,6 +961,23 @@ const clearActiveCallState = () => {
   stopCallTimer();
   stopRingTone();
   panelOpen.value = false;
+};
+
+const buildNumberLocation = (event: Record<string, unknown>) => {
+  return [event.callerProvince, event.callerCity, event.callerCarrier]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .join(' ');
+};
+
+const currentAgentIdentities = () =>
+  [currentAgent.value.extension, currentAgent.value.authUsername]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+
+const isCurrentAgentIdentity = (identity: string) => {
+  const normalizedIdentity = String(identity || '').trim();
+  return Boolean(normalizedIdentity) && currentAgentIdentities().includes(normalizedIdentity);
 };
 
 const markCallEnded = (callId?: string) => {
@@ -1379,6 +1401,11 @@ button {
   > span:last-child {
     color: #6e7c91;
     font-size: 11px;
+  }
+
+  .number-location {
+    color: #4f8f78;
+    font-size: 10px;
   }
 
   em {

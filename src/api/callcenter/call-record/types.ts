@@ -11,7 +11,17 @@ export interface CallRecordVO {
   callUuid?: string;
   direction: CallDirection;
   callerNumber?: string;
+  callerNumberType?: string;
+  callerMobileSegment?: string;
+  callerProvince?: string;
+  callerCity?: string;
+  callerCarrier?: string;
   calledNumber?: string;
+  calledNumberType?: string;
+  calledMobileSegment?: string;
+  calledProvince?: string;
+  calledCity?: string;
+  calledCarrier?: string;
   agentId?: string | number;
   agentExtension?: string;
   handlingQueueId?: string | number;

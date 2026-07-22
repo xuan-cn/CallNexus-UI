@@ -12,6 +12,10 @@ export interface IvrExternalNumberGroupConfig {
   outboundPolicyId?: string | number;
   ringTimeoutSeconds?: number;
   failoverEnabled?: boolean;
+  localAreaCode?: string;
+  addLocalAreaCode?: boolean;
+  stripChinaCountryCode?: boolean;
+  outboundPrefix?: string;
   numbers?: IvrExternalNumberTarget[];
 }
 

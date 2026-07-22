@@ -9,6 +9,7 @@ export interface DispatchExtensionStatusVO {
   nodeId?: string | number;
   nodeName?: string;
   extension: string;
+  authUsername?: string;
   displayName?: string;
   domain?: string;
   enabled: boolean;
@@ -27,6 +28,7 @@ export interface DispatchOperatorExtensionVO {
   nodeId?: string | number;
   nodeName?: string;
   extension?: string;
+  authUsername?: string;
   displayName?: string;
   domain?: string;
 }
