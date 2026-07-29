@@ -27,6 +27,7 @@ export interface FormTemplate {
   templateCode: string;
   templateName: string;
   businessType: FormBusinessType;
+  workflowCode?: string;
   enabled: boolean;
   version?: number;
   fields: FormField[];

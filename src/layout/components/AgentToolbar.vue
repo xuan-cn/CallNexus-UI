@@ -68,10 +68,10 @@
           <span>等待接听</span>
         </div>
         <div class="call-actions">
-          <button type="button" @click="createCustomer">
+          <button v-hasPermi="['callcenter:customer:create']" type="button" @click="createCustomer">
             <el-icon><User /></el-icon>新建客户
           </button>
-          <button type="button" @click="createTicket">
+          <button v-hasPermi="['callcenter:ticket:create']" type="button" @click="createTicket">
             <el-icon><Tickets /></el-icon>创建工单
           </button>
         </div>
@@ -119,8 +119,12 @@
           <button type="button" :disabled="callActionLoading" @click="toggleMute">{{ callMuted ? '取消静音' : '静音' }}</button>
           <button type="button" :disabled="callActionLoading || consultActive" @click="transferPanelOpen = !transferPanelOpen">盲转</button>
           <button type="button" :disabled="callActionLoading || callHeld" @click="consultPanelOpen = !consultPanelOpen">咨询转接</button>
-          <button type="button" :disabled="callActionLoading" @click="dtmfPanelOpen = !dtmfPanelOpen">DTMF</button>
-          <button type="button" :disabled="callActionLoading" @click="notePanelOpen = !notePanelOpen">通话备注</button>
+          <button type="button" :disabled="callActionLoading || callHeld || consultActive" @click="openConferenceDrawer">多方通话</button>
+          <button type="button" :disabled="callActionLoading" @click="morePanelOpen = !morePanelOpen">更多</button>
+        </div>
+        <div v-if="morePanelOpen" class="more-call-actions">
+          <button type="button" @click="toggleDtmfPanel">DTMF 按键</button>
+          <button type="button" @click="toggleNotePanel">通话备注</button>
         </div>
         <div v-if="dtmfPanelOpen" class="dtmf-panel">
           <div class="dtmf-input">
@@ -160,10 +164,10 @@
           </template>
         </div>
         <div class="call-actions">
-          <button type="button" @click="createCustomer">
+          <button v-hasPermi="['callcenter:customer:create']" type="button" @click="createCustomer">
             <el-icon><User /></el-icon>新建客户
           </button>
-          <button type="button" @click="createTicket">
+          <button v-hasPermi="['callcenter:ticket:create']" type="button" @click="createTicket">
             <el-icon><Tickets /></el-icon>创建工单
           </button>
         </div>
@@ -176,6 +180,14 @@
     <dynamic-business-form-dialog v-model="customerDialogVisible" business-type="CUSTOMER" :phone-number="dialNumber" :call-id="activeCallId" />
     <dynamic-business-form-dialog v-model="ticketDialogVisible" business-type="TICKET" :phone-number="dialNumber" :call-id="activeCallId" />
     <CallCenterBusinessDetail v-model="matchedCustomerDetailVisible" business-type="CUSTOMER" :business-id="matchedCustomer?.id" />
+    <CallConferenceDrawer
+      v-model="conferenceDrawerOpen"
+      :call-id="activeCallId"
+      :call-held="callHeld"
+      :consult-active="consultActive"
+      @owner-left="handleConferenceCallEnded"
+      @conference-ended="handleConferenceCallEnded"
+    />
     <audio ref="remoteAudioRef" autoplay playsinline></audio>
   </div>
 </template>
@@ -209,7 +221,9 @@ import { subscribeCallEvents } from '@/utils/websocket';
 import { webRtcPhone } from '@/utils/webrtcPhone';
 import { CustomerVO, getCustomerByPhone } from '@/api/callcenter/customer';
 import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/index.vue';
+import CallConferenceDrawer from './CallConferenceDrawer.vue';
 import DynamicBusinessFormDialog from './DynamicBusinessFormDialog.vue';
+import { useAgentDialBus, type AgentDialRequest } from '@/composables/useAgentDial';
 
 type AgentStatus = 'idle' | 'busy' | 'afterCall';
 type StatusCommand = AgentStatus | 'signIn' | 'signOut';
@@ -239,6 +253,8 @@ const consultPanelOpen = ref(false);
 const consultTarget = ref('');
 const consultActive = ref(false);
 const consultCallId = ref('');
+const conferenceDrawerOpen = ref(false);
+const morePanelOpen = ref(false);
 const dtmfPanelOpen = ref(false);
 const dtmfDigits = ref('');
 const notePanelOpen = ref(false);
@@ -259,6 +275,7 @@ const webRtcConnecting = ref(false);
 const webRtcIncoming = ref(false);
 const webRtcFirstLegWaiting = ref(false);
 const phoneRegistered = computed(() => signedIn.value && Boolean(currentAgent.value.extension));
+const agentDialBus = useAgentDialBus();
 const registrationSummary = computed(() => {
   if (!signedIn.value) return '未签入';
   if (webRtcRegistered.value) return 'WebRTC 已注册';
@@ -571,6 +588,23 @@ const makeCall = async () => {
   }
 };
 
+const handleAgentDialRequest = async (request: AgentDialRequest) => {
+  const destination = request.destination.trim();
+  if (!destination) return;
+  if (!phoneRegistered.value) {
+    ElMessage.warning('请先签入坐席并确认软电话已注册');
+    return;
+  }
+  if (callActive.value || incomingCall.value || webRtcPhone.hasActiveCall() || webRtcIncoming.value) {
+    ElMessage.warning('当前已有进行中的通话，无法发起新的外呼');
+    return;
+  }
+  dialNumber.value = destination;
+  panelOpen.value = true;
+  await nextTick();
+  await makeCall();
+};
+
 const hangup = async () => {
   if (!activeCallId.value && !webRtcPhone.hasActiveCall() && !webRtcIncoming.value) return;
   try {
@@ -725,6 +759,30 @@ const cancelConsultPanel = () => {
   consultTarget.value = '';
 };
 
+const openConferenceDrawer = () => {
+  if (!activeCallId.value || callHeld.value || consultActive.value) return;
+  morePanelOpen.value = false;
+  conferenceDrawerOpen.value = true;
+};
+
+const toggleDtmfPanel = () => {
+  dtmfPanelOpen.value = !dtmfPanelOpen.value;
+  notePanelOpen.value = false;
+  morePanelOpen.value = false;
+};
+
+const toggleNotePanel = () => {
+  notePanelOpen.value = !notePanelOpen.value;
+  dtmfPanelOpen.value = false;
+  morePanelOpen.value = false;
+};
+
+const handleConferenceCallEnded = () => {
+  markCallEnded(activeCallId.value);
+  clearActiveCallState();
+  void loadCurrentAgent();
+};
+
 const resetCallControls = () => {
   callHeld.value = false;
   callMuted.value = false;
@@ -735,6 +793,8 @@ const resetCallControls = () => {
   consultTarget.value = '';
   consultActive.value = false;
   consultCallId.value = '';
+  conferenceDrawerOpen.value = false;
+  morePanelOpen.value = false;
   dtmfPanelOpen.value = false;
   dtmfDigits.value = '';
   notePanelOpen.value = false;
@@ -899,7 +959,8 @@ const handleCallEvent = (event: Record<string, unknown>) => {
   const callerNumber = String(event.callerNumber || '');
   const calledNumber = String(event.calledNumber || '');
   const eventCallId = String(event.callId || '');
-  const relatedToCurrentAgent = isCurrentAgentIdentity(agentExtension) || isCurrentAgentIdentity(callerNumber) || isCurrentAgentIdentity(calledNumber);
+  const relatedToCurrentAgent =
+    isCurrentAgentIdentity(agentExtension) || isCurrentAgentIdentity(callerNumber) || isCurrentAgentIdentity(calledNumber);
   if (import.meta.env.DEV) {
     console.debug('[CallNexus][AgentToolbar] 通话事件判断', {
       type,
@@ -971,9 +1032,7 @@ const buildNumberLocation = (event: Record<string, unknown>) => {
 };
 
 const currentAgentIdentities = () =>
-  [currentAgent.value.extension, currentAgent.value.authUsername]
-    .map((value) => String(value || '').trim())
-    .filter(Boolean);
+  [currentAgent.value.extension, currentAgent.value.authUsername].map((value) => String(value || '').trim()).filter(Boolean);
 
 const isCurrentAgentIdentity = (identity: string) => {
   const normalizedIdentity = String(identity || '').trim();
@@ -1042,6 +1101,7 @@ watch([dialNumber, incomingNumber, callActive, incomingCall], () => {
 });
 
 onMounted(async () => {
+  agentDialBus.on(handleAgentDialRequest);
   unsubscribeCallEvents = subscribeCallEvents(handleCallEvent);
   await loadCurrentAgent();
   await nextTick();
@@ -1052,6 +1112,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  agentDialBus.off(handleAgentDialRequest);
   unsubscribeCallEvents?.();
   void disconnectWebRtcPhone();
   stopCallTimer();
@@ -1500,6 +1561,31 @@ button {
 
 .call-control-actions {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.more-call-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid #e2e9f2;
+  border-radius: 8px;
+  background: #f7faff;
+
+  button {
+    height: 32px;
+    color: #40546f;
+    font-size: 10px;
+    cursor: pointer;
+    border: 1px solid #d8e3f0;
+    border-radius: 7px;
+    background: #fff;
+  }
+
+  button:hover {
+    color: #064d8d;
+    border-color: #9bb9dc;
+  }
 }
 
 .transfer-panel {

@@ -125,3 +125,11 @@ export const streamAiChat = async (
     }
   }
 };
+
+export const listAiIntents = (): AxiosPromise<T.AiIntentVO[]> => request({ url: `${root}/intents`, method: 'get' });
+export const getAiIntent = (id: T.Id): AxiosPromise<T.AiIntentVO> => request({ url: `${root}/intents/${id}`, method: 'get' });
+export const createAiIntent = (data: T.AiIntentForm) => request({ url: `${root}/intents`, method: 'post', data });
+export const updateAiIntent = (id: T.Id, data: T.AiIntentForm) => request({ url: `${root}/intents/${id}`, method: 'put', data });
+export const deleteAiIntent = (id: T.Id) => request({ url: `${root}/intents/${id}`, method: 'delete' });
+export const recognizeAiIntent = (data: { agentId: T.Id; text: string }): AxiosPromise<T.AiIntentRecognitionVO> =>
+  request({ url: `${root}/intents/recognize-test`, method: 'post', data, timeout: 120000 });

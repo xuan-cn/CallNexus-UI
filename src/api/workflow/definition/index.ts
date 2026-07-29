@@ -15,6 +15,13 @@ export const listDefinition = (query: FlowDefinitionQuery): AxiosPromise<FlowDef
   });
 };
 
+/** 已发布且已激活的流程定义选项 */
+export const listDefinitionOptions = (): AxiosPromise<FlowDefinitionVo[]> =>
+  request({
+    url: '/workflow/definition/options',
+    method: 'get'
+  });
+
 /**
  * 查询未发布的流程定义列表
  * @param query 流程实例id

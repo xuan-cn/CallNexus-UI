@@ -69,7 +69,7 @@
       <pagination v-show="total > 0" v-model:page="queryParams.pageNum" v-model:limit="queryParams.pageSize" :total="total" @pagination="getList" />
     </el-card>
 
-    <el-dialog v-model="detailVisible" title="通话记录详情" width="1280px" append-to-body>
+    <el-drawer v-model="detailVisible" class="call-record-detail-drawer" title="通话记录详情" size="82%" append-to-body destroy-on-close>
       <el-tabs v-if="detail" v-model="detailTab" class="detail-tabs">
         <el-tab-pane label="基本信息" name="basic">
           <el-descriptions :column="3" border>
@@ -347,7 +347,7 @@
           </el-collapse>
         </el-tab-pane>
       </el-tabs>
-    </el-dialog>
+    </el-drawer>
 
     <CallCenterBusinessDetail v-model="customerDetailVisible" business-type="CUSTOMER" :business-id="customerDetailId" />
     <CallCenterBusinessDetail v-model="ticketDetailVisible" business-type="TICKET" :business-id="ticketDetailId" />
@@ -737,7 +737,13 @@ onBeforeUnmount(stopRecordingPoll);
 
 <style scoped>
 .detail-tabs {
-  min-height: 560px;
+  min-height: 100%;
+}
+.call-record-detail-drawer :deep(.el-drawer__body) {
+  padding-top: 8px;
+}
+.call-record-detail-drawer :deep(.el-tabs__content) {
+  overflow: visible;
 }
 .metric-grid {
   display: grid;

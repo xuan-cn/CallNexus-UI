@@ -88,6 +88,19 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: { title: '个人中心', icon: 'user' }
       }
     ]
+  },
+  {
+    path: '/callcenter/ticket',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/callcenter/ticket/index.vue'),
+        name: 'TicketWorkflowForm',
+        meta: { title: '工单办理', activeMenu: '/callcenter/callcenter-operation/ticket' }
+      }
+    ]
   }
 ];
 

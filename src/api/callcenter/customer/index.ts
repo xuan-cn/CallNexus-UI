@@ -15,6 +15,25 @@ export interface UpdateCustomerForm {
   formData: Record<string, unknown>;
 }
 
+export type CustomerPhoneType = 'MOBILE' | 'HOME' | 'WORK' | 'OTHER';
+
+export interface CustomerPhoneForm {
+  phoneNumber: string;
+  phoneType?: CustomerPhoneType;
+  phoneLabel?: string;
+  primaryFlag?: boolean;
+  enabled?: boolean;
+  sortOrder?: number;
+}
+
+export interface CustomerPhoneVO extends CustomerPhoneForm {
+  id: string | number;
+  normalizedPhone: string;
+  primaryFlag: boolean;
+  enabled: boolean;
+  sortOrder: number;
+}
+
 export interface CustomerFollowUpVO {
   id: string | number;
   content: string;
@@ -30,12 +49,32 @@ export interface CustomerVO {
   templateId?: string | number;
   sourceCallId?: string;
   createTime: string;
+  phones?: CustomerPhoneVO[];
   formData?: Record<string, unknown>;
 }
 
 export interface CustomerQuery extends PageQuery {
   primaryPhone?: string;
   customerName?: string;
+}
+
+export type CustomerImportStatus = 'IMPORTED' | 'SKIPPED' | 'FAILED';
+
+export interface CustomerImportRowVO {
+  rowNumber: number;
+  customerName?: string;
+  primaryPhone?: string;
+  status: CustomerImportStatus;
+  message: string;
+  customerId?: string | number;
+}
+
+export interface CustomerImportResultVO {
+  totalCount: number;
+  importedCount: number;
+  skippedCount: number;
+  failedCount: number;
+  rows: CustomerImportRowVO[];
 }
 
 export const listCustomers = (params: CustomerQuery) => request({ url: '/api/v1/customers', method: 'get', params });
@@ -49,8 +88,33 @@ export const createCustomer = (data: CreateCustomerForm) => request({ url: '/api
 
 export const updateCustomer = (id: string | number, data: UpdateCustomerForm) => request({ url: `/api/v1/customers/${id}`, method: 'put', data });
 
+export const listCustomerPhones = (id: string | number) => request<CustomerPhoneVO[]>({ url: `/api/v1/customers/${id}/phones`, method: 'get' });
+
+export const addCustomerPhone = (id: string | number, data: CustomerPhoneForm) =>
+  request<string | number>({ url: `/api/v1/customers/${id}/phones`, method: 'post', data });
+
+export const updateCustomerPhone = (id: string | number, phoneId: string | number, data: CustomerPhoneForm) =>
+  request<void>({ url: `/api/v1/customers/${id}/phones/${phoneId}`, method: 'put', data });
+
+export const setCustomerPrimaryPhone = (id: string | number, phoneId: string | number) =>
+  request<void>({ url: `/api/v1/customers/${id}/phones/${phoneId}/primary`, method: 'put' });
+
+export const deleteCustomerPhone = (id: string | number, phoneId: string | number) =>
+  request<void>({ url: `/api/v1/customers/${id}/phones/${phoneId}`, method: 'delete' });
+
 export const listCustomerFollowUps = (id: string | number) =>
   request<CustomerFollowUpVO[]>({ url: `/api/v1/customers/${id}/follow-ups`, method: 'get' });
 
 export const addCustomerFollowUp = (id: string | number, content: string) =>
   request<string | number>({ url: `/api/v1/customers/${id}/follow-ups`, method: 'post', data: { content } });
+
+export const importCustomers = (file: File) => {
+  const data = new FormData();
+  data.append('file', file);
+  return request<CustomerImportResultVO>({
+    url: '/api/v1/customers/import',
+    method: 'post',
+    data,
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+};

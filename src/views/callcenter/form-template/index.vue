@@ -6,6 +6,9 @@
         <el-table-column label="模板编码" prop="templateCode" min-width="150" />
         <el-table-column label="模板名称" prop="templateName" min-width="160" />
         <el-table-column label="业务类型" prop="businessType" width="120" />
+        <el-table-column label="工单流程" min-width="180" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.businessType === 'TICKET' ? workflowLabel(row.workflowCode) : '-' }}</template>
+        </el-table-column>
         <el-table-column label="字段数量" width="100"
           ><template #default="{ row }">{{ row.fields.length }}</template></el-table-column
         >
@@ -39,6 +42,19 @@
             ><el-form-item label="启用"><el-switch v-model="form.enabled" /></el-form-item
           ></el-col>
         </el-row>
+        <el-form-item v-if="form.businessType === 'TICKET'" label="工单流程">
+          <el-select v-model="form.workflowCode" clearable filterable placeholder="选择已发布并激活的流程" style="width: 100%">
+            <el-option
+              v-for="item in workflowOptions"
+              :key="item.flowCode"
+              :label="`${item.flowName}（${item.flowCode}）`"
+              :value="item.flowCode"
+            />
+          </el-select>
+          <div class="workflow-tip">
+            工单创建后固化流程编码，已启动实例不受后续版本发布影响；流程表单路径请配置为 /callcenter/ticket。
+          </div>
+        </el-form-item>
       </el-form>
 
       <el-row :gutter="16">
@@ -123,6 +139,8 @@
 import { ElMessage } from 'element-plus';
 import { createFormTemplate, deleteFormTemplate, listFormTemplates, updateFormTemplate } from '@/api/callcenter/form-template';
 import { FormField, FormFieldOption, FormFieldType, FormTemplate } from '@/api/callcenter/form-template/types';
+import { listDefinitionOptions } from '@/api/workflow/definition';
+import { FlowDefinitionVo } from '@/api/workflow/definition/types';
 
 type EditableOption = FormFieldOption & { localId: string };
 type EditableField = Omit<FormField, 'options'> & { localId: string; options: EditableOption[] };
@@ -131,6 +149,7 @@ type EditableTemplate = Omit<FormTemplate, 'fields'> & { fields: EditableField[]
 const loading = ref(false);
 const visible = ref(false);
 const templates = ref<FormTemplate[]>([]);
+const workflowOptions = ref<FlowDefinitionVo[]>([]);
 const optionTypes: FormFieldType[] = ['RADIO', 'CHECKBOX', 'SELECT', 'MULTI_SELECT'];
 const fieldTypes: Array<{ label: string; value: FormFieldType }> = [
   { label: '输入框', value: 'INPUT' },
@@ -144,7 +163,14 @@ const fieldTypes: Array<{ label: string; value: FormFieldType }> = [
   { label: '日期时间', value: 'DATETIME' }
 ];
 const localId = () => `${Date.now()}-${Math.random()}`;
-const emptyForm = (): EditableTemplate => ({ templateCode: '', templateName: '', businessType: 'CUSTOMER', enabled: true, fields: [] });
+const emptyForm = (): EditableTemplate => ({
+  templateCode: '',
+  templateName: '',
+  businessType: 'CUSTOMER',
+  workflowCode: undefined,
+  enabled: true,
+  fields: []
+});
 const form = ref<EditableTemplate>(emptyForm());
 const load = async () => {
   loading.value = true;
@@ -178,6 +204,11 @@ const handleFieldTypeChange = (field: EditableField) => {
   if (optionTypes.includes(field.fieldType) && !field.options.length) addOption(field);
 };
 const validOptions = (field: EditableField) => field.options.filter((option) => option.label && option.value);
+const workflowLabel = (workflowCode?: string) => {
+  if (!workflowCode) return '未绑定';
+  const definition = workflowOptions.value.find((item) => item.flowCode === workflowCode);
+  return definition ? `${definition.flowName}（${workflowCode}）` : workflowCode;
+};
 const submit = async () => {
   if (!form.value.templateCode || !form.value.templateName) {
     ElMessage.warning('请填写模板编码和模板名称');
@@ -214,7 +245,16 @@ const remove = async (template: FormTemplate) => {
   if (template.id) await deleteFormTemplate(template.id);
   await load();
 };
-onMounted(load);
+watch(
+  () => form.value.businessType,
+  (businessType) => {
+    if (businessType !== 'TICKET') form.value.workflowCode = undefined;
+  }
+);
+onMounted(async () => {
+  const [definitions] = await Promise.all([listDefinitionOptions(), load()]);
+  workflowOptions.value = definitions.data;
+});
 </script>
 
 <style scoped lang="scss">
@@ -255,5 +295,9 @@ onMounted(load);
   border: 1px solid #dfe6f1;
   border-radius: 12px;
   background: #f8fafc;
+}
+.workflow-tip {
+  margin-top: 4px;
+  color: #909399;
 }
 </style>

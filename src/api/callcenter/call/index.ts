@@ -1,6 +1,14 @@
 import request from '@/utils/request';
 import { AxiosPromise } from 'axios';
-import { CallControlVO, CallNoteForm, OriginateCallForm, SendDtmfForm } from './types';
+import {
+  CallConferenceInviteForm,
+  CallConferenceMuteForm,
+  CallConferenceVO,
+  CallControlVO,
+  CallNoteForm,
+  OriginateCallForm,
+  SendDtmfForm
+} from './types';
 
 export const originateCall = (data: OriginateCallForm): AxiosPromise<CallControlVO> => request({ url: '/api/v1/calls', method: 'post', data });
 
@@ -29,3 +37,22 @@ export const cancelConsultTransfer = (callId: string, phoneMode?: string) =>
 
 export const completeConsultTransfer = (callId: string, phoneMode?: string) =>
   request({ url: `/api/v1/calls/${callId}/consult-transfer/complete`, method: 'post', data: { phoneMode } });
+
+export const createCallConference = (callId: string): AxiosPromise<CallConferenceVO> =>
+  request({ url: `/api/v1/calls/${callId}/conference`, method: 'post' });
+
+export const getCallConference = (callId: string): AxiosPromise<CallConferenceVO | null> =>
+  request({ url: `/api/v1/calls/${callId}/conference`, method: 'get' });
+
+export const inviteCallConferenceMember = (callId: string, data: CallConferenceInviteForm): AxiosPromise<CallConferenceVO> =>
+  request({ url: `/api/v1/calls/${callId}/conference/invitations`, method: 'post', data });
+
+export const muteCallConferenceMember = (callId: string, memberId: string, data: CallConferenceMuteForm): AxiosPromise<CallConferenceVO> =>
+  request({ url: `/api/v1/calls/${callId}/conference/members/${memberId}/mute`, method: 'post', data });
+
+export const removeCallConferenceMember = (callId: string, memberId: string): AxiosPromise<CallConferenceVO> =>
+  request({ url: `/api/v1/calls/${callId}/conference/members/${memberId}`, method: 'delete' });
+
+export const leaveCallConference = (callId: string) => request({ url: `/api/v1/calls/${callId}/conference/leave`, method: 'post' });
+
+export const endCallConference = (callId: string) => request({ url: `/api/v1/calls/${callId}/conference`, method: 'delete' });

@@ -261,3 +261,55 @@ export interface AiStreamEvent {
   event: 'conversation' | 'retrieval' | 'delta' | 'citation' | 'completed' | 'error';
   data: any;
 }
+
+export type AiIntentType = 'CONVERSATION' | 'CONTROL' | 'ROUTING' | 'BUSINESS';
+export type AiIntentActionType =
+  | 'NONE'
+  | 'CHAT_REPLY'
+  | 'REPEAT_LAST_REPLY'
+  | 'STOP_PLAYBACK'
+  | 'TRANSFER_QUEUE'
+  | 'TRANSFER_EXTENSION'
+  | 'TRANSFER_IVR'
+  | 'END_CALL'
+  | 'KNOWLEDGE_QUERY';
+export interface AiIntentUtterance {
+  id?: Id;
+  utteranceType: 'POSITIVE' | 'NEGATIVE';
+  utteranceText: string;
+}
+export interface AiIntentVO {
+  id: Id;
+  intentCode: string;
+  intentName: string;
+  intentType: AiIntentType;
+  description?: string;
+  actionType: AiIntentActionType;
+  actionConfigJson?: string;
+  responseTemplate?: string;
+  confidenceThreshold: number;
+  priority: number;
+  confirmationRequired: boolean;
+  enabled: boolean;
+  version?: number;
+  utterances: AiIntentUtterance[];
+  agentIds: Id[];
+  agentNames: string[];
+}
+export interface AiIntentForm extends Omit<AiIntentVO, 'id' | 'agentNames'> {
+  id?: Id;
+}
+export interface AiIntentRecognitionVO {
+  matched: boolean;
+  intentId?: Id;
+  intentCode?: string;
+  intentName?: string;
+  intentType?: AiIntentType;
+  actionType?: AiIntentActionType;
+  responseTemplate?: string;
+  confidence: number;
+  matchMethod: 'EXACT' | 'MODEL' | 'NONE';
+  reason: string;
+  latencyMs: number;
+  rawResponse?: string;
+}

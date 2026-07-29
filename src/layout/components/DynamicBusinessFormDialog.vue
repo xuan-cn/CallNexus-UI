@@ -84,7 +84,11 @@ import { listFormTemplates } from '@/api/callcenter/form-template';
 import { FormBusinessType, FormTemplate } from '@/api/callcenter/form-template/types';
 import { createTicket } from '@/api/callcenter/ticket';
 
-const props = defineProps<{ businessType: FormBusinessType; phoneNumber: string; callId: string }>();
+const props = withDefaults(defineProps<{ businessType: FormBusinessType; phoneNumber?: string; callId?: string }>(), {
+  phoneNumber: '',
+  callId: ''
+});
+const emit = defineEmits<{ saved: [] }>();
 const visible = defineModel<boolean>({ default: false });
 const templates = ref<FormTemplate[]>([]);
 const templateId = ref<string | number>();
@@ -161,7 +165,7 @@ const submit = async () => {
       if (existingCustomer.value) {
         await updateCustomer(existingCustomer.value.id, {
           customerName: customerName.value || undefined,
-          sourceCallId: props.callId,
+          sourceCallId: props.callId || existingCustomer.value.sourceCallId,
           templateId: templateId.value,
           formData
         });
@@ -170,7 +174,7 @@ const submit = async () => {
           primaryPhone: phone.value,
           customerName: customerName.value || undefined,
           templateId: templateId.value,
-          sourceCallId: props.callId,
+          sourceCallId: props.callId || undefined,
           formData
         });
       }
@@ -179,12 +183,13 @@ const submit = async () => {
         customerId: existingCustomer.value?.id,
         callerNumber: phone.value,
         templateId: templateId.value,
-        sourceCallId: props.callId,
+        sourceCallId: props.callId || undefined,
         formData
       });
     }
     ElMessage.success(props.businessType === 'CUSTOMER' ? (existingCustomer.value ? '客户更新成功' : '客户创建成功') : '工单创建成功');
     visible.value = false;
+    emit('saved');
   } finally {
     submitting.value = false;
   }
