@@ -53,6 +53,12 @@ export const constantRoutes: RouteRecordRaw[] = [
     hidden: true
   },
   {
+    path: '/chat/:channelKey',
+    component: () => import('@/views/public/chat/index.vue'),
+    hidden: true,
+    meta: { title: '在线客服' }
+  },
+  {
     path: '/:pathMatch(.*)*',
     component: () => import('@/views/error/404.vue'),
     hidden: true
