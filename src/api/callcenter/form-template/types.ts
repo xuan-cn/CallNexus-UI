@@ -1,5 +1,15 @@
 export type FormBusinessType = 'CUSTOMER' | 'TICKET';
-export type FormFieldType = 'INPUT' | 'TEXTAREA' | 'RADIO' | 'CHECKBOX' | 'SELECT' | 'MULTI_SELECT' | 'NUMBER' | 'DATE' | 'DATETIME';
+export type FormFieldType =
+  | 'INPUT'
+  | 'TEXTAREA'
+  | 'RADIO'
+  | 'CHECKBOX'
+  | 'SELECT'
+  | 'MULTI_SELECT'
+  | 'NUMBER'
+  | 'DATE'
+  | 'DATETIME'
+  | 'FILE';
 
 export interface FormFieldOption {
   id?: string | number;

@@ -34,77 +34,164 @@
       >
     </el-card>
     <el-drawer v-model="drawer" :title="form.id ? '修改 AI 助手' : '新增 AI 助手'" size="1080px"
-      ><el-form :model="form" label-width="120px"
-        ><el-row :gutter="16"
-          ><el-col :span="12"
-            ><el-form-item label="助手编码"><el-input v-model="form.agentCode" /></el-form-item></el-col
-          ><el-col :span="12"
-            ><el-form-item label="助手名称"><el-input v-model="form.agentName" /></el-form-item></el-col></el-row
-        ><el-form-item label="Chat模型"
-          ><el-select v-model="form.chatModelId" style="width: 100%"
-            ><el-option v-for="m in chatModels" :key="m.id" :label="`${m.modelName}（${m.providerName}）`" :value="m.id" /></el-select></el-form-item
-        ><el-form-item label="绑定知识库"
-          ><el-select v-model="form.knowledgeBaseIds" multiple style="width: 100%"
-            ><el-option
-              v-for="k in bases"
-              :key="k.id"
-              :label="`${k.knowledgeName}（${k.embeddingModelName || ''}）`"
-              :value="k.id" /></el-select></el-form-item
-        ><el-alert
-          class="mb-4"
-          type="info"
-          :closable="false"
-          title="同一助手只能绑定使用相同 Embedding 模型的知识库；选择顺序同时作为冲突时的优先级。" /><el-form-item label="系统提示词"
-          ><el-input v-model="form.systemPrompt" type="textarea" :rows="5" /></el-form-item
-        ><el-form-item label="开场白"
-          ><el-input v-model="form.welcomeMessage" type="textarea" :rows="3" placeholder="创建新对话时，作为 AI 的第一条消息" />
-          <div class="mt-1 text-xs text-gray-400">开场白不参与知识检索，后续电话 AI 将复用该内容。</div></el-form-item
-        ><el-form-item label="语音传输"
-          ><el-radio-group v-model="form.voiceTransport"
-            ><el-radio value="HTTP">HTTP：整段合成后一次回传（兼容旧插件）</el-radio
-            ><el-radio value="WS">WS：按句流式回传（首字延迟更低，需 UniMRCP 插件支持）</el-radio></el-radio-group
-          >
-          <el-input
-            v-if="form.voiceTransport === 'WS'"
-            v-model="form.voiceTransportWsUrl"
-            class="mt-2"
-            placeholder="ws://<callnexus-host>:8080/api/internal/ai/realtime/tts-stream（留空使用系统默认）"
-            maxlength="256" />
-          <div class="mt-1 text-xs text-gray-400">
-            仅对话 AI 通话（callnexussynth 插件）生效；HTTP 兼容所有现网插件，WS 需要插件按新协议改造。
-          </div></el-form-item
-        ><el-form-item label="知识库回答"
-          ><el-radio-group v-model="form.retrievalMode"
-            ><el-radio value="RAG">智能混合：FAQ 直返，文档由模型整理</el-radio
-            ><el-radio value="DIRECT_RETRIEVAL">极速原文：直接返回最高相似度切片</el-radio></el-radio-group
-          >
-          <div class="text-gray-400 text-xs mt-1">
-            普通文档切片包含上下文，建议使用智能混合；极速原文适合内容已经整理成独立答案的知识库。
-          </div></el-form-item
-        ><el-row :gutter="16"
-          ><el-col :span="12"
-            ><el-form-item label="未命中处理"
-              ><el-select v-model="form.retrievalFailurePolicy" style="width: 100%"
-                ><el-option label="STRICT：没有依据时拒答" value="STRICT" /><el-option
-                  label="FALLBACK：允许模型通用回答"
-                  value="FALLBACK_MODEL" /></el-select></el-form-item></el-col
-          ><el-col :span="12"
-            ><el-form-item label="Top K"
-              ><el-input-number v-model="form.topK" :min="1" :max="20" style="width: 100%" /></el-form-item></el-col></el-row
-        ><el-form-item label="文档阈值"><el-slider v-model="form.scoreThreshold" :min="0" :max="1" :step="0.01" show-input /></el-form-item
-        ><el-form-item label="FAQ阈值"><el-slider v-model="form.faqScoreThreshold" :min="0" :max="1" :step="0.01" show-input /></el-form-item
-        ><el-row :gutter="16"
-          ><el-col :span="8"
-            ><el-form-item label="温度"><el-input-number v-model="form.temperature" :min="0" :max="2" :step="0.1" /></el-form-item></el-col
-          ><el-col :span="8"
-            ><el-form-item label="输出Token"><el-input-number v-model="form.maxOutputTokens" :min="1" /></el-form-item></el-col
-          ><el-col :span="8"
-            ><el-form-item label="历史消息数"><el-input-number v-model="form.historyMessageLimit" :min="0" /></el-form-item></el-col></el-row
-        ><el-form-item label="说明"><el-input v-model="form.description" type="textarea" /></el-form-item
-        ><el-form-item label="系统内部助手"
-          ><el-switch v-model="form.systemAssistant" active-text="用于系统顶部 AI 助手" />
-          <div class="text-gray-400 text-xs mt-1">每个租户只能指定一个；IVR 等业务助手不需要开启。</div></el-form-item
-        ><el-form-item label="启用"><el-switch v-model="form.enabled" /></el-form-item></el-form
+      ><el-form :model="form" label-width="120px">
+        <el-tabs v-model="activeTab" class="agent-config-tabs">
+          <el-tab-pane label="基础信息" name="basic">
+            <el-row :gutter="16">
+              <el-col :span="12">
+                <el-form-item label="助手编码"><el-input v-model="form.agentCode" /></el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="助手名称"><el-input v-model="form.agentName" /></el-form-item>
+              </el-col>
+            </el-row>
+            <el-form-item label="说明"><el-input v-model="form.description" type="textarea" :rows="4" /></el-form-item>
+            <el-form-item label="系统内部助手">
+              <el-switch v-model="form.systemAssistant" active-text="用于系统顶部 AI 助手" />
+              <div class="mt-1 text-xs text-gray-400">每个租户只能指定一个；IVR 等业务助手不需要开启。</div>
+            </el-form-item>
+            <el-form-item label="启用"><el-switch v-model="form.enabled" /></el-form-item>
+          </el-tab-pane>
+
+          <el-tab-pane label="对话设置" name="conversation">
+            <el-form-item label="Chat模型">
+              <el-select v-model="form.chatModelId" style="width: 100%">
+                <el-option v-for="m in chatModels" :key="m.id" :label="`${m.modelName}（${m.providerName}）`" :value="m.id" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="系统提示词">
+              <el-input v-model="form.systemPrompt" type="textarea" :rows="7" />
+            </el-form-item>
+            <el-form-item label="开场白">
+              <el-input v-model="form.welcomeMessage" type="textarea" :rows="4" placeholder="创建新对话时，作为 AI 的第一条消息" />
+              <div class="mt-1 text-xs text-gray-400">开场白不参与知识检索，后续电话 AI 将复用该内容。</div>
+            </el-form-item>
+            <el-row :gutter="16">
+              <el-col :span="8">
+                <el-form-item label="温度">
+                  <el-input-number v-model="form.temperature" :min="0" :max="2" :step="0.1" style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="输出Token">
+                  <el-input-number v-model="form.maxOutputTokens" :min="1" style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="历史消息数">
+                  <el-input-number v-model="form.historyMessageLimit" :min="0" style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-tab-pane>
+
+          <el-tab-pane label="知识库" name="knowledge">
+            <el-form-item label="绑定知识库">
+              <el-select v-model="form.knowledgeBaseIds" multiple style="width: 100%">
+                <el-option
+                  v-for="k in bases"
+                  :key="k.id"
+                  :label="`${k.knowledgeName}（${k.embeddingModelName || ''}）`"
+                  :value="k.id"
+                />
+              </el-select>
+            </el-form-item>
+            <el-alert
+              class="mb-4"
+              type="info"
+              :closable="false"
+              title="同一助手只能绑定使用相同 Embedding 模型的知识库；选择顺序同时作为冲突时的优先级。"
+            />
+            <el-form-item label="知识库回答">
+              <el-radio-group v-model="form.retrievalMode">
+                <el-radio value="RAG">智能混合：FAQ 直返，文档由模型整理</el-radio>
+                <el-radio value="DIRECT_RETRIEVAL">极速原文：直接返回最高相似度切片</el-radio>
+              </el-radio-group>
+              <div class="mt-1 text-xs text-gray-400">
+                普通文档切片包含上下文，建议使用智能混合；极速原文适合内容已经整理成独立答案的知识库。
+              </div>
+            </el-form-item>
+            <el-row :gutter="16">
+              <el-col :span="12">
+                <el-form-item label="未命中处理">
+                  <el-select v-model="form.retrievalFailurePolicy" style="width: 100%">
+                    <el-option label="STRICT：没有依据时拒答" value="STRICT" />
+                    <el-option label="FALLBACK：允许模型通用回答" value="FALLBACK_MODEL" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="Top K">
+                  <el-input-number v-model="form.topK" :min="1" :max="20" style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-form-item label="文档阈值">
+              <el-slider v-model="form.scoreThreshold" :min="0" :max="1" :step="0.01" show-input />
+            </el-form-item>
+            <el-form-item label="FAQ阈值">
+              <el-slider v-model="form.faqScoreThreshold" :min="0" :max="1" :step="0.01" show-input />
+            </el-form-item>
+          </el-tab-pane>
+
+          <el-tab-pane label="语音交互" name="voice">
+            <el-form-item label="语音传输">
+              <el-radio-group v-model="form.voiceTransport">
+                <el-radio value="HTTP">HTTP：整段合成后一次回传（兼容旧插件）</el-radio>
+                <el-radio value="WS">WS：按句流式回传（首字延迟更低，需 UniMRCP 插件支持）</el-radio>
+              </el-radio-group>
+              <el-input
+                v-if="form.voiceTransport === 'WS'"
+                v-model="form.voiceTransportWsUrl"
+                class="mt-2"
+                placeholder="ws://<callnexus-host>:8080/api/internal/ai/realtime/tts-stream（留空使用系统默认）"
+                maxlength="256"
+              />
+              <div class="mt-1 text-xs text-gray-400">
+                仅对话 AI 通话（callnexussynth 插件）生效；HTTP 兼容所有现网插件，WS 需要插件按新协议改造。
+              </div>
+            </el-form-item>
+            <el-form-item label="语音打断">
+              <div class="barge-in-setting">
+                <el-switch v-model="form.bargeInEnabled" active-text="允许用户在 AI 播报时插话" />
+                <div class="barge-in-description">
+                  开启后播放与 ASR 并行；检测到用户说话会停止当前播放并取消该轮剩余 TTS。默认关闭，不影响现有半双工流程。
+                </div>
+              </div>
+            </el-form-item>
+            <template v-if="form.bargeInEnabled">
+              <el-row :gutter="16">
+                <el-col :span="8">
+                  <el-form-item label="开场白打断">
+                    <el-switch v-model="form.openingBargeInEnabled" active-text="允许" inactive-text="禁止" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item label="环境模式">
+                    <el-select v-model="form.bargeInMode" style="width: 100%">
+                      <el-option label="灵敏：安静环境" value="SENSITIVE" />
+                      <el-option label="标准：普通办公环境" value="STANDARD" />
+                      <el-option label="抗噪：嘈杂环境" value="NOISY" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item label="开播保护">
+                    <el-input-number v-model="form.bargeInGraceMs" :min="0" :max="5000" :step="100" style="width: 100%" />
+                    <div class="mt-1 text-xs text-gray-400">毫秒；保护期内的 begin-speaking 不立即截断播放。</div>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-alert
+                class="mb-4"
+                type="warning"
+                :closable="false"
+                title="打断识别依赖 UniMRCP VAD。嘈杂场景请使用“抗噪”，不要用关键词硬编码代替现有意图识别。"
+              />
+            </template>
+          </el-tab-pane>
+        </el-tabs>
+      </el-form
       ><template #footer
         ><el-button @click="drawer = false">取消</el-button><el-button type="primary" @click="save">保存</el-button></template
       ></el-drawer
@@ -129,6 +216,7 @@ const agents = ref<AiAgentVO[]>([]),
   chatModels = ref<AiModelVO[]>([]),
   bases = ref<KnowledgeBaseVO[]>([]),
   drawer = ref(false);
+const activeTab = ref('basic');
 const testVisible = ref(false);
 const testAgent = ref<AiAgentVO>();
 const defaults = (): AiAgentForm => ({
@@ -150,6 +238,10 @@ const defaults = (): AiAgentForm => ({
   enabled: true,
   voiceTransport: 'HTTP',
   voiceTransportWsUrl: '',
+  bargeInEnabled: false,
+  openingBargeInEnabled: false,
+  bargeInMode: 'STANDARD',
+  bargeInGraceMs: 500,
   knowledgeBaseIds: []
 });
 const form = ref(defaults());
@@ -164,12 +256,17 @@ const load = async () => {
   bases.value = (k.data || []).filter((item) => item.enabled);
 };
 const edit = (row?: AiAgentVO) => {
+  activeTab.value = 'basic';
   form.value = row
     ? {
         ...row,
         scoreThreshold: numericValue(row.scoreThreshold, 0.5),
         faqScoreThreshold: numericValue(row.faqScoreThreshold, 0.8),
         temperature: numericValue(row.temperature, 0.2),
+        bargeInEnabled: Boolean(row.bargeInEnabled),
+        openingBargeInEnabled: Boolean(row.openingBargeInEnabled),
+        bargeInMode: row.bargeInMode || 'STANDARD',
+        bargeInGraceMs: numericValue(row.bargeInGraceMs, 500),
         knowledgeBaseIds: [...row.knowledgeBaseIds]
       }
     : defaults();
@@ -188,7 +285,8 @@ const save = async () => {
     ...form.value,
     scoreThreshold: numericValue(form.value.scoreThreshold, 0.5),
     faqScoreThreshold: numericValue(form.value.faqScoreThreshold, 0.8),
-    temperature: numericValue(form.value.temperature, 0.2)
+    temperature: numericValue(form.value.temperature, 0.2),
+    bargeInGraceMs: numericValue(form.value.bargeInGraceMs, 500)
   };
   payload.id ? await updateAiAgent(payload.id, payload) : await createAiAgent(payload);
   drawer.value = false;
@@ -206,3 +304,25 @@ const remove = async (row: AiAgentVO) => {
 };
 onMounted(load);
 </script>
+<style scoped>
+.agent-config-tabs {
+  padding: 0 8px;
+}
+
+.agent-config-tabs :deep(.el-tabs__content) {
+  padding: 20px 12px 4px;
+}
+
+.barge-in-setting {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.barge-in-description {
+  margin-top: 6px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+</style>

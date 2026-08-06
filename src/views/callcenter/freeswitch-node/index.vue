@@ -24,7 +24,7 @@
         <el-table-column label="节点编码" prop="nodeCode" min-width="130" />
         <el-table-column label="节点名称" prop="nodeName" min-width="150" />
         <el-table-column label="SIP 域" prop="sipDomain" min-width="170" />
-        <el-table-column label="WSS 地址" prop="wssUrl" min-width="230" />
+        <el-table-column label="WebSocket 地址" prop="wssUrl" min-width="230" />
         <el-table-column label="ESL 地址" min-width="170"
           ><template #default="{ row }">{{ row.eslHost }}:{{ row.eslPort }}</template></el-table-column
         >
@@ -56,7 +56,9 @@
         <el-form-item label="节点编码" prop="nodeCode"><el-input v-model="form.nodeCode" placeholder="例如 FS_LOCAL_01" /></el-form-item>
         <el-form-item label="节点名称" prop="nodeName"><el-input v-model="form.nodeName" placeholder="例如 本地FreeSWITCH" /></el-form-item>
         <el-form-item label="SIP 域" prop="sipDomain"><el-input v-model="form.sipDomain" placeholder="例如 freeswitch.local" /></el-form-item>
-        <el-form-item label="WSS 地址" prop="wssUrl"><el-input v-model="form.wssUrl" placeholder="例如 wss://freeswitch.local:7443" /></el-form-item>
+        <el-form-item label="WebSocket 地址" prop="wssUrl">
+          <el-input v-model="form.wssUrl" placeholder="开发 ws://节点IP:5066；生产 wss://域名:7443" />
+        </el-form-item>
         <el-form-item label="ESL 主机" prop="eslHost"><el-input v-model="form.eslHost" placeholder="后端可访问的 FreeSWITCH 地址" /></el-form-item>
         <el-form-item label="ESL 端口" prop="eslPort"
           ><el-input-number v-model="form.eslPort" :min="1" :max="65535" controls-position="right"
@@ -64,7 +66,9 @@
         <el-form-item :label="form.id ? '新ESL密码' : 'ESL密码'" prop="eslPassword">
           <el-input v-model="form.eslPassword" type="password" show-password :placeholder="form.id ? '留空表示不修改' : '请输入ESL密码'" />
         </el-form-item>
-        <el-form-item v-if="form.id" label="媒体 Agent"><el-switch v-model="form.agentEnabled" active-text="启用" inactive-text="停用" /></el-form-item>
+        <el-form-item v-if="form.id" label="媒体 Agent"
+          ><el-switch v-model="form.agentEnabled" active-text="启用" inactive-text="停用"
+        /></el-form-item>
         <el-form-item v-if="form.id" label="媒体根目录"><el-input v-model="form.mediaRootPath" /></el-form-item>
         <el-form-item v-if="form.id" label="状态"><el-switch v-model="form.enabled" active-text="启用" inactive-text="停用" /></el-form-item>
       </el-form>
@@ -112,7 +116,14 @@ const data = reactive<PageData<FreeSwitchNodeForm, FreeSwitchNodeQuery>>({
     nodeCode: [{ required: true, pattern: /^[A-Za-z0-9_-]{2,32}$/, message: '请输入合法节点编码', trigger: 'blur' }],
     nodeName: [{ required: true, message: '节点名称不能为空', trigger: 'blur' }],
     sipDomain: [{ required: true, message: 'SIP 域不能为空', trigger: 'blur' }],
-    wssUrl: [{ required: true, pattern: /^wss:\/\/.+$/, message: 'WSS 地址必须以 wss:// 开头', trigger: 'blur' }],
+    wssUrl: [
+      {
+        required: true,
+        pattern: import.meta.env.DEV ? /^wss?:\/\/.+$/ : /^wss:\/\/.+$/,
+        message: import.meta.env.DEV ? '开发环境地址必须以 ws:// 或 wss:// 开头' : '生产环境地址必须以 wss:// 开头',
+        trigger: 'blur'
+      }
+    ],
     eslHost: [{ required: true, message: 'ESL 主机不能为空', trigger: 'blur' }],
     eslPassword: [
       {

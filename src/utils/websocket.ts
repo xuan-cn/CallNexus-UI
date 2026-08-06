@@ -4,6 +4,8 @@ import { useNoticeStore } from '@/store/modules/notice';
 
 let initialized = false;
 const callEventSubscribers = new Set<(event: Record<string, unknown>) => void>();
+const recentCallEvents = new Map<string, number>();
+const callEventDedupWindowMs = 5000;
 
 export const subscribeCallEvents = (subscriber: (event: Record<string, unknown>) => void) => {
   callEventSubscribers.add(subscriber);
@@ -12,6 +14,24 @@ export const subscribeCallEvents = (subscriber: (event: Record<string, unknown>)
 
 export const dispatchCallEvent = (event: Record<string, unknown>, source = 'WebSocket') => {
   if (typeof event.type !== 'string' || !event.type.startsWith('CALL_')) return false;
+  const now = Date.now();
+  const eventKey = [
+    event.type,
+    event.businessCallId,
+    event.legUuid || event.callId,
+    event.occurredAt,
+    event.hangupCause
+  ].join('|');
+  const lastReceivedAt = recentCallEvents.get(eventKey);
+  if (lastReceivedAt && now - lastReceivedAt < callEventDedupWindowMs) {
+    return true;
+  }
+  recentCallEvents.set(eventKey, now);
+  if (recentCallEvents.size > 200) {
+    recentCallEvents.forEach((receivedAt, key) => {
+      if (now - receivedAt >= callEventDedupWindowMs) recentCallEvents.delete(key);
+    });
+  }
   console.debug(`[CallNexus][${source}] 收到通话事件`, event);
   callEventSubscribers.forEach((subscriber) => subscriber(event));
   return true;

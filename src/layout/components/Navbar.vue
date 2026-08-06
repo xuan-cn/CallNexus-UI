@@ -1,8 +1,8 @@
 <template>
   <div class="navbar" :class="'nav' + navType">
     <hamburger id="hamburger-container" :is-active="appStore.sidebar.opened" class="hamburger-container" @toggle-click="toggleSideBar" />
-
-    <breadcrumb v-if="navType == NavTypeEnum.LEFT" id="breadcrumb-container" class="breadcrumb-container" />
+<!--TODO 暂时屏蔽 -->
+<!--    <breadcrumb v-if="navType == NavTypeEnum.LEFT" id="breadcrumb-container" class="breadcrumb-container" />-->
     <top-nav v-if="navType == NavTypeEnum.MIX" id="topmenu-container" class="topmenu-container" />
 
     <template v-if="navType == NavTypeEnum.TOP">
@@ -11,20 +11,21 @@
     </template>
     <div class="right-menu flex align-center">
       <template v-if="appStore.device !== 'mobile'">
-        <el-select
-          v-if="userId === 1 && tenantEnabled"
-          v-model="companyName"
-          class="min-w-244px mr-2"
-          clearable
-          filterable
-          reserve-keyword
-          :placeholder="proxy.$t('navbar.selectTenant')"
-          @change="dynamicTenantEvent"
-          @clear="dynamicClearEvent"
-        >
-          <el-option v-for="item in tenantList" :key="item.tenantId" :label="item.companyName" :value="item.tenantId"> </el-option>
-          <template #prefix><svg-icon icon-class="company" class="el-input__icon input-icon" /></template>
-        </el-select>
+<!--TODO 租户选择功能 暂时屏蔽-->
+<!--        <el-select-->
+<!--          v-if="userId === 1 && tenantEnabled"-->
+<!--          v-model="companyName"-->
+<!--          class="min-w-244px mr-2"-->
+<!--          clearable-->
+<!--          filterable-->
+<!--          reserve-keyword-->
+<!--          :placeholder="proxy.$t('navbar.selectTenant')"-->
+<!--          @change="dynamicTenantEvent"-->
+<!--          @clear="dynamicClearEvent"-->
+<!--        >-->
+<!--          <el-option v-for="item in tenantList" :key="item.tenantId" :label="item.companyName" :value="item.tenantId"> </el-option>-->
+<!--          <template #prefix><svg-icon icon-class="company" class="el-input__icon input-icon" /></template>-->
+<!--        </el-select>-->
 
         <search-menu ref="searchMenuRef" />
         <el-tooltip content="搜索" effect="dark" placement="bottom">
@@ -47,10 +48,10 @@
             </el-popover>
           </div>
         </el-tooltip>
-
-        <el-tooltip :content="proxy.$t('navbar.full')" effect="dark" placement="bottom">
+<!--TODO 暂时屏蔽 -->
+<!--        <el-tooltip :content="proxy.$t('navbar.full')" effect="dark" placement="bottom">
           <screenfull id="screenfull" class="right-menu-item hover-effect" />
-        </el-tooltip>
+        </el-tooltip>-->
 
         <el-tooltip :content="proxy.$t('navbar.language')" effect="dark" placement="bottom">
           <lang-select id="lang-select" class="right-menu-item hover-effect" />

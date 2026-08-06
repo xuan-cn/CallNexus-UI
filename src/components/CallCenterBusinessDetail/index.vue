@@ -34,7 +34,13 @@
             <el-col v-for="field in customFields" :key="field.code" :span="field.layoutSpan">
               <div class="custom-field">
                 <div class="custom-field-label">{{ field.label }}</div>
-                <div class="custom-field-value">{{ field.value }}</div>
+                <file-upload
+                  v-if="field.fieldType === 'FILE' && field.rawValue"
+                  :model-value="field.rawValue"
+                  :is-show-tip="false"
+                  disabled
+                />
+                <div v-else class="custom-field-value">{{ field.value }}</div>
               </div>
             </el-col>
           </el-row>
@@ -247,6 +253,8 @@ const customFields = computed(() => {
     code: field.fieldCode,
     label: field.fieldName,
     value: displayValue(formData[field.fieldCode], field),
+    rawValue: formData[field.fieldCode],
+    fieldType: field.fieldType,
     layoutSpan: field.layoutSpan || 12
   }));
 });

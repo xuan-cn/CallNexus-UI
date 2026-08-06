@@ -1,4 +1,5 @@
 import { SimpleUser, SimpleUserDelegate, SimpleUserOptions, stripVideo } from 'sip.js/lib/platform/web';
+import type { Session } from 'sip.js/lib/api/session';
 import type { SessionDescriptionHandlerModifier } from 'sip.js/lib/api/session-description-handler';
 import type { AgentWebRtcConfigVO } from '@/api/callcenter/agent/types';
 
@@ -193,13 +194,14 @@ export class WebRtcPhone {
     const delegate: SimpleUserDelegate = {
       onCallReceived: () => {
         this.active = true;
-        this.callbacks.onIncoming?.();
+        this.callbacks.onIncoming?.(this.remoteNumber());
       },
       onCallAnswered: () => {
         this.active = true;
         this.callbacks.onAnswered?.();
       },
       onCallHangup: () => {
+        this.releaseRemoteAudio();
         this.active = false;
         this.callbacks.onHangup?.();
       },
@@ -243,10 +245,14 @@ export class WebRtcPhone {
 
   async disconnect() {
     const user = this.simpleUser;
+    const mediaStreams = this.captureMediaStreams(user);
     this.simpleUser = undefined;
     this.active = false;
     this.registered = false;
-    if (!user) return;
+    if (!user) {
+      this.releaseRemoteAudio();
+      return;
+    }
     try {
       if (user.isConnected()) {
         await user.unregister();
@@ -257,6 +263,8 @@ export class WebRtcPhone {
     if (user.isConnected()) {
       await user.disconnect();
     }
+    this.stopMediaStreams(mediaStreams);
+    this.releaseRemoteAudio();
   }
 
   async call(number: string) {
@@ -279,8 +287,16 @@ export class WebRtcPhone {
 
   async hangup() {
     const user = this.requireUser();
-    await user.hangup();
-    this.active = false;
+    const mediaStreams = this.captureMediaStreams(user);
+    try {
+      if (this.active) {
+        await user.hangup();
+      }
+    } finally {
+      this.stopMediaStreams(mediaStreams);
+      this.releaseRemoteAudio();
+      this.active = false;
+    }
   }
 
   async decline() {
@@ -295,6 +311,12 @@ export class WebRtcPhone {
 
   async unhold() {
     await this.requireUser().unhold();
+  }
+
+  private remoteNumber() {
+    const session = (this.simpleUser as (SimpleUser & { session?: Session }) | undefined)?.session;
+    const identity = session?.assertedIdentity || session?.remoteIdentity;
+    return identity?.uri?.user || identity?.displayName;
   }
 
   private sameConfig(config: AgentWebRtcConfigVO) {
@@ -319,6 +341,24 @@ export class WebRtcPhone {
       throw new Error('WebRTC 注册配置不存在');
     }
     return this.config;
+  }
+
+  private captureMediaStreams(user?: SimpleUser) {
+    return [user?.localMediaStream, user?.remoteMediaStream].filter((stream): stream is MediaStream => Boolean(stream));
+  }
+
+  private stopMediaStreams(streams: MediaStream[]) {
+    streams.forEach((stream) => stream.getTracks().forEach((track) => track.stop()));
+  }
+
+  private releaseRemoteAudio() {
+    if (!this.remoteAudio) return;
+    const stream = this.remoteAudio.srcObject;
+    if (stream instanceof MediaStream) {
+      stream.getTracks().forEach((track) => track.stop());
+    }
+    this.remoteAudio.pause();
+    this.remoteAudio.srcObject = null;
   }
 
   private async warmUpMicrophone() {

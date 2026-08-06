@@ -50,6 +50,12 @@
                 :placeholder="field.placeholder"
               />
               <el-input-number v-else-if="field.fieldType === 'NUMBER'" v-model="formData[field.fieldCode]" />
+              <file-upload
+                v-else-if="field.fieldType === 'FILE'"
+                v-model="formData[field.fieldCode]"
+                :limit="5"
+                :file-size="20"
+              />
               <el-date-picker
                 v-else-if="field.fieldType === 'DATE' || field.fieldType === 'DATETIME'"
                 v-model="formData[field.fieldCode]"

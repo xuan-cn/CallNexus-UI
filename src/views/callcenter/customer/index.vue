@@ -20,23 +20,50 @@
       </div>
       <el-table v-loading="loading" :data="rows">
         <el-table-column label="客户姓名" min-width="150">
-          <template #default="{ row }">{{ row.customerName || '未命名客户' }}</template>
-        </el-table-column>
-        <el-table-column label="客户电话" min-width="220">
           <template #default="{ row }">
-            <div class="customer-phone-summary" @click="showDetail(row)">
-              <span class="primary-phone" :class="{ 'is-disabled': primaryPhone(row)?.enabled === false }">
-                {{ primaryPhone(row)?.phoneNumber || '-' }}
-              </span>
-              <el-tag v-if="primaryPhone(row)" size="small" type="primary" effect="plain">主号</el-tag>
-              <el-popover v-if="customerPhones(row).length > 1" placement="bottom-start" :width="300" trigger="hover">
+            <el-button class="customer-detail-link" link type="primary" @click="showDetail(row)">
+              {{ row.customerName || '未命名客户' }}
+            </el-button>
+          </template>
+        </el-table-column>
+        <el-table-column label="客户电话" min-width="260">
+          <template #default="{ row }">
+            <div class="customer-phone-summary">
+              <template v-if="primaryPhone(row)">
+                <el-button
+                  v-if="primaryPhone(row)?.enabled"
+                  class="phone-dial-link"
+                  link
+                  type="primary"
+                  title="拨打主号码"
+                  @click="requestDialPhone(row, primaryPhone(row)!)"
+                >
+                  <el-icon><Phone /></el-icon>
+                  {{ primaryPhone(row)?.phoneNumber }}
+                </el-button>
+                <span v-else class="primary-phone is-disabled">{{ primaryPhone(row)?.phoneNumber }}</span>
+                <el-tag size="small" type="primary" effect="plain">主号</el-tag>
+              </template>
+              <span v-else>-</span>
+              <el-popover v-if="customerPhones(row).length > 1" placement="bottom-start" :width="360" trigger="click">
                 <template #reference>
-                  <el-tag class="more-phone-count" size="small" type="info" effect="plain">+{{ customerPhones(row).length - 1 }}</el-tag>
+                  <el-button class="more-phone-count" link type="primary">全部 {{ customerPhones(row).length }} 个号码</el-button>
                 </template>
-                <div class="phone-popover-title">全部号码（{{ customerPhones(row).length }}）</div>
+                <div class="phone-popover-title">选择要拨打的号码</div>
                 <div class="phone-popover-list">
-                  <div v-for="phone in customerPhones(row)" :key="phone.phoneNumber" class="phone-popover-item">
-                    <span :class="{ 'is-disabled': phone.enabled === false }">{{ phone.phoneNumber }}</span>
+                  <div v-for="phone in customerPhones(row)" :key="phone.id || phone.phoneNumber" class="phone-popover-item">
+                    <el-button
+                      v-if="phone.enabled"
+                      class="phone-dial-link"
+                      link
+                      type="primary"
+                      title="点击拨打"
+                      @click="requestDialPhone(row, phone)"
+                    >
+                      <el-icon><Phone /></el-icon>
+                      {{ phone.phoneNumber }}
+                    </el-button>
+                    <span v-else class="is-disabled">{{ phone.phoneNumber }}</span>
                     <div class="phone-popover-tags">
                       <el-tag v-if="phone.primaryFlag" size="small" type="primary" effect="plain">主号</el-tag>
                       <el-tag v-if="phone.phoneLabel" size="small" type="info" effect="plain">{{ phone.phoneLabel }}</el-tag>
@@ -120,9 +147,12 @@ import {
 } from '@/api/callcenter/customer';
 import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/index.vue';
 import DynamicBusinessFormDialog from '@/layout/components/DynamicBusinessFormDialog.vue';
-import type { UploadFile, UploadUserFile } from 'element-plus';
+import { ElMessageBox, type UploadFile, type UploadUserFile } from 'element-plus';
+import { Phone } from '@element-plus/icons-vue';
+import { useAgentDialBus } from '@/composables/useAgentDial';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
+const agentDialBus = useAgentDialBus();
 const loading = ref(false);
 const rows = ref<CustomerVO[]>([]);
 const total = ref(0);
@@ -172,6 +202,23 @@ const load = async () => {
 const showDetail = (row: CustomerVO) => {
   detailId.value = row.id;
   detailVisible.value = true;
+};
+const requestDialPhone = async (customer: CustomerVO, phone: CustomerPhoneVO) => {
+  if (!phone.enabled) return;
+  try {
+    await ElMessageBox.confirm(`确认拨打 ${phone.phoneNumber}？`, `拨打${customer.customerName ? ` ${customer.customerName}` : '客户'}电话`, {
+      type: 'info',
+      confirmButtonText: '立即拨打',
+      cancelButtonText: '取消'
+    });
+  } catch {
+    return;
+  }
+  agentDialBus.emit({
+    destination: phone.phoneNumber,
+    customerId: customer.id,
+    source: 'CUSTOMER_LIST'
+  });
 };
 const handleCreated = async () => {
   query.pageNum = 1;
@@ -227,7 +274,21 @@ onMounted(load);
   align-items: center;
   gap: 6px;
   min-width: 0;
-  cursor: pointer;
+  white-space: nowrap;
+}
+
+.customer-detail-link,
+.phone-dial-link {
+  height: auto;
+  padding: 0;
+}
+
+.customer-detail-link {
+  font-weight: 500;
+}
+
+.phone-dial-link {
+  gap: 4px;
 }
 
 .primary-phone {
@@ -244,6 +305,9 @@ onMounted(load);
 
 .more-phone-count {
   flex: none;
+  height: auto;
+  padding: 0 2px;
+  font-size: 12px;
 }
 
 .phone-popover-title {
@@ -262,9 +326,14 @@ onMounted(load);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 30px;
-  padding: 3px 4px;
+  min-height: 34px;
+  padding: 5px 4px;
   gap: 12px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.phone-popover-item:last-child {
+  border-bottom: 0;
 }
 
 .phone-popover-tags {

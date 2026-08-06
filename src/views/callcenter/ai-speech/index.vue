@@ -134,41 +134,131 @@
 
     <el-drawer v-model="providerDrawer.visible" :title="providerForm.id ? '修改语音服务商' : '新增语音服务商'" size="1040px">
       <el-form ref="providerFormRef" class="speech-provider-form" :model="providerForm" :rules="providerRules" label-width="112px">
-        <el-alert
-          class="mb-3"
-          type="info"
-          show-icon
-          :closable="false"
-          title="常用项优先配置；厂商地址、模型参数和扩展 JSON 放在高级配置里。"
-        />
+        <el-alert class="mb-3" type="info" show-icon :closable="false" title="选择产品后只填写对应凭证即可，接口地址和协议参数已使用系统模板。" />
 
         <section class="provider-section provider-summary">
           <div class="section-title">
             <div>
-              <h3>基础信息</h3>
-              <p>一条语音服务商可以同时承担 TTS、录音 ASR、实时 ASR，多厂商后续仍按这里统一维护。</p>
+              <h3>选择语音产品</h3>
+              <p>千问语音属于阿里云百炼；不同厂商使用独立适配器，业务侧仍使用统一的 TTS / ASR 能力。</p>
             </div>
             <el-switch v-model="providerForm.enabled" active-text="启用" inactive-text="停用" />
           </div>
+          <el-form-item label="语音产品" prop="providerType">
+            <el-radio-group
+              v-model="providerForm.providerType"
+              class="provider-product-grid"
+              :disabled="!!providerForm.id"
+              @change="handleProviderTypeChange"
+            >
+              <el-radio-button value="ALIYUN_DASHSCOPE">
+                <strong>阿里云百炼</strong>
+                <small>千问 TTS / ASR / 实时语音</small>
+              </el-radio-button>
+              <el-radio-button value="ALIYUN_NLS">
+                <strong>阿里云 NLS</strong>
+                <small>智能语音交互 TTS / ASR</small>
+              </el-radio-button>
+              <el-radio-button value="OPENAI_COMPATIBLE">
+                <strong>OpenAI 兼容</strong>
+                <small>标准 Audio API</small>
+              </el-radio-button>
+              <el-radio-button value="CUSTOM_HTTP">
+                <strong>自定义服务</strong>
+                <small>本地或第三方 HTTP</small>
+              </el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+          <div class="planned-provider-row">
+            <span>待接入：</span>
+            <el-tag type="info">火山引擎</el-tag>
+            <el-tag type="info">科大讯飞</el-tag>
+            <span>接入适配器后会自动出现对应的简易凭证表单。</span>
+          </div>
           <el-row :gutter="16">
-            <el-col :span="8">
-              <el-form-item label="服务商编码" prop="providerCode">
-                <el-input v-model="providerForm.providerCode" placeholder="如 ALIYUN_DASHSCOPE" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
+            <el-col :span="12">
               <el-form-item label="服务商名称" prop="providerName">
                 <el-input v-model="providerForm.providerName" placeholder="如 阿里云百炼" />
               </el-form-item>
             </el-col>
-            <el-col :span="8">
-              <el-form-item label="服务商类型" prop="providerType">
-                <el-select v-model="providerForm.providerType" style="width: 100%" @change="handleProviderTypeChange">
-                  <el-option label="通用HTTP" value="CUSTOM_HTTP" />
-                  <el-option label="OpenAI兼容" value="OPENAI_COMPATIBLE" />
-                  <el-option label="阿里云百炼 DashScope" value="ALIYUN_DASHSCOPE" />
-                  <el-option label="阿里云智能语音 NLS" value="ALIYUN_NLS" />
+            <el-col :span="12">
+              <el-form-item label="服务商编码" prop="providerCode">
+                <el-input v-model="providerForm.providerCode" :disabled="!!providerForm.id" placeholder="系统自动生成，也可修改" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </section>
+
+        <section class="provider-section credential-section">
+          <div class="section-title">
+            <div>
+              <h3>账号凭证</h3>
+              <p>{{ providerCredentialHint }}</p>
+            </div>
+            <el-tag v-if="editingAuthConfigured" type="success">密钥已配置</el-tag>
+          </div>
+          <el-row v-if="providerForm.providerType === 'ALIYUN_NLS'" :gutter="16">
+            <el-col :span="12">
+              <el-form-item label="AppKey" required>
+                <el-input v-model="simpleCredential.appKey" placeholder="智能语音交互项目 AppKey" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="区域">
+                <el-select v-model="simpleCredential.region" style="width: 100%">
+                  <el-option label="上海 cn-shanghai" value="cn-shanghai" />
+                  <el-option label="北京 cn-beijing" value="cn-beijing" />
+                  <el-option label="深圳 cn-shenzhen" value="cn-shenzhen" />
                 </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="AccessKeyId" required>
+                <el-input v-model="simpleCredential.accessKeyId" placeholder="RAM 子用户 AccessKey ID" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="AccessKeySecret" :required="!editingAuthConfigured">
+                <el-input
+                  v-model="simpleCredential.secret"
+                  type="password"
+                  show-password
+                  :placeholder="editingAuthConfigured ? '已配置，留空表示不修改' : 'RAM 子用户 AccessKey Secret'"
+                />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row v-else-if="providerForm.providerType === 'ALIYUN_DASHSCOPE'" :gutter="16">
+            <el-col :span="12">
+              <el-form-item label="API Key" :required="!editingAuthConfigured">
+                <el-input
+                  v-model="simpleCredential.secret"
+                  type="password"
+                  show-password
+                  :placeholder="editingAuthConfigured ? '已配置，留空表示不修改' : '百炼 DASHSCOPE_API_KEY'"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="WorkspaceId">
+                <el-input v-model="simpleCredential.workspaceId" placeholder="业务空间调用时填写，公共模式可留空" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row v-else :gutter="16">
+            <el-col :span="12">
+              <el-form-item label="API Key" :required="providerForm.authType !== 'NONE' && !editingAuthConfigured">
+                <el-input
+                  v-model="simpleCredential.secret"
+                  type="password"
+                  show-password
+                  :placeholder="editingAuthConfigured ? '已配置，留空表示不修改' : '服务访问密钥'"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col v-if="providerForm.providerType === 'CUSTOM_HTTP'" :span="12">
+              <el-form-item label="服务地址">
+                <el-input v-model="providerForm.endpointUrl" placeholder="https:// 或 http:// 服务地址" />
               </el-form-item>
             </el-col>
           </el-row>
@@ -217,56 +307,49 @@
           </div>
         </section>
 
-        <section class="provider-section">
-          <div class="section-title">
-            <div>
-              <h3>常用参数</h3>
-              <p>日常最常改的是音色、格式、采样率和 ASR 语言，地址和 JSON 通常不需要频繁调整。</p>
-            </div>
-          </div>
-          <el-row :gutter="16">
-            <el-col :span="8">
-              <el-form-item label="默认音色">
-                <el-input v-model="providerForm.defaultVoice" placeholder="如 Cherry、longxiaochun、alloy" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="TTS格式">
-                <el-select v-model="providerForm.defaultFormat" style="width: 100%">
-                  <el-option label="wav" value="wav" />
-                  <el-option label="mp3" value="mp3" />
-                  <el-option label="pcm" value="pcm" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="TTS采样率">
-                <el-input-number v-model="providerForm.defaultSampleRate" :min="8000" :max="48000" :step="1000" style="width: 100%" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="ASR语言">
-                <el-input v-model="providerForm.asrLanguage" placeholder="zh-CN" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="ASR格式">
-                <el-select v-model="providerForm.asrFormat" style="width: 100%">
-                  <el-option label="wav" value="wav" />
-                  <el-option label="pcm" value="pcm" />
-                  <el-option label="opus" value="opus" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="ASR采样率">
-                <el-input-number v-model="providerForm.asrSampleRate" :min="8000" :max="48000" :step="1000" style="width: 100%" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-        </section>
-
-        <el-collapse class="provider-advanced" :model-value="['auth', 'tts']">
+        <el-collapse v-model="advancedSections" class="provider-advanced">
+          <el-collapse-item title="高级配置（通常无需修改）" name="common">
+            <el-row :gutter="16">
+              <el-col :span="8">
+                <el-form-item label="默认音色">
+                  <el-input v-model="providerForm.defaultVoice" placeholder="如 Cherry、xiaoyun、alloy" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="TTS格式">
+                  <el-select v-model="providerForm.defaultFormat" style="width: 100%">
+                    <el-option label="wav" value="wav" />
+                    <el-option label="mp3" value="mp3" />
+                    <el-option label="pcm" value="pcm" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="TTS采样率">
+                  <el-input-number v-model="providerForm.defaultSampleRate" :min="8000" :max="48000" :step="1000" style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="ASR语言">
+                  <el-input v-model="providerForm.asrLanguage" placeholder="zh-CN" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="ASR格式">
+                  <el-select v-model="providerForm.asrFormat" style="width: 100%">
+                    <el-option label="wav" value="wav" />
+                    <el-option label="pcm" value="pcm" />
+                    <el-option label="opus" value="opus" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="ASR采样率">
+                  <el-input-number v-model="providerForm.asrSampleRate" :min="8000" :max="48000" :step="1000" style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-collapse-item>
           <el-collapse-item title="认证配置" name="auth">
             <el-row :gutter="16">
               <el-col :span="8">
@@ -285,7 +368,7 @@
               </el-col>
               <el-col :span="8">
                 <el-form-item label="Token/API Key">
-                  <el-input v-model="providerForm.authToken" type="password" show-password placeholder="修改时留空表示不变" />
+                  <el-input v-model="simpleCredential.secret" type="password" show-password placeholder="请在上方账号凭证中填写" />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
@@ -368,7 +451,12 @@
               </el-col>
               <el-col :span="24">
                 <el-form-item label="ASR扩展参数">
-                  <el-input v-model="providerForm.asrOptionsJson" type="textarea" :rows="3" placeholder='{"model":"qwen3-asr-flash","enable_itn":false}' />
+                  <el-input
+                    v-model="providerForm.asrOptionsJson"
+                    type="textarea"
+                    :rows="3"
+                    placeholder='{"model":"qwen3-asr-flash","enable_itn":false}'
+                  />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -376,7 +464,12 @@
 
           <el-collapse-item title="备注与厂商扩展JSON" name="remark">
             <el-form-item label="扩展JSON">
-              <el-input v-model="providerForm.remark" type="textarea" :rows="4" placeholder='百炼可填 {"workspaceId":"xxx"}；其他厂商按适配器要求填写。' />
+              <el-input
+                v-model="providerForm.remark"
+                type="textarea"
+                :rows="4"
+                placeholder='百炼可填 {"workspaceId":"xxx"}；其他厂商按适配器要求填写。'
+              />
             </el-form-item>
           </el-collapse-item>
         </el-collapse>
@@ -406,9 +499,15 @@
       <el-form :model="ttsTestForm" label-width="90px">
         <el-form-item label="测试文本"><el-input v-model="ttsTestForm.text" type="textarea" :rows="3" /></el-form-item>
         <el-row :gutter="12">
-          <el-col :span="8"><el-form-item label="音色"><el-input v-model="ttsTestForm.voice" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="格式"><el-input v-model="ttsTestForm.format" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="采样率"><el-input-number v-model="ttsTestForm.sampleRate" :min="8000" :max="48000" /></el-form-item></el-col>
+          <el-col :span="8"
+            ><el-form-item label="音色"><el-input v-model="ttsTestForm.voice" /></el-form-item
+          ></el-col>
+          <el-col :span="8"
+            ><el-form-item label="格式"><el-input v-model="ttsTestForm.format" /></el-form-item
+          ></el-col>
+          <el-col :span="8"
+            ><el-form-item label="采样率"><el-input-number v-model="ttsTestForm.sampleRate" :min="8000" :max="48000" /></el-form-item
+          ></el-col>
         </el-row>
       </el-form>
       <el-alert v-if="ttsTestResult?.playbackUrl" type="success" show-icon :closable="false" class="mb-2">
@@ -449,7 +548,8 @@
         <el-button @click="asrTestDialog.visible = false">关闭</el-button>
         <el-button type="primary" :loading="asrTesting" @click="submitAsrTest">开始识别</el-button>
       </template>
-    </el-dialog>  </div>
+    </el-dialog>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -502,6 +602,27 @@ const asrTestDialog = reactive({ visible: false });
 const taskQuery = ref<AiSpeechTaskQuery>({ pageNum: 1, pageSize: 10 });
 
 const providerForm = ref<AiSpeechProviderForm>(defaultProviderForm());
+const advancedSections = ref<string[]>([]);
+const editingAuthConfigured = ref(false);
+const simpleCredential = reactive({
+  appKey: '',
+  accessKeyId: '',
+  secret: '',
+  region: 'cn-shanghai',
+  workspaceId: ''
+});
+const providerCredentialHint = computed(() => {
+  if (providerForm.value.providerType === 'ALIYUN_NLS') {
+    return '只需填写智能语音交互项目 AppKey 和 RAM 子用户 AccessKey，服务地址由区域自动生成。';
+  }
+  if (providerForm.value.providerType === 'ALIYUN_DASHSCOPE') {
+    return '千问语音使用百炼 API Key；仅使用业务空间专属地址时才需要 WorkspaceId。';
+  }
+  if (providerForm.value.providerType === 'OPENAI_COMPATIBLE') {
+    return '填写兼容服务的 API Key，标准接口地址已预置，可在高级配置中覆盖。';
+  }
+  return '填写自建或第三方服务地址和访问密钥，协议细节可在高级配置中覆盖。';
+});
 const templateForm = ref<AiSpeechTemplateForm>(defaultTemplateForm());
 const ttsTestForm = ref<TtsTestForm>({ text: '工号1001为您服务', format: 'wav', sampleRate: 8000 });
 const ttsTestResult = ref<TtsTestVO>();
@@ -537,7 +658,7 @@ function defaultProviderForm(): AiSpeechProviderForm {
     defaultStreamingTts: false,
     defaultRecordingAsr: false,
     defaultStreamingAsr: false,
-    endpointUrl: 'https://{workspaceId}.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
+    endpointUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/audio/speech',
     httpMethod: 'POST',
     authType: 'BEARER',
     authHeaderName: '',
@@ -548,7 +669,7 @@ function defaultProviderForm(): AiSpeechProviderForm {
     timeoutSeconds: 60,
     streamingTtsEndpointUrl: 'wss://dashscope.aliyuncs.com/api-ws/v1/realtime',
     streamingTtsOptionsJson: '{"model":"qwen3-tts-flash-realtime","speech_rate":1.0,"volume":50}',
-    recordingAsrEndpointUrl: 'https://{workspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions',
+    recordingAsrEndpointUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
     streamingAsrEndpointUrl: '',
     asrLanguage: 'zh-CN',
     asrFormat: 'wav',
@@ -612,9 +733,61 @@ const loadTasks = async () => {
 
 const openProviderDrawer = (row?: AiSpeechProviderVO) => {
   providerForm.value = row ? { ...defaultProviderForm(), ...row, authToken: '' } : defaultProviderForm();
+  editingAuthConfigured.value = Boolean(row?.authConfigured);
+  advancedSections.value = [];
+  hydrateSimpleCredential(row);
+  if (!row) {
+    handleProviderTypeChange(providerForm.value.providerType);
+  }
   providerDrawer.visible = true;
 };
+
+const parseRemark = (remark?: string): Record<string, unknown> => {
+  if (!remark?.trim()) {
+    return {};
+  }
+  try {
+    const value = JSON.parse(remark);
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  } catch {
+    return {};
+  }
+};
+
+const hydrateSimpleCredential = (row?: AiSpeechProviderVO) => {
+  const config = parseRemark(row?.remark);
+  simpleCredential.appKey = String(config.appKey || config.app_key || '');
+  simpleCredential.accessKeyId = row?.authHeaderName || '';
+  simpleCredential.secret = '';
+  simpleCredential.region = String(config.region || 'cn-shanghai');
+  simpleCredential.workspaceId = String(config.workspaceId || config.workspace_id || '');
+};
+
+const setProductIdentity = (type: string) => {
+  if (providerForm.value.id) {
+    return;
+  }
+  const identity: Record<string, { code: string; name: string }> = {
+    ALIYUN_DASHSCOPE: { code: 'ALIYUN_DASHSCOPE', name: '阿里云百炼' },
+    ALIYUN_NLS: { code: 'ALIYUN_NLS', name: '阿里云 NLS' },
+    OPENAI_COMPATIBLE: { code: 'OPENAI_COMPATIBLE', name: 'OpenAI 兼容语音' },
+    CUSTOM_HTTP: { code: 'CUSTOM_HTTP', name: '自定义语音服务' }
+  };
+  const selected = identity[type];
+  if (selected) {
+    providerForm.value.providerCode = selected.code;
+    providerForm.value.providerName = selected.name;
+  }
+};
+
 const handleProviderTypeChange = (type: string) => {
+  setProductIdentity(type);
+  editingAuthConfigured.value = false;
+  simpleCredential.appKey = '';
+  simpleCredential.accessKeyId = '';
+  simpleCredential.secret = '';
+  simpleCredential.region = 'cn-shanghai';
+  simpleCredential.workspaceId = '';
   if (type === 'OPENAI_COMPATIBLE') {
     providerForm.value = {
       ...providerForm.value,
@@ -642,7 +815,7 @@ const handleProviderTypeChange = (type: string) => {
     providerForm.value = {
       ...providerForm.value,
       authType: 'BEARER',
-      endpointUrl: 'https://{workspaceId}.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
+      endpointUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/audio/speech',
       ttsEnabled: true,
       streamingTtsEnabled: true,
       recordingAsrEnabled: true,
@@ -652,7 +825,7 @@ const handleProviderTypeChange = (type: string) => {
       defaultSampleRate: 8000,
       streamingTtsEndpointUrl: 'wss://dashscope.aliyuncs.com/api-ws/v1/realtime',
       streamingTtsOptionsJson: '{"model":"qwen3-tts-flash-realtime","speech_rate":1.0,"volume":50}',
-      recordingAsrEndpointUrl: 'https://{workspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions',
+      recordingAsrEndpointUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
       streamingAsrEndpointUrl: '',
       asrOptionsJson: '{"model":"qwen3-asr-flash","enable_itn":false}'
     };
@@ -661,19 +834,81 @@ const handleProviderTypeChange = (type: string) => {
     providerForm.value = {
       ...providerForm.value,
       authType: 'NONE',
-      ttsEnabled: false,
+      ttsEnabled: true,
       streamingTtsEnabled: false,
       recordingAsrEnabled: true,
       streamingAsrEnabled: true,
       endpointUrl: '',
+      defaultVoice: 'xiaoyun',
+      defaultFormat: 'wav',
+      defaultSampleRate: 8000,
       recordingAsrEndpointUrl: 'wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1',
       streamingAsrEndpointUrl: 'wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1',
       asrOptionsJson: '{}'
     };
   }
+  if (type === 'CUSTOM_HTTP') {
+    providerForm.value = {
+      ...providerForm.value,
+      authType: 'BEARER',
+      ttsEnabled: true,
+      streamingTtsEnabled: false,
+      recordingAsrEnabled: false,
+      streamingAsrEnabled: false,
+      endpointUrl: '',
+      streamingTtsEndpointUrl: '',
+      recordingAsrEndpointUrl: '',
+      streamingAsrEndpointUrl: ''
+    };
+  }
 };
+
+const applySimpleCredential = () => {
+  const type = providerForm.value.providerType;
+  const config = parseRemark(providerForm.value.remark);
+  if (type === 'ALIYUN_NLS') {
+    if (!simpleCredential.appKey.trim()) {
+      throw new Error('请输入阿里云 NLS AppKey');
+    }
+    if (!simpleCredential.accessKeyId.trim()) {
+      throw new Error('请输入阿里云 NLS AccessKeyId');
+    }
+    if (!editingAuthConfigured.value && !simpleCredential.secret.trim()) {
+      throw new Error('请输入阿里云 NLS AccessKeySecret');
+    }
+    config.appKey = simpleCredential.appKey.trim();
+    config.region = simpleCredential.region;
+    delete config.app_key;
+    providerForm.value.authHeaderName = simpleCredential.accessKeyId.trim();
+    providerForm.value.recordingAsrEndpointUrl = `wss://nls-gateway-${simpleCredential.region}.aliyuncs.com/ws/v1`;
+    providerForm.value.streamingAsrEndpointUrl = providerForm.value.recordingAsrEndpointUrl;
+  } else if (type === 'ALIYUN_DASHSCOPE') {
+    if (!editingAuthConfigured.value && !simpleCredential.secret.trim()) {
+      throw new Error('请输入阿里云百炼 API Key');
+    }
+    if (simpleCredential.workspaceId.trim()) {
+      config.workspaceId = simpleCredential.workspaceId.trim();
+    } else {
+      delete config.workspaceId;
+      delete config.workspace_id;
+    }
+  } else if (providerForm.value.authType !== 'NONE' && !editingAuthConfigured.value && !simpleCredential.secret.trim()) {
+    throw new Error('请输入 API Key');
+  }
+  if (simpleCredential.secret.trim()) {
+    providerForm.value.authToken = simpleCredential.secret.trim();
+  }
+  providerForm.value.remark = Object.keys(config).length ? JSON.stringify(config) : '';
+};
+
 const submitProvider = async () => {
   await providerFormRef.value?.validate();
+  try {
+    applySimpleCredential();
+  } catch (error) {
+    proxy?.$modal.msgError(error instanceof Error ? error.message : '请检查账号凭证');
+    return;
+  }
   providerSubmitting.value = true;
   try {
     if (providerForm.value.id) {
@@ -681,7 +916,7 @@ const submitProvider = async () => {
     } else {
       await createSpeechProvider(providerForm.value);
     }
-    proxy?.$modal.msgSuccess('淇濆瓨鎴愬姛');
+    proxy?.$modal.msgSuccess('保存成功');
     providerDrawer.visible = false;
     loadProviders();
   } finally {
@@ -689,9 +924,9 @@ const submitProvider = async () => {
   }
 };
 const removeProvider = async (row: AiSpeechProviderVO) => {
-  await proxy?.$modal.confirm(`纭鍒犻櫎璇煶鏈嶅姟鍟嗏€?{row.providerName}鈥濓紵`);
+  await proxy?.$modal.confirm(`确认删除语音服务商“${row.providerName}”？`);
   await deleteSpeechProvider(row.id);
-  proxy?.$modal.msgSuccess('鍒犻櫎鎴愬姛');
+  proxy?.$modal.msgSuccess('删除成功');
   loadProviders();
 };
 
@@ -868,6 +1103,56 @@ onMounted(reloadAll);
 .provider-advanced :deep(.el-collapse-item__content) {
   padding-bottom: 4px;
 }
+.provider-product-grid {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.provider-product-grid :deep(.el-radio-button) {
+  width: 100%;
+}
+.provider-product-grid :deep(.el-radio-button__inner) {
+  display: flex;
+  width: 100%;
+  min-height: 72px;
+  padding: 12px 14px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 10px;
+  box-shadow: none;
+  text-align: left;
+}
+.provider-product-grid :deep(.el-radio-button:first-child .el-radio-button__inner),
+.provider-product-grid :deep(.el-radio-button:last-child .el-radio-button__inner) {
+  border-radius: 10px;
+}
+.provider-product-grid :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  box-shadow: none;
+}
+.provider-product-grid small {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  font-weight: 400;
+}
+.planned-provider-row {
+  display: flex;
+  margin: -2px 0 18px 112px;
+  align-items: center;
+  gap: 8px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.credential-section {
+  border-color: var(--el-color-primary-light-7);
+  background: var(--el-color-primary-light-9);
+}
 .default-purpose-tags {
   display: inline-flex;
   max-width: 100%;
@@ -883,6 +1168,3 @@ onMounted(reloadAll);
   line-height: 1.7;
 }
 </style>
-
-
-

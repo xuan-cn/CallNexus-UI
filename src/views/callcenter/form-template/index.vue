@@ -24,7 +24,13 @@
       </el-table>
     </el-card>
 
-    <el-dialog v-model="visible" :title="form.id ? '编辑模板' : '新增模板'" width="1180px" append-to-body>
+    <el-drawer
+      v-model="visible"
+      :title="form.id ? '编辑模板' : '新增模板'"
+      size="min(1280px, 92vw)"
+      class="form-template-drawer"
+      append-to-body
+    >
       <el-form label-width="85px">
         <el-row :gutter="14">
           <el-col :span="7"
@@ -61,9 +67,31 @@
         <el-col :span="15">
           <div class="section-heading"><strong>字段配置</strong><el-button plain type="primary" @click="addField">添加字段</el-button></div>
           <el-empty v-if="!form.fields.length" description="点击添加字段开始配置" />
-          <div v-for="(field, fieldIndex) in form.fields" :key="field.localId" class="field-card">
+          <div
+            v-for="(field, fieldIndex) in form.fields"
+            :key="field.localId"
+            class="field-card"
+            :class="{
+              'is-dragging': draggedFieldIndex === fieldIndex,
+              'is-drag-over': dragOverFieldIndex === fieldIndex && draggedFieldIndex !== fieldIndex
+            }"
+            @dragover.prevent="handleFieldDragOver(fieldIndex)"
+            @drop.prevent="handleFieldDrop(fieldIndex)"
+          >
             <div class="field-card-heading">
-              <strong>{{ field.fieldName || `字段 ${fieldIndex + 1}` }}</strong>
+              <div class="field-card-title">
+                <span
+                  class="field-drag-handle"
+                  draggable="true"
+                  title="拖拽调整字段顺序"
+                  @dragstart.stop="handleFieldDragStart(fieldIndex, $event)"
+                  @dragend.stop="handleFieldDragEnd"
+                >
+                  <el-icon><Rank /></el-icon>
+                </span>
+                <strong>{{ field.fieldName || `字段 ${fieldIndex + 1}` }}</strong>
+                <el-tag size="small" type="info">第 {{ fieldIndex + 1 }} 项</el-tag>
+              </div>
               <el-button link type="danger" @click="form.fields.splice(fieldIndex, 1)">删除字段</el-button>
             </div>
             <el-row :gutter="10">
@@ -110,6 +138,7 @@
                     <el-input v-if="field.fieldType === 'INPUT'" :placeholder="field.placeholder || '请输入'" />
                     <el-input v-else-if="field.fieldType === 'TEXTAREA'" type="textarea" placeholder="请输入" />
                     <el-input-number v-else-if="field.fieldType === 'NUMBER'" />
+                    <el-button v-else-if="field.fieldType === 'FILE'" disabled>选择文件</el-button>
                     <el-date-picker v-else-if="field.fieldType === 'DATE'" type="date" placeholder="选择日期" style="width: 100%" />
                     <el-date-picker v-else-if="field.fieldType === 'DATETIME'" type="datetime" placeholder="选择日期时间" style="width: 100%" />
                     <el-radio-group v-else-if="field.fieldType === 'RADIO'">
@@ -131,7 +160,7 @@
       </el-row>
 
       <template #footer><el-button @click="visible = false">取消</el-button><el-button type="primary" @click="submit">保存</el-button></template>
-    </el-dialog>
+    </el-drawer>
   </div>
 </template>
 
@@ -152,6 +181,7 @@ const templates = ref<FormTemplate[]>([]);
 const workflowOptions = ref<FlowDefinitionVo[]>([]);
 const optionTypes: FormFieldType[] = ['RADIO', 'CHECKBOX', 'SELECT', 'MULTI_SELECT'];
 const fieldTypes: Array<{ label: string; value: FormFieldType }> = [
+  { label: '附件', value: 'FILE' },
   { label: '输入框', value: 'INPUT' },
   { label: '文本框', value: 'TEXTAREA' },
   { label: '单选框', value: 'RADIO' },
@@ -172,6 +202,8 @@ const emptyForm = (): EditableTemplate => ({
   fields: []
 });
 const form = ref<EditableTemplate>(emptyForm());
+const draggedFieldIndex = ref<number>();
+const dragOverFieldIndex = ref<number>();
 const load = async () => {
   loading.value = true;
   try {
@@ -199,6 +231,31 @@ const openEdit = (template: FormTemplate) => {
 const addField = () =>
   form.value.fields.push({ localId: localId(), fieldCode: '', fieldName: '', fieldType: 'INPUT', required: false, layoutSpan: 12, options: [] });
 const addOption = (field: EditableField) => field.options.push({ localId: localId(), label: '', value: '', sortOrder: field.options.length });
+const handleFieldDragStart = (fieldIndex: number, event: DragEvent) => {
+  draggedFieldIndex.value = fieldIndex;
+  dragOverFieldIndex.value = fieldIndex;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(fieldIndex));
+  }
+};
+const handleFieldDragOver = (fieldIndex: number) => {
+  if (draggedFieldIndex.value !== undefined) dragOverFieldIndex.value = fieldIndex;
+};
+const handleFieldDrop = (fieldIndex: number) => {
+  const sourceIndex = draggedFieldIndex.value;
+  if (sourceIndex === undefined || sourceIndex === fieldIndex) {
+    handleFieldDragEnd();
+    return;
+  }
+  const [field] = form.value.fields.splice(sourceIndex, 1);
+  form.value.fields.splice(fieldIndex, 0, field);
+  handleFieldDragEnd();
+};
+const handleFieldDragEnd = () => {
+  draggedFieldIndex.value = undefined;
+  dragOverFieldIndex.value = undefined;
+};
 const handleFieldTypeChange = (field: EditableField) => {
   if (!optionTypes.includes(field.fieldType)) field.options = [];
   if (optionTypes.includes(field.fieldType) && !field.options.length) addOption(field);
@@ -272,6 +329,41 @@ onMounted(async () => {
   border: 1px solid #e3e8f1;
   border-radius: 10px;
   background: #fff;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    opacity 0.16s ease;
+}
+.field-card.is-dragging {
+  opacity: 0.45;
+}
+.field-card.is-drag-over {
+  border-color: #409eff;
+  box-shadow: 0 0 0 2px rgb(64 158 255 / 14%);
+}
+.field-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.field-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: #909399;
+  cursor: grab;
+  user-select: none;
+}
+.field-drag-handle:hover {
+  color: #409eff;
+  background: #ecf5ff;
+}
+.field-drag-handle:active {
+  cursor: grabbing;
 }
 .option-editor {
   padding: 12px;
@@ -299,5 +391,21 @@ onMounted(async () => {
 .workflow-tip {
   margin-top: 4px;
   color: #909399;
+}
+
+:global(.form-template-drawer .el-drawer__body) {
+  padding: 16px 20px;
+  overflow-y: auto;
+}
+
+:global(.form-template-drawer .el-drawer__footer) {
+  padding: 14px 20px;
+  border-top: 1px solid #ebeef5;
+}
+
+@media (max-width: 900px) {
+  :global(.form-template-drawer) {
+    width: 100% !important;
+  }
 }
 </style>

@@ -1,10 +1,19 @@
 <template>
-  <div ref="phoneShellRef" class="agent-phone-shell" :class="{ incoming: incomingCall }" :style="phonePositionStyle">
+  <div
+    ref="phoneShellRef"
+    class="agent-phone-shell"
+    :class="{ incoming: incomingCall, dragging: isDragging }"
+    :style="phonePositionStyle"
+    @pointerenter="revealDockedPhone"
+    @pointerleave="scheduleDockedPhoneHide"
+  >
     <button
       v-if="!panelOpen"
       type="button"
       class="toolbar-trigger"
       :class="{ calling: callActive, incoming: incomingCall }"
+      title="拖动可调整位置，松开后自动吸附到屏幕边缘"
+      @pointerdown="startCollapsedDrag"
       @click="handleTriggerClick"
     >
       <span class="trigger-icon" :class="{ incoming: incomingCall }">
@@ -31,7 +40,7 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="EXTERNAL_SOFTPHONE">外置软电话</el-dropdown-item>
-                <el-dropdown-item command="WEBRTC">浏览器 WebRTC</el-dropdown-item>
+                <el-dropdown-item v-if="WEBRTC_MODE_ENABLED" command="WEBRTC">浏览器 WebRTC</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -51,7 +60,7 @@
               </el-dropdown-menu>
             </template>
           </el-dropdown>
-          <button type="button" class="collapse-button" aria-label="收起坐席电话" @click="panelOpen = false">
+          <button type="button" class="collapse-button" aria-label="收起坐席电话" @click="collapsePanel">
             <el-icon><CloseBold /></el-icon>
           </button>
         </div>
@@ -75,7 +84,7 @@
             <el-icon><Tickets /></el-icon>创建工单
           </button>
         </div>
-        <p v-if="webRtcFirstLegWaiting" class="webrtc-first-leg-tip">请在 30 秒内接听浏览器软电话，接听后才会继续呼叫客户。</p>
+<!--        <p v-if="webRtcFirstLegWaiting" class="webrtc-first-leg-tip">正在自动接通浏览器软电话，接通后将继续呼叫目标号码。</p>-->
         <button v-if="webRtcIncoming" type="button" class="call-button" :disabled="callActionLoading" @click="answerWebRtcCall">
           <el-icon><PhoneFilled /></el-icon>接听电话
         </button>
@@ -120,6 +129,7 @@
           <button type="button" :disabled="callActionLoading || consultActive" @click="transferPanelOpen = !transferPanelOpen">盲转</button>
           <button type="button" :disabled="callActionLoading || callHeld" @click="consultPanelOpen = !consultPanelOpen">咨询转接</button>
           <button type="button" :disabled="callActionLoading || callHeld || consultActive" @click="openConferenceDrawer">多方通话</button>
+          <button type="button" :disabled="callActionLoading || callHeld || consultActive" @click="toggleIvrTransferPanel">转 IVR</button>
           <button type="button" :disabled="callActionLoading" @click="morePanelOpen = !morePanelOpen">更多</button>
         </div>
         <div v-if="morePanelOpen" class="more-call-actions">
@@ -150,6 +160,14 @@
           <input v-model="transferTarget" maxlength="20" placeholder="输入目标分机" @keyup.enter="confirmTransfer" />
           <button type="button" :disabled="callActionLoading || !transferTarget" @click="confirmTransfer">确认转接</button>
           <button type="button" :disabled="callActionLoading" @click="cancelTransfer">取消</button>
+        </div>
+        <div v-if="ivrTransferPanelOpen" v-loading="ivrTransferLoading" class="transfer-panel ivr-transfer-panel">
+          <el-select v-model="ivrTransferFlowId" filterable clearable placeholder="选择已发布 IVR 流程">
+            <el-option v-for="flow in ivrTransferFlows" :key="flow.id" :label="`${flow.flowName} (${flow.flowCode})`" :value="flow.id" />
+          </el-select>
+          <button type="button" :disabled="callActionLoading || !ivrTransferFlowId" @click="confirmIvrTransfer">确认转入</button>
+          <button type="button" :disabled="callActionLoading" @click="cancelIvrTransfer">取消</button>
+          <span v-if="!ivrTransferLoading && ivrTransferFlows.length === 0" class="ivr-transfer-empty">当前节点暂无已发布且启用的 IVR 流程</span>
         </div>
         <div v-if="consultPanelOpen" class="transfer-panel consult-panel">
           <template v-if="!consultActive">
@@ -194,7 +212,7 @@
 
 <script setup lang="ts">
 import { ArrowDown, CloseBold, Phone, PhoneFilled, Tickets, User } from '@element-plus/icons-vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   changeCurrentAgentStatus,
   getCurrentAgent,
@@ -214,6 +232,7 @@ import {
   sendCallDtmf,
   startConsultTransfer,
   transferCall,
+  transferCallToIvr,
   unmuteCall,
   unholdCall
 } from '@/api/callcenter/call';
@@ -224,12 +243,19 @@ import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/inde
 import CallConferenceDrawer from './CallConferenceDrawer.vue';
 import DynamicBusinessFormDialog from './DynamicBusinessFormDialog.vue';
 import { useAgentDialBus, type AgentDialRequest } from '@/composables/useAgentDial';
+import { listIvrFlows } from '@/api/callcenter/ivr-flow';
+import type { IvrFlowVO } from '@/api/callcenter/ivr-flow/types';
 
 type AgentStatus = 'idle' | 'busy' | 'afterCall';
 type StatusCommand = AgentStatus | 'signIn' | 'signOut';
 type PhoneMode = 'EXTERNAL_SOFTPHONE' | 'WEBRTC';
 const PHONE_MODE_STORAGE_KEY = 'callnexus_agent_phone_mode';
-const WEBRTC_MODE_DISABLED = true;
+const WEBRTC_MODE_ENABLED =
+  import.meta.env.DEV ||
+  String(import.meta.env.VITE_APP_WEBRTC_ENABLED)
+    .trim()
+    .toLowerCase() === 'true';
+const WEBRTC_MODE_DISABLED = !WEBRTC_MODE_ENABLED;
 const savedPhoneMode = localStorage.getItem(PHONE_MODE_STORAGE_KEY);
 if (WEBRTC_MODE_DISABLED && savedPhoneMode === 'WEBRTC') {
   localStorage.setItem(PHONE_MODE_STORAGE_KEY, 'EXTERNAL_SOFTPHONE');
@@ -239,6 +265,10 @@ const panelOpen = ref(false);
 const phoneShellRef = ref<HTMLElement>();
 const remoteAudioRef = ref<HTMLAudioElement>();
 const phonePosition = reactive({ left: 0, top: 0 });
+const dockSide = ref<'left' | 'right'>('right');
+const dockedPhoneHidden = ref(false);
+const phoneShellWidth = ref(140);
+const isDragging = ref(false);
 const signedIn = ref(false);
 const agentStatus = ref<AgentStatus>('idle');
 const currentAgent = ref<CurrentAgentVO>({ configured: false, status: 'OFFLINE' });
@@ -249,6 +279,10 @@ const callMuted = ref(false);
 const callActionLoading = ref(false);
 const transferPanelOpen = ref(false);
 const transferTarget = ref('');
+const ivrTransferPanelOpen = ref(false);
+const ivrTransferFlowId = ref<string | number>();
+const ivrTransferFlows = ref<IvrFlowVO[]>([]);
+const ivrTransferLoading = ref(false);
 const consultPanelOpen = ref(false);
 const consultTarget = ref('');
 const consultActive = ref(false);
@@ -265,6 +299,7 @@ const incomingNumber = ref('');
 const incomingLocation = ref('');
 const activeNumberLocation = ref('');
 const activeCallId = ref('');
+const outboundDestination = ref('');
 const callSeconds = ref(0);
 const customerDialogVisible = ref(false);
 const ticketDialogVisible = ref(false);
@@ -272,6 +307,7 @@ const matchedCustomer = ref<CustomerVO>();
 const matchedCustomerDetailVisible = ref(false);
 const webRtcRegistered = ref(false);
 const webRtcConnecting = ref(false);
+const webRtcRegistrationError = ref('');
 const webRtcIncoming = ref(false);
 const webRtcFirstLegWaiting = ref(false);
 const phoneRegistered = computed(() => signedIn.value && Boolean(currentAgent.value.extension));
@@ -284,6 +320,7 @@ const registrationSummary = computed(() => {
 });
 let callTimer: ReturnType<typeof setInterval> | undefined;
 let ringTimer: ReturnType<typeof setInterval> | undefined;
+let ringStartToken = 0;
 let ringAudioContext: AudioContext | undefined;
 let presenceTimer: ReturnType<typeof setInterval> | undefined;
 let matchedCustomerLookupTimer: ReturnType<typeof setTimeout> | undefined;
@@ -291,9 +328,13 @@ let unsubscribeCallEvents: (() => void) | undefined;
 let syncingCallPresence = false;
 let restoringIdleAfterHangup = false;
 let webRtcFirstLegTimeout: ReturnType<typeof setTimeout> | undefined;
-let dragging = false;
+let webRtcOutboundFirstLegPending = false;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
+let dragStartX = 0;
+let dragStartY = 0;
+let suppressTriggerClick = false;
+let dockedPhoneHideTimer: ReturnType<typeof setTimeout> | undefined;
 let suppressActiveCallUntil = 0;
 let suppressIncomingCallUntil = 0;
 const recentlyEndedCallIds = new Map<string, number>();
@@ -311,7 +352,19 @@ const displayedRegistrationSummary = computed(() => {
   return 'WebRTC 未注册';
 });
 
-const phonePositionStyle = computed(() => ({ left: `${phonePosition.left}px`, top: `${phonePosition.top}px` }));
+const DOCK_EDGE_GAP = 8;
+const DOCK_VISIBLE_WIDTH = 22;
+const phonePositionStyle = computed(() => {
+  let left = phonePosition.left;
+  if (dockedPhoneHidden.value && !panelOpen.value && !incomingCall.value && !isDragging.value) {
+    left = dockSide.value === 'left' ? DOCK_VISIBLE_WIDTH - phoneShellWidth.value : window.innerWidth - DOCK_VISIBLE_WIDTH;
+  }
+  return {
+    left: `${left}px`,
+    top: `${phonePosition.top}px`,
+    transition: isDragging.value ? 'none' : 'left 0.22s ease, top 0.16s ease'
+  };
+});
 const dialKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
 const statusLabels: Record<AgentStatus, string> = { idle: '示闲', busy: '示忙', afterCall: '话后处理' };
 const statusToApi: Record<AgentStatus, AgentPresenceStatus> = { idle: 'IDLE', busy: 'BUSY', afterCall: 'AFTER_CALL' };
@@ -396,29 +449,77 @@ const loadCurrentAgent = async () => {
   applyCurrentAgent(res.data);
 };
 
+let webRtcRegistrationTask: Promise<boolean> | undefined;
+
 const registerWebRtcPhone = async () => {
   if (!webRtcPhoneEnabled.value) {
     await disconnectWebRtcPhone();
     return false;
   }
-  if (!signedIn.value || !remoteAudioRef.value || webRtcConnecting.value) return false;
+  if (!signedIn.value) {
+    webRtcRegistrationError.value = '坐席尚未签入，请先签入坐席';
+    return false;
+  }
+  if (!remoteAudioRef.value) {
+    await nextTick();
+  }
+  const remoteAudio = remoteAudioRef.value;
+  if (!remoteAudio) {
+    webRtcRegistrationError.value = '远端音频组件尚未挂载，请刷新页面后重试';
+    return false;
+  }
+  if (webRtcRegistrationTask) {
+    return webRtcRegistrationTask;
+  }
+  webRtcRegistrationTask = performWebRtcRegistration(remoteAudio);
+  try {
+    return await webRtcRegistrationTask;
+  } finally {
+    webRtcRegistrationTask = undefined;
+  }
+};
+
+const performWebRtcRegistration = async (remoteAudio: HTMLAudioElement) => {
   let registrationSucceeded = false;
   try {
     webRtcConnecting.value = true;
     webRtcRegistered.value = false;
+    webRtcRegistrationError.value = '';
     const response = await getCurrentAgentWebRtcConfig();
+    const config = response.data;
+    if (window.location.protocol === 'https:' && config.wssUrl?.startsWith('ws://')) {
+      throw new Error('当前页面使用 HTTPS，WebSocket 地址必须使用 wss://');
+    }
+    console.info('[WebRTC] registering', {
+      extension: config.extension,
+      authUsername: config.authUsername,
+      sipDomain: config.sipDomain,
+      wssUrl: config.wssUrl
+    });
     webRtcPhone.configure({
-      onIncoming: () => {
+      onIncoming: (number) => {
         webRtcIncoming.value = true;
         webRtcFirstLegWaiting.value = true;
-        incomingCall.value = true;
-        incomingNumber.value = dialNumber.value || '未知号码';
+        incomingNumber.value = webRtcOutboundFirstLegPending
+          ? outboundDestination.value || dialNumber.value || '未知号码'
+          : String(number || '').trim() || '未知号码';
+        if (!webRtcOutboundFirstLegPending) {
+          dialNumber.value = incomingNumber.value;
+        }
         panelOpen.value = true;
         startWebRtcFirstLegTimeout();
+        if (webRtcOutboundFirstLegPending) {
+          incomingCall.value = false;
+          stopRingTone();
+          void answerWebRtcOutboundFirstLeg();
+          return;
+        }
+        incomingCall.value = true;
         startRingTone();
         nextTick(constrainPosition);
       },
       onAnswered: () => {
+        webRtcOutboundFirstLegPending = false;
         webRtcIncoming.value = false;
         incomingCall.value = false;
         stopWebRtcFirstLegWaiting();
@@ -428,6 +529,7 @@ const registerWebRtcPhone = async () => {
         startCallTimer();
       },
       onHangup: () => {
+        webRtcOutboundFirstLegPending = false;
         webRtcIncoming.value = false;
         stopWebRtcFirstLegWaiting();
         markCallEnded(activeCallId.value);
@@ -447,23 +549,34 @@ const registerWebRtcPhone = async () => {
         webRtcRegistered.value = false;
       }
     });
-    await webRtcPhone.connect(response.data, remoteAudioRef.value);
+    await webRtcPhone.connect(config, remoteAudio);
     registrationSucceeded = true;
     webRtcRegistered.value = true;
     return true;
   } catch (error) {
     webRtcRegistered.value = false;
+    webRtcRegistrationError.value = describeWebRtcRegistrationError(error);
     console.warn('[WebRTC] register failed, fallback to external softphone mode', error);
     await disconnectWebRtcPhone();
     return false;
-    console.warn('[WebRTC] 注册失败，保留外置软电话模式', error);
   } finally {
     webRtcConnecting.value = false;
     webRtcRegistered.value = webRtcPhoneEnabled.value && (registrationSucceeded || webRtcPhone.isRegistered());
   }
 };
 
+const describeWebRtcRegistrationError = (error: unknown) => {
+  if (error instanceof DOMException && error.name === 'NotAllowedError') {
+    return '浏览器未授权麦克风权限';
+  }
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return '未知错误，请查看浏览器控制台和 Network/WS';
+};
+
 const disconnectWebRtcPhone = async () => {
+  webRtcOutboundFirstLegPending = false;
   webRtcIncoming.value = false;
   stopWebRtcFirstLegWaiting();
   webRtcRegistered.value = false;
@@ -490,7 +603,7 @@ const changePhoneMode = async (mode: PhoneMode) => {
   }
   const registered = await registerWebRtcPhone();
   if (!registered) {
-    ElMessage.warning('WebRTC 注册失败，请检查 WSS 配置');
+    ElMessage.error(`WebRTC 注册失败：${webRtcRegistrationError.value || '请检查 WebSocket 和 SIP 鉴权配置'}`);
     return;
   }
   ElMessage.success(webRtcRegistered.value ? '已切换为 WebRTC 模式' : 'WebRTC 注册失败，请检查 WSS 配置');
@@ -567,16 +680,20 @@ const makeCall = async () => {
     return;
   }
   try {
+    outboundDestination.value = dialNumber.value.trim();
     suppressIncomingCallUntil = webRtcPhoneEnabled.value ? 0 : Date.now() + 15000;
+    webRtcOutboundFirstLegPending = webRtcPhoneEnabled.value;
+    if (webRtcPhoneEnabled.value) {
+      webRtcFirstLegWaiting.value = true;
+      panelOpen.value = true;
+      startWebRtcFirstLegTimeout();
+    }
     const response = await originateCall({ destination: dialNumber.value });
     activeCallId.value = response.data.callId;
     resetCallControls();
     const current = await getCurrentAgent();
     if (webRtcPhoneEnabled.value) {
-      webRtcFirstLegWaiting.value = true;
-      panelOpen.value = true;
-      startWebRtcFirstLegTimeout();
-      ElMessage.success('外呼命令已发送，请在浏览器软电话接听来电');
+      ElMessage.success('外呼命令已发送，浏览器软电话正在自动接通');
     } else {
       callActive.value = true;
       startCallTimer();
@@ -584,7 +701,23 @@ const makeCall = async () => {
       ElMessage.success('外呼命令已发送，请在软电话接听');
     }
   } catch {
+    outboundDestination.value = '';
+    webRtcOutboundFirstLegPending = false;
+    stopWebRtcFirstLegWaiting();
     // HTTP 错误由全局请求拦截器统一提示。
+  }
+};
+
+const answerWebRtcOutboundFirstLeg = async () => {
+  try {
+    await webRtcPhone.answer();
+  } catch (error) {
+    webRtcOutboundFirstLegPending = false;
+    incomingCall.value = true;
+    startRingTone();
+    nextTick(constrainPosition);
+    console.error('[WebRTC] 自动接听外呼第一腿失败', error);
+    ElMessage.error('浏览器软电话自动接听失败，请手动接听或查看控制台错误');
   }
 };
 
@@ -600,8 +733,10 @@ const handleAgentDialRequest = async (request: AgentDialRequest) => {
     return;
   }
   dialNumber.value = destination;
+  revealDockedPhone();
   panelOpen.value = true;
   await nextTick();
+  constrainPosition();
   await makeCall();
 };
 
@@ -609,18 +744,28 @@ const hangup = async () => {
   if (!activeCallId.value && !webRtcPhone.hasActiveCall() && !webRtcIncoming.value) return;
   try {
     callActionLoading.value = true;
-    if (webRtcRegistered.value && (webRtcPhone.hasActiveCall() || webRtcIncoming.value)) {
-      if (webRtcIncoming.value && !callActive.value) {
-        await webRtcPhone.decline();
-      } else {
-        await webRtcPhone.hangup();
-      }
+    if (webRtcIncoming.value && !callActive.value) {
+      await webRtcPhone.decline();
+      markCallEnded(activeCallId.value);
+      clearActiveCallState();
+      await restoreIdleAfterWebRtcHangup();
+      return;
+    }
+    if (!activeCallId.value) {
+      await webRtcPhone.hangup();
       markCallEnded(activeCallId.value);
       clearActiveCallState();
       await restoreIdleAfterWebRtcHangup();
       return;
     }
     await hangupCall(activeCallId.value);
+    if (webRtcPhoneEnabled.value && webRtcPhone.hasActiveCall()) {
+      try {
+        await webRtcPhone.hangup();
+      } catch (error) {
+        console.debug('[WebRTC] backend hangup completed before local SIP session cleanup', error);
+      }
+    }
     markCallEnded(activeCallId.value);
     clearActiveCallState();
     const current = await getCurrentAgent();
@@ -633,23 +778,15 @@ const hangup = async () => {
 };
 
 const toggleHold = async () => {
-  if (!activeCallId.value && !webRtcPhone.hasActiveCall()) return;
+  if (!activeCallId.value) return;
   try {
     callActionLoading.value = true;
     if (callHeld.value) {
-      if (webRtcRegistered.value && webRtcPhone.hasActiveCall()) {
-        await webRtcPhone.unhold();
-      } else {
-        await unholdCall(activeCallId.value);
-      }
+      await unholdCall(activeCallId.value);
       callHeld.value = false;
       ElMessage.success('通话已恢复');
     } else {
-      if (webRtcRegistered.value && webRtcPhone.hasActiveCall()) {
-        await webRtcPhone.hold();
-      } else {
-        await holdCall(activeCallId.value);
-      }
+      await holdCall(activeCallId.value);
       callHeld.value = true;
       ElMessage.success('通话已保持');
     }
@@ -708,11 +845,72 @@ const cancelTransfer = () => {
   transferTarget.value = '';
 };
 
+const loadTransferableIvrFlows = async () => {
+  try {
+    ivrTransferLoading.value = true;
+    const response = await listIvrFlows();
+    const nodeId = currentAgent.value.nodeId;
+    ivrTransferFlows.value = (response.data || []).filter((flow) => {
+      if (!flow.enabled || flow.publishStatus !== 'PUBLISHED') return false;
+      if (!nodeId) return true;
+      return (flow.nodeIds || []).some((id) => String(id) === String(nodeId));
+    });
+  } finally {
+    ivrTransferLoading.value = false;
+  }
+};
+
+const toggleIvrTransferPanel = async () => {
+  if (!activeCallId.value || callHeld.value || consultActive.value) return;
+  const open = !ivrTransferPanelOpen.value;
+  transferPanelOpen.value = false;
+  consultPanelOpen.value = false;
+  morePanelOpen.value = false;
+  ivrTransferPanelOpen.value = open;
+  if (open) {
+    await loadTransferableIvrFlows();
+  }
+};
+
+const confirmIvrTransfer = async () => {
+  if (!activeCallId.value || !ivrTransferFlowId.value) return;
+  const selectedFlow = ivrTransferFlows.value.find((flow) => String(flow.id) === String(ivrTransferFlowId.value));
+  try {
+    await ElMessageBox.confirm(
+      `确认将客户转入 IVR 流程“${selectedFlow?.flowName || ivrTransferFlowId.value}”吗？转入后坐席将退出当前通话。`,
+      '转入 IVR',
+      {
+        confirmButtonText: '确认转入',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    );
+  } catch {
+    return;
+  }
+
+  try {
+    callActionLoading.value = true;
+    await transferCallToIvr(activeCallId.value, ivrTransferFlowId.value);
+    ElMessage.success('客户已转入 IVR 流程');
+    clearActiveCallState();
+    const current = await getCurrentAgent();
+    applyCurrentAgent(current.data);
+  } finally {
+    callActionLoading.value = false;
+  }
+};
+
+const cancelIvrTransfer = () => {
+  ivrTransferPanelOpen.value = false;
+  ivrTransferFlowId.value = undefined;
+};
+
 const startConsult = async () => {
   if (!activeCallId.value || !consultTarget.value) return;
   try {
     callActionLoading.value = true;
-    const response = await startConsultTransfer(activeCallId.value, consultTarget.value, phoneMode.value);
+    const response = await startConsultTransfer(activeCallId.value, consultTarget.value);
     consultCallId.value = response.data.callId;
     consultActive.value = true;
     callHeld.value = true;
@@ -727,7 +925,7 @@ const cancelConsult = async () => {
   if (!activeCallId.value) return;
   try {
     callActionLoading.value = true;
-    await cancelConsultTransfer(activeCallId.value, phoneMode.value);
+    await cancelConsultTransfer(activeCallId.value);
     consultActive.value = false;
     consultCallId.value = '';
     consultPanelOpen.value = false;
@@ -743,7 +941,7 @@ const completeConsult = async () => {
   if (!activeCallId.value) return;
   try {
     callActionLoading.value = true;
-    await completeConsultTransfer(activeCallId.value, phoneMode.value);
+    await completeConsultTransfer(activeCallId.value);
     ElMessage.success('咨询转接已完成');
     clearActiveCallState();
     const current = await getCurrentAgent();
@@ -789,6 +987,9 @@ const resetCallControls = () => {
   callActionLoading.value = false;
   transferPanelOpen.value = false;
   transferTarget.value = '';
+  ivrTransferPanelOpen.value = false;
+  ivrTransferFlowId.value = undefined;
+  ivrTransferLoading.value = false;
   consultPanelOpen.value = false;
   consultTarget.value = '';
   consultActive.value = false;
@@ -811,47 +1012,139 @@ const createTicket = () => {
 };
 
 const handleTriggerClick = () => {
+  if (suppressTriggerClick) return;
   void unlockRingAudio();
+  revealDockedPhone();
   panelOpen.value = true;
   nextTick(constrainPosition);
 };
 
+const clearDockedPhoneHideTimer = () => {
+  if (!dockedPhoneHideTimer) return;
+  clearTimeout(dockedPhoneHideTimer);
+  dockedPhoneHideTimer = undefined;
+};
+
+const revealDockedPhone = () => {
+  clearDockedPhoneHideTimer();
+  dockedPhoneHidden.value = false;
+};
+
+const scheduleDockedPhoneHide = () => {
+  clearDockedPhoneHideTimer();
+  if (panelOpen.value || incomingCall.value || isDragging.value) return;
+  dockedPhoneHideTimer = setTimeout(() => {
+    if (!panelOpen.value && !incomingCall.value && !isDragging.value) {
+      dockedPhoneHidden.value = true;
+    }
+  }, 500);
+};
+
+const persistPhonePosition = () => {
+  sessionStorage.setItem(
+    'callnexus-agent-phone-position',
+    JSON.stringify({ left: phonePosition.left, top: phonePosition.top, dockSide: dockSide.value })
+  );
+};
+
+const snapCollapsedPhoneToEdge = () => {
+  if (panelOpen.value || !phoneShellRef.value) return;
+  const width = phoneShellRef.value.offsetWidth || 140;
+  const height = phoneShellRef.value.offsetHeight || 46;
+  phoneShellWidth.value = width;
+  dockSide.value = phonePosition.left + width / 2 <= window.innerWidth / 2 ? 'left' : 'right';
+  phonePosition.left = dockSide.value === 'left' ? DOCK_EDGE_GAP : Math.max(DOCK_EDGE_GAP, window.innerWidth - width - DOCK_EDGE_GAP);
+  phonePosition.top = Math.min(Math.max(DOCK_EDGE_GAP, phonePosition.top), Math.max(DOCK_EDGE_GAP, window.innerHeight - height - DOCK_EDGE_GAP));
+  persistPhonePosition();
+};
+
+const collapsePanel = () => {
+  panelOpen.value = false;
+  nextTick(() => {
+    snapCollapsedPhoneToEdge();
+    scheduleDockedPhoneHide();
+  });
+};
+
 const startDrag = (event: PointerEvent) => {
   if ((event.target as HTMLElement).closest('button, .el-dropdown, input')) return;
-  dragging = true;
+  beginDrag(event);
+};
+
+const startCollapsedDrag = (event: PointerEvent) => {
+  beginDrag(event);
+};
+
+const beginDrag = (event: PointerEvent) => {
+  if (event.button !== 0) return;
+  clearDockedPhoneHideTimer();
+  const rect = phoneShellRef.value?.getBoundingClientRect();
+  if (rect) {
+    phoneShellWidth.value = rect.width;
+    phonePosition.left =
+      dockedPhoneHidden.value && !panelOpen.value
+        ? dockSide.value === 'left'
+          ? DOCK_EDGE_GAP
+          : Math.max(DOCK_EDGE_GAP, window.innerWidth - rect.width - DOCK_EDGE_GAP)
+        : rect.left;
+    phonePosition.top = rect.top;
+  }
+  dockedPhoneHidden.value = false;
+  isDragging.value = true;
+  suppressTriggerClick = false;
+  dragStartX = event.clientX;
+  dragStartY = event.clientY;
   dragOffsetX = event.clientX - phonePosition.left;
   dragOffsetY = event.clientY - phonePosition.top;
+  (event.currentTarget as HTMLElement | null)?.setPointerCapture?.(event.pointerId);
   window.addEventListener('pointermove', handleDrag);
   window.addEventListener('pointerup', stopDrag, { once: true });
 };
 
 const handleDrag = (event: PointerEvent) => {
-  if (!dragging) return;
+  if (!isDragging.value) return;
+  if (Math.hypot(event.clientX - dragStartX, event.clientY - dragStartY) > 4) {
+    suppressTriggerClick = true;
+  }
   phonePosition.left = event.clientX - dragOffsetX;
   phonePosition.top = event.clientY - dragOffsetY;
   constrainPosition();
 };
 
 const stopDrag = () => {
-  dragging = false;
+  if (!isDragging.value) return;
+  isDragging.value = false;
   window.removeEventListener('pointermove', handleDrag);
-  sessionStorage.setItem('callnexus-agent-phone-position', JSON.stringify(phonePosition));
+  if (!panelOpen.value) {
+    snapCollapsedPhoneToEdge();
+    scheduleDockedPhoneHide();
+  } else {
+    persistPhonePosition();
+  }
+  setTimeout(() => {
+    suppressTriggerClick = false;
+  }, 0);
 };
 
 const constrainPosition = () => {
-  const rect = phoneShellRef.value?.getBoundingClientRect();
-  const width = rect?.width || 140;
-  const height = rect?.height || 46;
-  phonePosition.left = Math.min(Math.max(8, phonePosition.left), Math.max(8, window.innerWidth - width - 8));
-  phonePosition.top = Math.min(Math.max(8, phonePosition.top), Math.max(8, window.innerHeight - height - 8));
+  const width = phoneShellRef.value?.offsetWidth || 140;
+  const height = phoneShellRef.value?.offsetHeight || 46;
+  phoneShellWidth.value = width;
+  phonePosition.left = Math.min(Math.max(DOCK_EDGE_GAP, phonePosition.left), Math.max(DOCK_EDGE_GAP, window.innerWidth - width - DOCK_EDGE_GAP));
+  phonePosition.top = Math.min(Math.max(DOCK_EDGE_GAP, phonePosition.top), Math.max(DOCK_EDGE_GAP, window.innerHeight - height - DOCK_EDGE_GAP));
 };
 
 const initializePosition = () => {
   const saved = sessionStorage.getItem('callnexus-agent-phone-position');
   if (saved) {
     try {
-      Object.assign(phonePosition, JSON.parse(saved));
+      const parsed = JSON.parse(saved) as { left?: number; top?: number; dockSide?: 'left' | 'right' };
+      if (Number.isFinite(parsed.left)) phonePosition.left = Number(parsed.left);
+      if (Number.isFinite(parsed.top)) phonePosition.top = Number(parsed.top);
+      if (parsed.dockSide === 'left' || parsed.dockSide === 'right') dockSide.value = parsed.dockSide;
       constrainPosition();
+      snapCollapsedPhoneToEdge();
+      scheduleDockedPhoneHide();
       return;
     } catch {
       sessionStorage.removeItem('callnexus-agent-phone-position');
@@ -861,6 +1154,16 @@ const initializePosition = () => {
   const height = phoneShellRef.value?.offsetHeight || 46;
   phonePosition.left = window.innerWidth - width - 18;
   phonePosition.top = (window.innerHeight - height) / 2;
+  snapCollapsedPhoneToEdge();
+  scheduleDockedPhoneHide();
+};
+
+const handleViewportResize = () => {
+  if (!panelOpen.value) {
+    nextTick(snapCollapsedPhoneToEdge);
+    return;
+  }
+  constrainPosition();
 };
 
 const startCallTimer = () => {
@@ -904,20 +1207,23 @@ const playRingPulse = () => {
 
 const startRingTone = () => {
   if (ringTimer) return;
+  const startToken = ++ringStartToken;
   void unlockRingAudio().then(() => {
+    if (startToken !== ringStartToken || ringTimer) return;
     playRingPulse();
     ringTimer = setInterval(playRingPulse, 1200);
   });
 };
 
 const stopRingTone = () => {
+  ringStartToken += 1;
   if (ringTimer) clearInterval(ringTimer);
   ringTimer = undefined;
 };
 
 const showIncomingCall = (event: Record<string, unknown>) => {
   if (Date.now() < suppressIncomingCallUntil) return;
-  const eventCallId = String(event.callId || '');
+  const eventCallId = String(event.businessCallId || event.callId || '');
   const callerNumber = String(event.callerNumber || '');
   if (eventCallId) activeCallId.value = eventCallId;
   incomingNumber.value = callerNumber || '未知号码';
@@ -937,13 +1243,17 @@ const isSourceConsultLegEvent = (eventCallId: string, callerNumber: string) =>
 
 const showActiveCall = (event: Record<string, unknown>) => {
   if (isWebRtcLocalIdle()) return;
-  const eventCallId = String(event.callId || '');
+  const eventCallId = String(event.businessCallId || event.callId || '');
+  const eventLegUuid = String(event.legUuid || event.callId || '');
   const callerNumber = String(event.callerNumber || '');
   const calledNumber = String(event.calledNumber || '');
   if (eventCallId && recentlyEndedCallIds.has(eventCallId)) return;
-  if (isSourceConsultLegEvent(eventCallId, callerNumber)) return;
+  if (isSourceConsultLegEvent(eventLegUuid, callerNumber)) return;
   if (eventCallId) activeCallId.value = eventCallId;
-  dialNumber.value = isCurrentAgentIdentity(callerNumber) ? calledNumber : callerNumber;
+  const peerNumber = isCurrentAgentIdentity(callerNumber)
+    ? outboundDestination.value || calledNumber
+    : callerNumber;
+  dialNumber.value = peerNumber;
   activeNumberLocation.value = isCurrentAgentIdentity(callerNumber) ? '' : buildNumberLocation(event);
   incomingCall.value = false;
   stopRingTone();
@@ -958,7 +1268,8 @@ const handleCallEvent = (event: Record<string, unknown>) => {
   const agentExtension = String(event.agentExtension || '');
   const callerNumber = String(event.callerNumber || '');
   const calledNumber = String(event.calledNumber || '');
-  const eventCallId = String(event.callId || '');
+  const eventLegUuid = String(event.legUuid || event.callId || '');
+  const eventCallId = String(event.businessCallId || event.callId || '');
   const relatedToCurrentAgent =
     isCurrentAgentIdentity(agentExtension) || isCurrentAgentIdentity(callerNumber) || isCurrentAgentIdentity(calledNumber);
   if (import.meta.env.DEV) {
@@ -969,6 +1280,7 @@ const handleCallEvent = (event: Record<string, unknown>) => {
       agentExtension,
       callerNumber,
       calledNumber,
+      eventLegUuid,
       eventCallId,
       relatedToCurrentAgent
     });
@@ -994,11 +1306,17 @@ const handleCallEvent = (event: Record<string, unknown>) => {
     return;
   }
   if (type === 'CALL_ANSWER' || type === 'CALL_BRIDGE') {
-    if (isSourceConsultLegEvent(eventCallId, callerNumber)) return;
+    if (isSourceConsultLegEvent(eventLegUuid, callerNumber)) return;
     showActiveCall(event);
     return;
   }
   if (type === 'CALL_CREATE' || type === 'CALL_PROGRESS' || type === 'CALL_PROGRESS_MEDIA') {
+    // SIP.js may report the local session as answered before delayed ESL ringing events arrive.
+    // Keep the business call id, but never move an answered WebRTC call back to ringing.
+    if (webRtcPhoneEnabled.value && callActive.value && !webRtcIncoming.value) {
+      if (eventCallId) activeCallId.value = eventCallId;
+      return;
+    }
     const isIncomingToCurrentAgent = isCurrentAgentIdentity(agentExtension) && !isCurrentAgentIdentity(callerNumber) && calledNumber !== '';
     if (isIncomingToCurrentAgent) {
       showIncomingCall(event);
@@ -1015,6 +1333,7 @@ const clearActiveCallState = () => {
   activeNumberLocation.value = '';
   callActive.value = false;
   activeCallId.value = '';
+  outboundDestination.value = '';
   matchedCustomer.value = undefined;
   webRtcIncoming.value = false;
   stopWebRtcFirstLegWaiting();
@@ -1100,6 +1419,16 @@ watch([dialNumber, incomingNumber, callActive, incomingCall], () => {
   matchedCustomerLookupTimer = setTimeout(() => void lookupMatchedCustomer(), 300);
 });
 
+watch(incomingCall, (incoming) => {
+  if (!incoming) {
+    scheduleDockedPhoneHide();
+    return;
+  }
+  revealDockedPhone();
+  panelOpen.value = true;
+  nextTick(constrainPosition);
+});
+
 onMounted(async () => {
   agentDialBus.on(handleAgentDialRequest);
   unsubscribeCallEvents = subscribeCallEvents(handleCallEvent);
@@ -1108,7 +1437,7 @@ onMounted(async () => {
   await registerWebRtcPhone();
   initializePosition();
   presenceTimer = setInterval(() => void syncActiveCallPresence(), 3000);
-  window.addEventListener('resize', constrainPosition);
+  window.addEventListener('resize', handleViewportResize);
 });
 
 onBeforeUnmount(() => {
@@ -1119,7 +1448,8 @@ onBeforeUnmount(() => {
   stopRingTone();
   if (presenceTimer) clearInterval(presenceTimer);
   if (matchedCustomerLookupTimer) clearTimeout(matchedCustomerLookupTimer);
-  window.removeEventListener('resize', constrainPosition);
+  clearDockedPhoneHideTimer();
+  window.removeEventListener('resize', handleViewportResize);
   window.removeEventListener('pointermove', handleDrag);
 });
 </script>
@@ -1134,6 +1464,11 @@ button {
   z-index: 1001;
   width: max-content;
   filter: drop-shadow(0 10px 20px rgba(26, 48, 82, 0.18));
+  will-change: left, top;
+}
+
+.agent-phone-shell.dragging {
+  cursor: grabbing;
 }
 
 .agent-phone-shell.incoming {
@@ -1148,7 +1483,9 @@ button {
   height: 46px;
   padding: 6px 12px 6px 6px;
   color: #536176;
-  cursor: pointer;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
   border: 1px solid #e1e7f0;
   border-radius: 12px;
   background: #fff;
@@ -1615,6 +1952,21 @@ button {
   }
 }
 
+.ivr-transfer-panel {
+  align-items: center;
+
+  :deep(.el-select) {
+    min-width: 0;
+  }
+}
+
+.ivr-transfer-empty {
+  grid-column: 1 / -1;
+  color: #8996a9;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
 .dtmf-panel,
 .note-panel {
   display: grid;
@@ -1806,11 +2158,5 @@ button {
   80% {
     transform: translateX(2px);
   }
-}
-
-:global(.agent-phone-mode-dropdown .el-dropdown-menu__item:nth-child(2)) {
-  color: #a8abb2;
-  cursor: not-allowed;
-  pointer-events: none;
 }
 </style>

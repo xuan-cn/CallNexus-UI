@@ -216,6 +216,10 @@ export interface AiAgentVO {
   version?: number;
   voiceTransport?: 'HTTP' | 'WS';
   voiceTransportWsUrl?: string;
+  bargeInEnabled: boolean;
+  openingBargeInEnabled: boolean;
+  bargeInMode: 'SENSITIVE' | 'STANDARD' | 'NOISY';
+  bargeInGraceMs: number;
   knowledgeBaseIds: Id[];
   knowledgeBaseNames: string[];
 }

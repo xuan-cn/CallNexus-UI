@@ -29,6 +29,9 @@ export const saveCallNote = (callId: string, data: CallNoteForm) => request({ ur
 export const transferCall = (callId: string, targetExtension: string) =>
   request({ url: `/api/v1/calls/${callId}/transfer`, method: 'post', data: { targetExtension } });
 
+export const transferCallToIvr = (callId: string, flowId: string | number) =>
+  request({ url: `/api/v1/calls/${callId}/ivr-transfer`, method: 'post', data: { flowId } });
+
 export const startConsultTransfer = (callId: string, targetExtension: string, phoneMode?: string): AxiosPromise<CallControlVO> =>
   request({ url: `/api/v1/calls/${callId}/consult-transfer`, method: 'post', data: { targetExtension, phoneMode } });
 
