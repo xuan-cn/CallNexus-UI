@@ -169,9 +169,16 @@ export interface AiCallTranscriptSegmentVO {
   sentenceIndex?: number;
   startMs?: number;
   endMs?: number;
+  messageTime?: string;
   textContent: string;
   finalResult: boolean;
   confidence?: number;
+}
+
+export interface AiCallTranscriptStreamEvent {
+  callSessionId: string | number;
+  transcriptId?: string | number;
+  segment?: AiCallTranscriptSegmentVO;
 }
 
 export interface AiCallTranscriptVO {

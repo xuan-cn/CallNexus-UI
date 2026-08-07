@@ -27,8 +27,8 @@
               ><span v-if="!agent.knowledgeBaseNames.length">未绑定</span>
             </div>
           </el-form-item>
-          <el-form-item label="系统提示词"><el-input v-model="form.systemPrompt" type="textarea" :rows="5" /></el-form-item>
-          <el-form-item label="开场白"><el-input v-model="form.welcomeMessage" type="textarea" :rows="3" /></el-form-item>
+          <el-form-item label="系统提示词"><el-input v-model="form.systemPrompt" type="textarea" :rows="12" /></el-form-item>
+          <el-form-item label="开场白"><el-input v-model="form.welcomeMessage" type="textarea" :rows="5" /></el-form-item>
           <el-form-item label="知识库回答">
             <el-radio-group v-model="form.retrievalMode"
               ><el-radio value="RAG">智能混合</el-radio><el-radio value="DIRECT_RETRIEVAL">极速原文</el-radio></el-radio-group

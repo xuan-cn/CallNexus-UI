@@ -18,6 +18,11 @@
             <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
+        <el-form-item label="挂断原因" prop="hangupCause">
+          <el-select v-model="queryParams.hangupCause" clearable filterable placeholder="全部原因" style="width: 180px">
+            <el-option v-for="item in hangupCauseOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
           <el-button icon="Refresh" @click="resetQuery">重置</el-button>
@@ -357,8 +362,8 @@
 <script setup name="CallRecord" lang="ts">
 import { getCallRecord, listCallRecords } from '@/api/callcenter/call-record';
 import { hangupCauseLabel } from '@/api/callcenter/call-record/display';
-import { getCallTranscript, transcribeCallRecording } from '@/api/callcenter/ai-speech';
-import { AiCallTranscriptSegmentVO, AiCallTranscriptVO } from '@/api/callcenter/ai-speech/types';
+import { getCallTranscript, streamCallTranscript, transcribeCallRecording } from '@/api/callcenter/ai-speech';
+import { AiCallTranscriptSegmentVO, AiCallTranscriptStreamEvent, AiCallTranscriptVO } from '@/api/callcenter/ai-speech/types';
 import { handleVoiceMailMessage } from '@/api/callcenter/voicemail';
 import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/index.vue';
 import { CallDirection, CallRecordQuery, CallRecordVO, CallStatus } from '@/api/callcenter/call-record/types';
@@ -416,6 +421,9 @@ const customerDetailId = ref<string | number>();
 const ticketDetailVisible = ref(false);
 const ticketDetailId = ref<string | number>();
 let recordingPollTimer: ReturnType<typeof setTimeout> | undefined;
+let transcriptStreamController: AbortController | undefined;
+let transcriptStreamReconnectTimer: ReturnType<typeof setTimeout> | undefined;
+let transcriptStreamSessionId: string | number | undefined;
 const directionOptions: Array<{ label: string; value: CallDirection }> = [
   { label: '呼入', value: 'INBOUND' },
   { label: '呼出', value: 'OUTBOUND' },
@@ -429,6 +437,24 @@ const statusOptions: Array<{ label: string; value: CallStatus }> = [
   { label: '已桥接', value: 'BRIDGED' },
   { label: '已结束', value: 'ENDED' }
 ];
+const hangupCauseOptions = [
+  'NORMAL_CLEARING',
+  'ORIGINATOR_CANCEL',
+  'USER_BUSY',
+  'NO_ANSWER',
+  'NO_USER_RESPONSE',
+  'CALL_REJECTED',
+  'AGENT_NO_ANSWER',
+  'ABANDON',
+  'QUEUE_TIMEOUT',
+  'LOSE_RACE',
+  'ALLOTTED_TIMEOUT',
+  'MEDIA_TIMEOUT',
+  'DESTINATION_OUT_OF_ORDER',
+  'NORMAL_TEMPORARY_FAILURE',
+  'NETWORK_OUT_OF_ORDER',
+  'SWITCH_CONGESTION'
+].map((value) => ({ value, label: hangupCauseLabel(value) }));
 const queryParams = reactive<CallRecordQuery>({
   pageNum: 1,
   pageSize: 10,
@@ -683,16 +709,78 @@ const loadDetail = async (id: string | number) => {
 const loadTranscript = async (id: string | number) => {
   try {
     const res = await getCallTranscript(id);
-    transcript.value = normalizeTranscriptResponse(res);
+    const loaded = normalizeTranscriptResponse(res);
+    if (!loaded) return;
+    const current = transcript.value;
+    if (!current || String(current.callSessionId) !== String(id)) {
+      transcript.value = loaded;
+      return;
+    }
+    const segments = new Map<string, AiCallTranscriptSegmentVO>();
+    for (const segment of loaded.segments || []) segments.set(String(segment.id), segment);
+    for (const segment of current.segments || []) segments.set(String(segment.id), segment);
+    transcript.value = { ...loaded, segments: [...segments.values()] };
   } catch {
-    transcript.value = undefined;
+    if (!transcript.value || String(transcript.value.callSessionId) !== String(id)) transcript.value = undefined;
   }
+};
+const mergeTranscriptSegment = (event: AiCallTranscriptStreamEvent) => {
+  if (!event.segment || String(event.callSessionId) !== String(detail.value?.id)) return;
+  const segment = event.segment;
+  const current = transcript.value;
+  const segments = current?.segments ? [...current.segments] : [];
+  if (segments.some((item) => String(item.id) === String(segment.id))) return;
+  segments.push(segment);
+  transcript.value = {
+    ...(current || {
+      id: event.transcriptId || `realtime-${event.callSessionId}`,
+      callSessionId: event.callSessionId,
+      businessCallId: detail.value?.businessCallId || '',
+      status: 'SUCCESS'
+    }),
+    status: 'SUCCESS',
+    fullText: [current?.fullText, segment.textContent].filter(Boolean).join('\n'),
+    segments
+  };
+};
+const stopTranscriptStream = () => {
+  if (transcriptStreamReconnectTimer) clearTimeout(transcriptStreamReconnectTimer);
+  transcriptStreamReconnectTimer = undefined;
+  transcriptStreamController?.abort();
+  transcriptStreamController = undefined;
+  transcriptStreamSessionId = undefined;
+};
+const startTranscriptStream = (callSessionId: string | number) => {
+  stopTranscriptStream();
+  transcriptStreamSessionId = callSessionId;
+  const connect = () => {
+    if (!detailVisible.value || String(transcriptStreamSessionId) !== String(callSessionId)) return;
+    const controller = new AbortController();
+    transcriptStreamController = controller;
+    streamCallTranscript(
+      callSessionId,
+      (event, data) => {
+        if (event === 'connected') void loadTranscript(callSessionId);
+        if (event === 'segment') mergeTranscriptSegment(data);
+      },
+      controller.signal
+    )
+      .catch((error) => {
+        if (error?.name !== 'AbortError') console.warn('Transcript stream disconnected', error);
+      })
+      .finally(() => {
+        if (controller.signal.aborted || !detailVisible.value || String(transcriptStreamSessionId) !== String(callSessionId)) return;
+        transcriptStreamReconnectTimer = setTimeout(connect, 1500);
+      });
+  };
+  connect();
 };
 const handleDetail = async (row: CallRecordVO) => {
   detailTab.value = 'basic';
   transcript.value = undefined;
   detailVisible.value = true;
   await loadDetail(row.id);
+  startTranscriptStream(row.id);
 };
 const handleTranscribe = async () => {
   if (!detail.value?.id) return;
@@ -729,10 +817,16 @@ const openTicketDetail = (id: string | number) => {
   ticketDetailVisible.value = true;
 };
 watch(detailVisible, (visible) => {
-  if (!visible) stopRecordingPoll();
+  if (!visible) {
+    stopRecordingPoll();
+    stopTranscriptStream();
+  }
 });
 onMounted(getList);
-onBeforeUnmount(stopRecordingPoll);
+onBeforeUnmount(() => {
+  stopRecordingPoll();
+  stopTranscriptStream();
+});
 </script>
 
 <style scoped>
