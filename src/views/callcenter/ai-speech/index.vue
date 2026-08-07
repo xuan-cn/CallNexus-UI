@@ -943,7 +943,7 @@ const submitTemplate = async () => {
     } else {
       await createSpeechTemplate(templateForm.value);
     }
-    proxy?.$modal.msgSuccess('淇濆瓨鎴愬姛');
+    proxy?.$modal.msgSuccess('保存成功');
     templateDialog.visible = false;
     loadTemplates();
   } finally {
@@ -951,9 +951,9 @@ const submitTemplate = async () => {
   }
 };
 const removeTemplate = async (row: AiSpeechTemplateVO) => {
-  await proxy?.$modal.confirm(`纭鍒犻櫎璇煶妯℃澘鈥?{row.templateName}鈥濓紵`);
+  await proxy?.$modal.confirm(`确认删除语音模板“${row.templateName}”？`);
   await deleteSpeechTemplate(row.id);
-  proxy?.$modal.msgSuccess('鍒犻櫎鎴愬姛');
+  proxy?.$modal.msgSuccess('删除成功');
   loadTemplates();
 };
 
@@ -961,7 +961,7 @@ const openTtsTest = (row: AiSpeechProviderVO) => {
   testingProviderId.value = row.id;
   ttsTestResult.value = undefined;
   ttsTestForm.value = {
-    text: '宸ュ彿1001涓烘偍鏈嶅姟',
+    text: '工号1001为您服务',
     voice: row.defaultVoice,
     format: row.defaultFormat,
     sampleRate: row.defaultSampleRate
@@ -974,7 +974,7 @@ const submitTtsTest = async () => {
   try {
     const res = await testTtsProvider(testingProviderId.value, ttsTestForm.value);
     ttsTestResult.value = res.data;
-    proxy?.$modal.msgSuccess('娴嬭瘯闊抽鐢熸垚鎴愬姛');
+    proxy?.$modal.msgSuccess('TTS 测试音频生成成功');
   } finally {
     ttsTesting.value = false;
   }

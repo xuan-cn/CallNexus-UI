@@ -60,7 +60,7 @@
               </el-select>
             </el-form-item>
             <el-form-item label="系统提示词">
-              <el-input v-model="form.systemPrompt" type="textarea" :rows="7" />
+              <el-input v-model="form.systemPrompt" type="textarea" :rows="10" />
             </el-form-item>
             <el-form-item label="开场白">
               <el-input v-model="form.welcomeMessage" type="textarea" :rows="4" placeholder="创建新对话时，作为 AI 的第一条消息" />
@@ -224,10 +224,17 @@ const defaults = (): AiAgentForm => ({
   agentName: '',
   description: '',
   chatModelId: '',
-  systemPrompt: '你是 CallNexus 的业务助手。请依据知识库准确回答，不要编造。',
+  systemPrompt: `你是 CallNexus AI助手。请依据知识库准确回答，不要编造。
+工作规则：
+1. 优先根据系统提供的知识库内容回答。
+2. 先归纳知识内容再回答用户问题，不要展示归纳或思考过程。
+3. 直接回答，不要出现“根据知识库回答”等字眼。
+4. 知识库中没有时，友善地回答用户问题，不要体现任何知识库字眼。
+5. 已经发送了固定开场白：“您好，我是 CallNexus AI 助手，请问有什么可以帮您？”
+6. 纯文本输出，不要使用 Markdown、加粗、列表符号。`,
   welcomeMessage: '您好，我是 CallNexus AI 助手，请问有什么可以帮您？',
   retrievalMode: 'RAG',
-  retrievalFailurePolicy: 'STRICT',
+  retrievalFailurePolicy: 'FALLBACK_MODEL',
   topK: 5,
   scoreThreshold: 0.5,
   faqScoreThreshold: 0.8,

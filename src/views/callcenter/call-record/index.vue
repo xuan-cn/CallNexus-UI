@@ -991,15 +991,15 @@ onBeforeUnmount(stopRecordingPoll);
 .transcript-chat {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px;
+  gap: 11px;
+  padding: 14px;
   border-radius: 10px;
   background: #f5f7fb;
 }
 .transcript-message {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
   max-width: 78%;
 }
 .transcript-message.is-agent,
@@ -1013,17 +1013,17 @@ onBeforeUnmount(stopRecordingPoll);
   align-self: flex-start;
 }
 .transcript-avatar {
-  flex: 0 0 34px;
+  flex: 0 0 30px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   background: #909399;
   color: #fff;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12px;
 }
 .transcript-message.is-customer .transcript-avatar {
   background: #0b4a7a;
@@ -1032,7 +1032,7 @@ onBeforeUnmount(stopRecordingPoll);
   background: #1f9d55;
 }
 .transcript-message.is-ai .transcript-avatar {
-  background: #7c3aed;
+  background: #23856d;
 }
 .transcript-message.is-system .transcript-avatar {
   background: #e6a23c;
@@ -1040,7 +1040,7 @@ onBeforeUnmount(stopRecordingPoll);
 .transcript-bubble-wrap {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 .transcript-message.is-agent .transcript-bubble-wrap,
 .transcript-message.is-ai .transcript-bubble-wrap {
@@ -1050,9 +1050,9 @@ onBeforeUnmount(stopRecordingPoll);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   color: #909399;
-  font-size: 12px;
+  font-size: 11px;
 }
 .transcript-message.is-agent .transcript-meta,
 .transcript-message.is-ai .transcript-meta {
@@ -1063,21 +1063,25 @@ onBeforeUnmount(stopRecordingPoll);
   font-weight: 600;
 }
 .transcript-bubble {
-  padding: 10px 14px;
-  border-radius: 12px;
-  line-height: 1.7;
+  padding: 8px 12px;
+  border: 1px solid #e4e7ed;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.6;
   white-space: pre-wrap;
   background: #fff;
   color: #303133;
-  box-shadow: 0 4px 14px rgba(31, 45, 61, 0.06);
+  box-shadow: 0 2px 8px rgba(31, 45, 61, 0.04);
 }
 .transcript-message.is-agent .transcript-bubble {
-  color: #fff;
-  background: #0b4a7a;
+  color: #25364a;
+  border-color: #d6e7f7;
+  background: #eaf4fc;
 }
 .transcript-message.is-ai .transcript-bubble {
-  color: #fff;
-  background: #7c3aed;
+  color: #245247;
+  border-color: #d4ebe3;
+  background: #eaf7f2;
 }
 .transcript-message.is-system .transcript-bubble,
 .transcript-message.is-unknown .transcript-bubble {
