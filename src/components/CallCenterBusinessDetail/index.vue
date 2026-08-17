@@ -477,20 +477,21 @@ defineExpose({ reload: loadDetail });
   border-radius: 10px;
 }
 .custom-field {
-  min-height: 68px;
-  padding: 12px;
-  margin-bottom: 12px;
+  min-height: 60px;
+  padding: 10px;
+  margin-bottom: 10px;
   border: 1px solid #e4e7ed;
   border-radius: 8px;
   background: #fff;
 }
 .custom-field-label {
-  margin-bottom: 8px;
-  font-size: 13px;
+  margin-bottom: 6px;
+  font-size: 12px;
   color: #909399;
 }
 .custom-field-value {
-  line-height: 22px;
+  font-size: 13px;
+  line-height: 20px;
   color: #303133;
   white-space: pre-wrap;
   overflow-wrap: anywhere;

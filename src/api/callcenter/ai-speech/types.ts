@@ -197,3 +197,47 @@ export interface AiCallTranscriptVO {
   createTime?: string;
   segments?: AiCallTranscriptSegmentVO[];
 }
+
+export interface AiCallRecordQuery extends PageQuery {
+  participantNumber?: string;
+  callerNumber?: string;
+  calledNumber?: string;
+  agentExtension?: string;
+  callStatus?: string;
+}
+
+export interface AiCallRecordVO {
+  transcriptId: string | number;
+  callSessionId: string | number;
+  businessCallId: string;
+  nodeId?: string | number;
+  direction?: string;
+  callerNumber?: string;
+  calledNumber?: string;
+  agentId?: string | number;
+  agentExtension?: string;
+  ownerAgentId?: string | number;
+  ownerAgentExtension?: string;
+  handlingQueueId?: string | number;
+  handlingQueueName?: string;
+  callStatus?: string;
+  startedAt?: string;
+  answeredAt?: string;
+  endedAt?: string;
+  durationSeconds?: number;
+  billableSeconds?: number;
+  hangupCause?: string;
+  recordingOssId?: string | number;
+  recordingMediaId?: string | number;
+  recordingFileName?: string;
+  recordingStatus?: string;
+  recordingUrl?: string;
+  transcriptStatus?: 'PROCESSING' | 'SUCCESS' | 'FAILED';
+  transcriptFailureReason?: string;
+  transcriptStartedAt?: string;
+  transcriptFinishedAt?: string;
+  segmentCount?: number;
+  customerSegmentCount?: number;
+  aiSegmentCount?: number;
+  agentSegmentCount?: number;
+}

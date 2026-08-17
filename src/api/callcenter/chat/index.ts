@@ -5,6 +5,8 @@ export interface ChatChannelVO {
   channelKey: string;
   channelName: string;
   skillGroupId?: string | number;
+  aiEnabled?: boolean;
+  aiAgentId?: string | number;
   welcomeMessage?: string;
   offlineMessage?: string;
   allowedOrigins?: string;
@@ -15,6 +17,8 @@ export interface ChatChannelVO {
 export interface ChatChannelForm {
   channelName: string;
   skillGroupId?: string | number;
+  aiEnabled?: boolean;
+  aiAgentId?: string | number;
   welcomeMessage?: string;
   offlineMessage?: string;
   allowedOrigins?: string;
@@ -27,11 +31,13 @@ export interface ChatConversationVO {
   conversationNo: string;
   channelId: string | number;
   channelName?: string;
+  skillGroupId?: string | number;
+  aiAgentId?: string | number;
   visitorId: string | number;
   visitorName?: string;
   phone?: string;
   email?: string;
-  status: 'QUEUING' | 'ACTIVE' | 'CLOSED' | 'ABANDONED';
+  status: 'AI_SERVING' | 'QUEUING' | 'ACTIVE' | 'CLOSED' | 'ABANDONED';
   priority: number;
   assignedUserId?: string | number;
   assignedUserName?: string;
@@ -48,7 +54,7 @@ export interface ChatConversationVO {
 export interface ChatMessageVO {
   id: string | number;
   conversationId: string | number;
-  senderType: 'VISITOR' | 'AGENT' | 'SYSTEM';
+  senderType: 'VISITOR' | 'AGENT' | 'AI' | 'SYSTEM';
   senderId?: string | number;
   senderName?: string;
   messageType: 'TEXT';

@@ -35,12 +35,9 @@ export interface PhoneNumberForm {
   numberType: PhoneNumberType;
   nodeId?: string | number;
   gatewayId?: string | number;
-  routeType: PhoneRouteType;
-  routeTarget?: string;
   outboundDefault: boolean;
   enabled: boolean;
   version?: number;
-  businessHoursRoute: PhoneBusinessHoursRoute;
 }
 
 export interface PhoneNumberQuery extends PageQuery {
@@ -49,6 +46,5 @@ export interface PhoneNumberQuery extends PageQuery {
   number?: string;
   numberName?: string;
   numberType?: PhoneNumberType;
-  routeType?: PhoneRouteType;
   enabled?: boolean;
 }

@@ -29,6 +29,7 @@ export interface FormField {
   defaultValue?: string;
   placeholder?: string;
   validationRules?: string;
+  listVisible?: boolean;
   options: FormFieldOption[];
 }
 

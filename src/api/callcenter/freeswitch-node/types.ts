@@ -11,6 +11,12 @@ export interface FreeSwitchNodeVO {
   agentLastHeartbeat?: string;
   agentVersion?: string;
   mediaRootPath: string;
+  sipProfileName: string;
+  sipIp: string;
+  rtpIp: string;
+  autoNatEnabled: boolean;
+  extSipIp?: string;
+  extRtpIp?: string;
   version: number;
   createTime: string;
 }
@@ -27,6 +33,12 @@ export interface FreeSwitchNodeForm {
   enabled: boolean;
   agentEnabled: boolean;
   mediaRootPath: string;
+  sipProfileName: string;
+  sipIp: string;
+  rtpIp: string;
+  autoNatEnabled: boolean;
+  extSipIp?: string;
+  extRtpIp?: string;
   version?: number;
 }
 
@@ -34,4 +46,12 @@ export interface FreeSwitchNodeQuery extends PageQuery {
   nodeCode?: string;
   nodeName?: string;
   enabled?: boolean;
+}
+
+export interface FreeSwitchNodeSipProfilePreview {
+  nodeId: string | number;
+  nodeName: string;
+  profileName: string;
+  xmlSnippet: string;
+  applyCommands: string;
 }

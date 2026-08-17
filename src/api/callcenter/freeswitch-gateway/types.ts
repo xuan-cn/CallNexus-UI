@@ -1,5 +1,6 @@
 export type GatewayDirection = 'INBOUND' | 'OUTBOUND' | 'BOTH';
 export type GatewayTransport = 'UDP' | 'TCP' | 'TLS';
+export type GatewayAccessMode = 'IP_TRUNK' | 'OUTBOUND_REGISTER' | 'DEVICE_REGISTER';
 
 export interface FreeSwitchGatewayVO {
   id: string | number;
@@ -8,9 +9,12 @@ export interface FreeSwitchGatewayVO {
   gatewayCode: string;
   gatewayName: string;
   direction: GatewayDirection;
+  accessMode: GatewayAccessMode;
   proxy: string;
   realm?: string;
   username?: string;
+  registeredIdentity?: string;
+  sipProfile?: string;
   registerEnabled: boolean;
   transport: GatewayTransport;
   callerIdNumber?: string;
@@ -37,9 +41,12 @@ export interface FreeSwitchGatewayForm {
   gatewayCode: string;
   gatewayName: string;
   direction: GatewayDirection;
+  accessMode: GatewayAccessMode;
   proxy: string;
   realm?: string;
   username?: string;
+  registeredIdentity?: string;
+  sipProfile?: string;
   password?: string;
   registerEnabled: boolean;
   transport: GatewayTransport;

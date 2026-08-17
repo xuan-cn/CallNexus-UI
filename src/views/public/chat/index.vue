@@ -25,13 +25,21 @@
       </template>
 
       <template v-else>
-        <main ref="messageScroller" class="visitor-messages">
+        <main ref="messageScroller" class="visitor-messages" @click="handleMessageClick">
           <div v-for="message in messages" :key="message.id" class="visitor-message" :class="message.senderType.toLowerCase()">
             <div v-if="message.senderType === 'SYSTEM'" class="system-tip">{{ message.content }}</div>
             <template v-else>
               <small>{{ message.senderType === 'VISITOR' ? '我' : message.senderName || '客服' }}</small>
-              <div class="bubble">{{ message.content }}</div>
+              <div class="bubble" v-html="renderTextWithLinks(message.content)"></div>
             </template>
+          </div>
+          <div v-if="aiThinking" class="visitor-message ai">
+            <small>AI助手</small>
+            <div class="bubble typing-bubble">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
           </div>
           <div v-if="!messages.length" class="waiting">正在为您接入客服…</div>
         </main>
@@ -68,6 +76,7 @@ import {
   listPublicChatMessages,
   sendPublicChatMessage
 } from '@/api/callcenter/chat';
+import { copyMiniProgramLinkFromEvent, renderTextWithLinks } from '@/utils/messageLinkify';
 
 const route = useRoute();
 const channelKey = computed(() => String(route.params.channelKey || ''));
@@ -75,6 +84,7 @@ const bootstrap = ref<PublicChatBootstrap>();
 const messages = ref<ChatMessageVO[]>([]);
 const starting = ref(false);
 const sending = ref(false);
+const aiThinking = ref(false);
 const draft = ref('');
 const messageScroller = ref<HTMLElement>();
 const visitor = reactive({ visitorName: '', phone: '', initialMessage: '' });
@@ -91,6 +101,7 @@ const resetConversation = () => {
   session.conversationId = undefined;
   session.visitorToken = undefined;
   messages.value = [];
+  aiThinking.value = false;
   draft.value = '';
   sessionStorage.removeItem(storageKey.value);
 };
@@ -105,16 +116,34 @@ const scrollToBottom = async () => {
   await nextTick();
   if (messageScroller.value) messageScroller.value.scrollTop = messageScroller.value.scrollHeight;
 };
+const handleMessageClick = async (event: MouseEvent) => {
+  const copied = await copyMiniProgramLinkFromEvent(event);
+  if (copied) ElMessage.success('小程序链接已复制，请在微信中打开');
+};
+const createClientMessageId = () => {
+  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+};
+const appendMessages = async (incoming: ChatMessageVO[]) => {
+  if (!incoming.length) return;
+  const existingIds = new Set(messages.value.map((message) => String(message.id)));
+  const nextMessages = incoming.filter((message) => !existingIds.has(String(message.id)));
+  if (!nextMessages.length) return;
+  messages.value.push(...nextMessages);
+  if (nextMessages.some((message) => message.senderType !== 'VISITOR')) {
+    aiThinking.value = false;
+  }
+  await scrollToBottom();
+};
 const loadMessages = async () => {
   if (!session.conversationId || !session.visitorToken || polling) return;
   polling = true;
   try {
     const afterId = messages.value.at(-1)?.id;
     const incoming = (await listPublicChatMessages(session.conversationId, session.visitorToken, afterId)).data || [];
-    if (incoming.length) {
-      messages.value.push(...incoming);
-      await scrollToBottom();
-    }
+    await appendMessages(incoming);
   } finally {
     polling = false;
   }
@@ -133,17 +162,27 @@ const startConversation = async () => {
     session.visitorToken = created.visitorToken;
     persistSession();
     await loadMessages();
+    if (visitor.initialMessage?.trim() && messages.value.at(-1)?.senderType === 'VISITOR') {
+      aiThinking.value = true;
+      await scrollToBottom();
+    }
   } finally {
     starting.value = false;
   }
 };
 const send = async () => {
   if (!session.conversationId || !session.visitorToken || !draft.value.trim()) return;
+  const content = draft.value.trim();
+  draft.value = '';
   sending.value = true;
   try {
-    await sendPublicChatMessage(session.conversationId, session.visitorToken, draft.value.trim(), crypto.randomUUID());
-    draft.value = '';
-    await loadMessages();
+    const message = (await sendPublicChatMessage(session.conversationId, session.visitorToken, content, createClientMessageId())).data;
+    await appendMessages([message]);
+    aiThinking.value = true;
+    await scrollToBottom();
+  } catch (error) {
+    draft.value = content;
+    throw error;
   } finally {
     sending.value = false;
   }
@@ -235,6 +274,8 @@ onBeforeUnmount(() => {
 }
 .visitor-message {
   display: flex;
+  min-width: 0;
+  max-width: 100%;
   margin-bottom: 16px;
   flex-direction: column;
   align-items: flex-start;
@@ -247,17 +288,67 @@ onBeforeUnmount(() => {
   color: var(--el-text-color-secondary);
 }
 .bubble {
+  min-width: 0;
   max-width: 82%;
   padding: 10px 13px;
   line-height: 1.65;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
+  word-break: break-word;
   border-radius: 4px 14px 14px;
   background: white;
 }
+
+.bubble :deep(a) {
+  color: var(--el-color-primary);
+  overflow-wrap: anywhere;
+  text-decoration: underline !important;
+  text-underline-offset: 2px;
+  word-break: break-all;
+  cursor: pointer;
+}
+
 .visitor-message.visitor .bubble {
   color: white;
   border-radius: 14px 4px 14px 14px;
   background: #0c568f;
+}
+
+.visitor-message.visitor .bubble :deep(a) {
+  color: white;
+  text-decoration-color: currentcolor;
+}
+.typing-bubble {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 48px;
+  min-height: 24px;
+}
+.typing-bubble span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #b6c0cc;
+  animation: typing-dot 1.2s infinite ease-in-out;
+}
+.typing-bubble span:nth-child(2) {
+  animation-delay: 0.16s;
+}
+.typing-bubble span:nth-child(3) {
+  animation-delay: 0.32s;
+}
+@keyframes typing-dot {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
 }
 .system-tip,
 .waiting {

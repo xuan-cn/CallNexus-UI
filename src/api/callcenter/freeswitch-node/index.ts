@@ -1,6 +1,6 @@
 import request from '@/utils/request';
 import { AxiosPromise } from 'axios';
-import { FreeSwitchNodeForm, FreeSwitchNodeQuery, FreeSwitchNodeVO } from './types';
+import { FreeSwitchNodeForm, FreeSwitchNodeQuery, FreeSwitchNodeSipProfilePreview, FreeSwitchNodeVO } from './types';
 
 export const listFreeSwitchNodes = (query: FreeSwitchNodeQuery): AxiosPromise<FreeSwitchNodeVO[]> =>
   request({ url: '/api/v1/freeswitch-nodes', method: 'get', params: query });
@@ -17,3 +17,6 @@ export const updateFreeSwitchNode = (data: FreeSwitchNodeForm) =>
 export const deleteFreeSwitchNode = (id: string | number) => request({ url: `/api/v1/freeswitch-nodes/${id}`, method: 'delete' });
 export const resetFreeSwitchNodeAgentToken = (id: string | number): AxiosPromise<string> =>
   request({ url: `/api/v1/freeswitch-nodes/${id}/agent-token`, method: 'post' });
+
+export const previewFreeSwitchNodeSipProfile = (id: string | number): AxiosPromise<FreeSwitchNodeSipProfilePreview> =>
+  request({ url: `/api/v1/freeswitch-nodes/${id}/sip-profile-preview`, method: 'get' });

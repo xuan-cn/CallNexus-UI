@@ -127,7 +127,12 @@
         <el-tab-pane label="语音转写" name="transcript">
           <div class="transcript-toolbar">
             <div>
-              <strong>通话语音转写</strong>
+              <div class="transcript-title-line">
+                <strong>通话语音转写</strong>
+                <el-tag size="small" :type="transcriptStreamConnected ? 'success' : 'info'" effect="plain">
+                  {{ transcriptStreamActive ? (transcriptStreamConnected ? '实时接收中' : '实时连接中') : '实时未连接' }}
+                </el-tag>
+              </div>
               <span>按说话人展示客户、坐席和 AI 的对话内容；无法识别来源时显示为未知。</span>
             </div>
             <el-button type="primary" :loading="transcriptLoading" :disabled="!detail.recordingUrl" @click="handleTranscribe">
@@ -150,10 +155,10 @@
             :title="transcript.failureReason || '转写失败'"
           />
           <div v-if="transcript?.status === 'SUCCESS'" class="transcript-content">
-            <div v-if="transcriptSegments.length" class="transcript-chat">
+            <div v-if="transcriptSegments.length" ref="transcriptChatRef" class="transcript-chat">
               <div
                 v-for="segment in transcriptSegments"
-                :key="String(segment.id || segment.sentenceIndex || segment.textContent)"
+                :key="transcriptSegmentKey(segment)"
                 class="transcript-message"
                 :class="speakerClass(segment.speaker)"
               >
@@ -161,7 +166,7 @@
                 <div class="transcript-bubble-wrap">
                   <div class="transcript-meta">
                     <span>{{ speakerLabel(segment.speaker) }}</span>
-                    <span>{{ formatMilliseconds(segment.startMs) }} - {{ formatMilliseconds(segment.endMs) }}</span>
+                    <span>{{ transcriptSegmentTime(segment) }}</span>
                     <span v-if="segment.confidence !== undefined">置信度 {{ formatConfidence(segment.confidence) }}</span>
                   </div>
                   <div class="transcript-bubble">{{ segment.textContent || '-' }}</div>
@@ -169,12 +174,13 @@
               </div>
             </div>
             <el-empty v-else description="暂无转写分句" :image-size="70" />
-            <el-collapse v-if="transcript.fullText" class="transcript-raw">
+            <el-collapse v-if="transcriptFullText" class="transcript-raw">
               <el-collapse-item title="查看完整文本" name="fullText">
-                <div class="transcript-full-text">{{ transcript.fullText }}</div>
+                <div class="transcript-full-text">{{ transcriptFullText }}</div>
               </el-collapse-item>
             </el-collapse>
           </div>
+          <el-empty v-else-if="transcript?.status === 'PROCESSING'" description="语音转写处理中，实时分句会自动追加到这里" :image-size="70" />
           <el-empty v-else-if="!transcriptLoading && detail.recordingUrl && !transcript" description="暂无转写结果" :image-size="70" />
         </el-tab-pane>
         <el-tab-pane label="语音留言" name="voicemail">
@@ -377,6 +383,9 @@ const detail = ref<CallRecordVO>();
 const detailTab = ref('basic');
 const transcript = ref<AiCallTranscriptVO>();
 const transcriptLoading = ref(false);
+const transcriptChatRef = ref<HTMLElement>();
+const transcriptStreamActive = ref(false);
+const transcriptStreamConnected = ref(false);
 const normalizeTranscriptResponse = (response: any): AiCallTranscriptVO | undefined => {
   const data = response?.data && response?.status === undefined ? response.data : response;
   if (!data) {
@@ -387,6 +396,15 @@ const normalizeTranscriptResponse = (response: any): AiCallTranscriptVO | undefi
     segments: Array.isArray(data.segments) ? data.segments : []
   };
 };
+const sortTranscriptSegments = (segments: AiCallTranscriptSegmentVO[]) =>
+  [...segments].sort((left, right) => {
+    const leftStart = left.startMs ?? Number.MAX_SAFE_INTEGER;
+    const rightStart = right.startMs ?? Number.MAX_SAFE_INTEGER;
+    if (leftStart !== rightStart) {
+      return leftStart - rightStart;
+    }
+    return (left.sentenceIndex ?? 0) - (right.sentenceIndex ?? 0);
+  });
 const transcriptSegments = computed<AiCallTranscriptSegmentVO[]>(() => {
   const current = transcript.value;
   const segments =
@@ -404,14 +422,14 @@ const transcriptSegments = computed<AiCallTranscriptSegmentVO[]>(() => {
             } as AiCallTranscriptSegmentVO
           ]
         : [];
-  return [...segments].sort((left, right) => {
-    const leftStart = left.startMs ?? Number.MAX_SAFE_INTEGER;
-    const rightStart = right.startMs ?? Number.MAX_SAFE_INTEGER;
-    if (leftStart !== rightStart) {
-      return leftStart - rightStart;
-    }
-    return (left.sentenceIndex ?? 0) - (right.sentenceIndex ?? 0);
-  });
+  return sortTranscriptSegments(segments);
+});
+const transcriptFullText = computed(() => {
+  const segments = transcriptSegments.value;
+  if (segments.length > 0) {
+    return segments.map((segment) => `${speakerLabel(segment.speaker)}：${segment.textContent || '-'}`).join('\n');
+  }
+  return transcript.value?.fullText || '';
 });
 const recordList = ref<CallRecordVO[]>([]);
 const queryFormRef = ref<ElFormInstance>();
@@ -490,6 +508,18 @@ const speakerLabel = (value?: string) =>
 const speakerInitial = (value?: string) => ({ CUSTOMER: '客', AGENT: '席', AI: 'AI', SYSTEM: '系', UNKNOWN: '?' })[value || 'UNKNOWN'] || '?';
 const speakerClass = (value?: string) =>
   ({ CUSTOMER: 'is-customer', AGENT: 'is-agent', AI: 'is-ai', SYSTEM: 'is-system', UNKNOWN: 'is-unknown' })[value || 'UNKNOWN'] || 'is-unknown';
+const transcriptSegmentKey = (segment: AiCallTranscriptSegmentVO) =>
+  String(segment.id || `${segment.speaker || 'UNKNOWN'}-${segment.sentenceIndex ?? ''}-${segment.startMs ?? ''}-${segment.textContent}`);
+const transcriptSegmentTime = (segment: AiCallTranscriptSegmentVO) => {
+  if (segment.startMs !== undefined || segment.endMs !== undefined) {
+    return `${formatMilliseconds(segment.startMs)} - ${formatMilliseconds(segment.endMs)}`;
+  }
+  return segment.messageTime || '实时';
+};
+const buildTranscriptFullText = (segments: AiCallTranscriptSegmentVO[]) =>
+  sortTranscriptSegments(segments)
+    .map((segment) => `${speakerLabel(segment.speaker)}：${segment.textContent || '-'}`)
+    .join('\n');
 const formatConfidence = (value?: number) => (value === undefined || value === null ? '-' : `${Math.round(value * 100)}%`);
 const directionTag = (value: CallDirection) => ({ INBOUND: 'success', OUTBOUND: 'primary', INTERNAL: 'warning', UNKNOWN: 'info' })[value] as any;
 const eventLabel = (eventType: string) =>
@@ -713,13 +743,17 @@ const loadTranscript = async (id: string | number) => {
     if (!loaded) return;
     const current = transcript.value;
     if (!current || String(current.callSessionId) !== String(id)) {
-      transcript.value = loaded;
+      transcript.value = {
+        ...loaded,
+        fullText: buildTranscriptFullText(loaded.segments || []) || loaded.fullText
+      };
       return;
     }
     const segments = new Map<string, AiCallTranscriptSegmentVO>();
-    for (const segment of loaded.segments || []) segments.set(String(segment.id), segment);
-    for (const segment of current.segments || []) segments.set(String(segment.id), segment);
-    transcript.value = { ...loaded, segments: [...segments.values()] };
+    for (const segment of loaded.segments || []) segments.set(transcriptSegmentKey(segment), segment);
+    for (const segment of current.segments || []) segments.set(transcriptSegmentKey(segment), segment);
+    const mergedSegments = sortTranscriptSegments([...segments.values()]);
+    transcript.value = { ...loaded, fullText: buildTranscriptFullText(mergedSegments) || loaded.fullText, segments: mergedSegments };
   } catch {
     if (!transcript.value || String(transcript.value.callSessionId) !== String(id)) transcript.value = undefined;
   }
@@ -729,8 +763,9 @@ const mergeTranscriptSegment = (event: AiCallTranscriptStreamEvent) => {
   const segment = event.segment;
   const current = transcript.value;
   const segments = current?.segments ? [...current.segments] : [];
-  if (segments.some((item) => String(item.id) === String(segment.id))) return;
+  if (segments.some((item) => transcriptSegmentKey(item) === transcriptSegmentKey(segment))) return;
   segments.push(segment);
+  const mergedSegments = sortTranscriptSegments(segments);
   transcript.value = {
     ...(current || {
       id: event.transcriptId || `realtime-${event.callSessionId}`,
@@ -739,8 +774,8 @@ const mergeTranscriptSegment = (event: AiCallTranscriptStreamEvent) => {
       status: 'SUCCESS'
     }),
     status: 'SUCCESS',
-    fullText: [current?.fullText, segment.textContent].filter(Boolean).join('\n'),
-    segments
+    fullText: buildTranscriptFullText(mergedSegments),
+    segments: mergedSegments
   };
 };
 const stopTranscriptStream = () => {
@@ -749,18 +784,25 @@ const stopTranscriptStream = () => {
   transcriptStreamController?.abort();
   transcriptStreamController = undefined;
   transcriptStreamSessionId = undefined;
+  transcriptStreamActive.value = false;
+  transcriptStreamConnected.value = false;
 };
 const startTranscriptStream = (callSessionId: string | number) => {
   stopTranscriptStream();
   transcriptStreamSessionId = callSessionId;
+  transcriptStreamActive.value = true;
   const connect = () => {
     if (!detailVisible.value || String(transcriptStreamSessionId) !== String(callSessionId)) return;
     const controller = new AbortController();
     transcriptStreamController = controller;
+    transcriptStreamConnected.value = false;
     streamCallTranscript(
       callSessionId,
       (event, data) => {
-        if (event === 'connected') void loadTranscript(callSessionId);
+        if (event === 'connected') {
+          transcriptStreamConnected.value = true;
+          void loadTranscript(callSessionId);
+        }
         if (event === 'segment') mergeTranscriptSegment(data);
       },
       controller.signal
@@ -769,11 +811,20 @@ const startTranscriptStream = (callSessionId: string | number) => {
         if (error?.name !== 'AbortError') console.warn('Transcript stream disconnected', error);
       })
       .finally(() => {
+        transcriptStreamConnected.value = false;
         if (controller.signal.aborted || !detailVisible.value || String(transcriptStreamSessionId) !== String(callSessionId)) return;
         transcriptStreamReconnectTimer = setTimeout(connect, 1500);
       });
   };
   connect();
+};
+const scrollTranscriptToBottom = () => {
+  void nextTick(() => {
+    const el = transcriptChatRef.value;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+  });
 };
 const handleDetail = async (row: CallRecordVO) => {
   detailTab.value = 'basic';
@@ -821,6 +872,15 @@ watch(detailVisible, (visible) => {
     stopRecordingPoll();
     stopTranscriptStream();
   }
+});
+watch(
+  () => transcriptSegments.value.length,
+  () => {
+    if (detailTab.value === 'transcript') scrollTranscriptToBottom();
+  }
+);
+watch(detailTab, (tab) => {
+  if (tab === 'transcript') scrollTranscriptToBottom();
 });
 onMounted(getList);
 onBeforeUnmount(() => {
@@ -1073,6 +1133,11 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 6px;
 }
+.transcript-title-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .transcript-toolbar span {
   color: #909399;
   font-size: 13px;
@@ -1086,7 +1151,9 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 11px;
+  max-height: 520px;
   padding: 14px;
+  overflow-y: auto;
   border-radius: 10px;
   background: #f5f7fb;
 }

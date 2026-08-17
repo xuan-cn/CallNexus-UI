@@ -169,9 +169,12 @@ import { getCallQueueMonitorOverview } from '@/api/callcenter/call-queue-monitor
 import type { CallQueueMonitorOverviewVO } from '@/api/callcenter/call-queue-monitor/types';
 import { ElMessage } from 'element-plus';
 import { computed, inject, onMounted, ref, type Component, type Ref } from 'vue';
+import { usePermissionStore } from '@/store/modules/permission';
+import type { RouteRecordRaw } from 'vue-router';
 
 const agentToolbarRef = inject<Ref<{ simulateIncomingCall: () => void } | null>>('agentToolbarRef');
 const router = useRouter();
+const permissionStore = usePermissionStore();
 
 const loading = ref(false);
 const overview = ref<CallQueueMonitorOverviewVO>();
@@ -278,14 +281,71 @@ const todos = computed<TodoItem[]>(() => [
   }
 ]);
 
-const quickActions = [
-  { label: '新建坐席', tone: 'blue', icon: Plus, path: '/callcenter/callcenter-operation/agent' },
-  { label: '队列监控', tone: 'cyan', icon: UserFilled, path: '/callcenter/callcenter-operation/call-queue-monitor' },
-  { label: '通话记录', tone: 'purple', icon: Document, path: '/callcenter/callcenter-operation/call-record' },
-  { label: '系统配置', tone: 'orange', icon: Setting, path: '/callcenter/callcenter-routing/callcenter-config' },
-  { label: '语音留言', tone: 'red', icon: Bell, path: '/callcenter/callcenter-routing/voicemail' },
-  { label: '运营报表', tone: 'green', icon: DataAnalysis, path: '/callcenter/callcenter-operation/call-queue-monitor' }
+type DashboardLinkKey = 'agent' | 'queueMonitor' | 'callRecord' | 'callcenterConfig' | 'voicemail';
+type QuickAction = {
+  label: string;
+  tone: string;
+  icon: Component;
+  routeKey: DashboardLinkKey;
+};
+
+const dashboardRouteTargets: Record<DashboardLinkKey, { titles: string[]; names: string[]; fallbacks: string[] }> = {
+  agent: {
+    titles: ['坐席管理'],
+    names: ['agent'],
+    fallbacks: ['/callcenter/agent']
+  },
+  queueMonitor: {
+    titles: ['队列监控'],
+    names: ['call-queue-monitor'],
+    fallbacks: ['/callcenter/call-queue-monitor']
+  },
+  callRecord: {
+    titles: ['通话记录'],
+    names: ['call-record'],
+    fallbacks: ['/callcenter/call-record']
+  },
+  callcenterConfig: {
+    titles: ['配置中心', '系统配置'],
+    names: ['callcenter-config'],
+    fallbacks: ['/callcenter/callcenter-config']
+  },
+  voicemail: {
+    titles: ['语音留言'],
+    names: ['voicemail'],
+    fallbacks: ['/callcenter/voicemail']
+  }
+};
+
+const quickActions: QuickAction[] = [
+  { label: '新建坐席', tone: 'blue', icon: Plus, routeKey: 'agent' },
+  { label: '队列监控', tone: 'cyan', icon: UserFilled, routeKey: 'queueMonitor' },
+  { label: '通话记录', tone: 'purple', icon: Document, routeKey: 'callRecord' },
+  { label: '系统配置', tone: 'orange', icon: Setting, routeKey: 'callcenterConfig' },
+  { label: '语音留言', tone: 'red', icon: Bell, routeKey: 'voicemail' },
+  { label: '运营报表', tone: 'green', icon: DataAnalysis, routeKey: 'queueMonitor' }
 ];
+
+const normalizePath = (path?: string) => {
+  if (!path) return '';
+  return path.startsWith('/') ? path : `/${path}`;
+};
+
+const flattenRoutes = (routes: RouteRecordRaw[], parentPath = ''): Array<RouteRecordRaw & { resolvedPath: string }> =>
+  routes.flatMap((route) => {
+    const currentPath = normalizePath(route.path);
+    const resolvedPath = currentPath.startsWith(parentPath) || currentPath === '/' ? currentPath : `${parentPath}${currentPath}`;
+    const current = { ...route, resolvedPath };
+    return [current, ...flattenRoutes((route.children || []) as RouteRecordRaw[], resolvedPath === '/' ? '' : resolvedPath)];
+  });
+
+const resolveDashboardPath = (key: DashboardLinkKey) => {
+  const target = dashboardRouteTargets[key];
+  const routes = flattenRoutes(permissionStore.getRoutes());
+  const matchedRoute = routes.find((route) => target.names.includes(String(route.name || '')))
+    || routes.find((route) => target.titles.includes(String(route.meta?.title || '')));
+  return matchedRoute?.resolvedPath || target.fallbacks[0];
+};
 
 const loadDashboard = async () => {
   loading.value = true;
@@ -309,11 +369,11 @@ const refreshDashboard = async () => {
 };
 
 const openQueueMonitor = () => {
-  router.push('/callcenter/callcenter-operation/call-queue-monitor');
+  router.push(resolveDashboardPath('queueMonitor'));
 };
 
 const openUnhandledVoiceMail = () => {
-  router.push({ path: '/callcenter/callcenter-routing/voicemail', query: { status: 'UNHANDLED' } });
+  router.push({ path: resolveDashboardPath('voicemail'), query: { status: 'UNHANDLED' } });
 };
 
 const handleTodo = (todo: TodoItem) => {
@@ -321,12 +381,13 @@ const handleTodo = (todo: TodoItem) => {
   if (todo.action === 'QUEUE_MONITOR') openQueueMonitor();
 };
 
-const handleQuickAction = (action: { path: string; label: string }) => {
-  if (action.path) {
-    router.push(action.path);
-  } else {
-    ElMessage.info(`${action.label}功能将在对应业务模块开放`);
+const handleQuickAction = (action: QuickAction) => {
+  const path = resolveDashboardPath(action.routeKey);
+  if (path) {
+    router.push(path);
+    return;
   }
+  ElMessage.info(`${action.label}功能将在对应业务模块开放`);
 };
 
 const simulateIncomingCall = () => {

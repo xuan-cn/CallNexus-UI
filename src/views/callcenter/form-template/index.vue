@@ -110,6 +110,12 @@
                 <el-radio-button :value="12">一行两个</el-radio-button>
                 <el-radio-button :value="24">独占整行</el-radio-button>
               </el-radio-group>
+              <el-switch
+                v-if="form.businessType === 'CUSTOMER'"
+                v-model="field.listVisible"
+                active-text="列表显示"
+                inactive-text="列表隐藏"
+              />
             </div>
             <div v-if="optionTypes.includes(field.fieldType)" class="option-editor">
               <div class="option-heading">
@@ -290,6 +296,7 @@ const submit = async () => {
       placeholder: field.placeholder,
       defaultValue: field.defaultValue,
       validationRules: field.validationRules,
+      listVisible: Boolean(field.listVisible),
       sortOrder: index,
       options: validOptions(field).map((option, optionIndex) => ({ label: option.label, value: option.value, sortOrder: optionIndex }))
     }))
@@ -373,6 +380,7 @@ onMounted(async () => {
 }
 .layout-editor {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   align-items: center;
   margin-top: 12px;

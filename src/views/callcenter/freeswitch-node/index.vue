@@ -24,6 +24,13 @@
         <el-table-column label="节点编码" prop="nodeCode" min-width="130" />
         <el-table-column label="节点名称" prop="nodeName" min-width="150" />
         <el-table-column label="SIP 域" prop="sipDomain" min-width="170" />
+        <el-table-column label="SIP Profile" prop="sipProfileName" width="120" />
+        <el-table-column label="外部 SIP/RTP" min-width="180">
+          <template #default="{ row }">
+            <span v-if="row.autoNatEnabled">auto-nat</span>
+            <span v-else>{{ row.extSipIp || row.sipIp }} / {{ row.extRtpIp || row.rtpIp }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="WebSocket 地址" prop="wssUrl" min-width="230" />
         <el-table-column label="ESL 地址" min-width="170"
           ><template #default="{ row }">{{ row.eslHost }}:{{ row.eslPort }}</template></el-table-column
@@ -42,6 +49,7 @@
         >
         <el-table-column label="操作" width="180" align="center">
           <template #default="{ row }">
+            <el-button v-hasPermi="['callcenter:freeswitch-node:query']" link type="primary" icon="Document" @click="handleProfilePreview(row)" />
             <el-button v-hasPermi="['callcenter:freeswitch-node:agent-token']" link type="primary" icon="Key" @click="handleAgentToken(row)" />
             <el-button v-hasPermi="['callcenter:freeswitch-node:update']" link type="primary" icon="Edit" @click="handleUpdate(row)" />
             <el-button v-hasPermi="['callcenter:freeswitch-node:delete']" link type="danger" icon="Delete" @click="handleDelete(row)" />
@@ -70,12 +78,52 @@
           ><el-switch v-model="form.agentEnabled" active-text="启用" inactive-text="停用"
         /></el-form-item>
         <el-form-item v-if="form.id" label="媒体根目录"><el-input v-model="form.mediaRootPath" /></el-form-item>
+        <el-divider content-position="left">网络与 SIP Profile</el-divider>
+        <el-alert
+          title="这里维护 FreeSWITCH external profile 的 Contact/SDP 对外地址。关闭 Auto NAT 后，网关 Contact 会使用固定对外 SIP IP。"
+          type="info"
+          :closable="false"
+          show-icon
+          class="mb-3"
+        />
+        <el-form-item label="Profile 名称" prop="sipProfileName">
+          <el-input v-model="form.sipProfileName" placeholder="external" />
+        </el-form-item>
+        <el-form-item label="本机 SIP IP" prop="sipIp">
+          <el-input v-model="form.sipIp" placeholder="$${local_ip_v4} 或 192.168.0.176" />
+        </el-form-item>
+        <el-form-item label="本机 RTP IP" prop="rtpIp">
+          <el-input v-model="form.rtpIp" placeholder="$${local_ip_v4} 或 192.168.0.176" />
+        </el-form-item>
+        <el-form-item label="Auto NAT">
+          <el-switch v-model="form.autoNatEnabled" active-text="启用" inactive-text="固定IP" />
+        </el-form-item>
+        <el-form-item label="对外 SIP IP" prop="extSipIp">
+          <el-input v-model="form.extSipIp" :disabled="form.autoNatEnabled" placeholder="例如 192.168.0.176；Auto NAT 开启时使用 auto-nat" />
+        </el-form-item>
+        <el-form-item label="对外 RTP IP" prop="extRtpIp">
+          <el-input v-model="form.extRtpIp" :disabled="form.autoNatEnabled" placeholder="例如 192.168.0.176；Auto NAT 开启时使用 auto-nat" />
+        </el-form-item>
         <el-form-item v-if="form.id" label="状态"><el-switch v-model="form.enabled" active-text="启用" inactive-text="停用" /></el-form-item>
       </el-form>
       <template #footer
         ><el-button @click="dialog.visible = false">取消</el-button><el-button type="primary" @click="submitForm">确定</el-button></template
       >
     </el-dialog>
+
+    <el-drawer v-model="profilePreview.visible" title="SIP Profile 配置预览" size="560px" append-to-body>
+      <el-alert
+        title="把 XML 片段同步到 FreeSWITCH 对应 sip_profiles 文件后，执行下方命令生效。当前版本先提供预览与人工应用。"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="mb-3"
+      />
+      <div class="preview-title">Profile：{{ profilePreview.data?.profileName }}</div>
+      <el-input :model-value="profilePreview.data?.xmlSnippet || ''" type="textarea" :rows="8" readonly />
+      <div class="preview-title mt-4">生效命令</div>
+      <el-input :model-value="profilePreview.data?.applyCommands || ''" type="textarea" :rows="5" readonly />
+    </el-drawer>
   </div>
 </template>
 
@@ -85,10 +133,11 @@ import {
   deleteFreeSwitchNode,
   getFreeSwitchNode,
   listFreeSwitchNodes,
+  previewFreeSwitchNodeSipProfile,
   resetFreeSwitchNodeAgentToken,
   updateFreeSwitchNode
 } from '@/api/callcenter/freeswitch-node';
-import { FreeSwitchNodeForm, FreeSwitchNodeQuery, FreeSwitchNodeVO } from '@/api/callcenter/freeswitch-node/types';
+import { FreeSwitchNodeForm, FreeSwitchNodeQuery, FreeSwitchNodeSipProfilePreview, FreeSwitchNodeVO } from '@/api/callcenter/freeswitch-node/types';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const loading = ref(false);
@@ -97,6 +146,7 @@ const nodeList = ref<FreeSwitchNodeVO[]>([]);
 const queryFormRef = ref<ElFormInstance>();
 const formRef = ref<ElFormInstance>();
 const dialog = reactive<DialogOption>({ visible: false, title: '' });
+const profilePreview = reactive<{ visible: boolean; data?: FreeSwitchNodeSipProfilePreview }>({ visible: false });
 const initialForm: FreeSwitchNodeForm = {
   nodeCode: '',
   nodeName: '',
@@ -107,6 +157,12 @@ const initialForm: FreeSwitchNodeForm = {
   eslPassword: '',
   agentEnabled: false,
   mediaRootPath: '/var/lib/freeswitch/sounds/callnexus',
+  sipProfileName: 'external',
+  sipIp: '$${local_ip_v4}',
+  rtpIp: '$${local_ip_v4}',
+  autoNatEnabled: true,
+  extSipIp: '',
+  extRtpIp: '',
   enabled: true
 };
 const data = reactive<PageData<FreeSwitchNodeForm, FreeSwitchNodeQuery>>({
@@ -125,6 +181,7 @@ const data = reactive<PageData<FreeSwitchNodeForm, FreeSwitchNodeQuery>>({
       }
     ],
     eslHost: [{ required: true, message: 'ESL 主机不能为空', trigger: 'blur' }],
+    sipProfileName: [{ required: true, pattern: /^[A-Za-z0-9_-]{1,32}$/, message: '请输入合法 Profile 名称', trigger: 'blur' }],
     eslPassword: [
       {
         validator: (_: unknown, value: string, callback: (error?: Error) => void) =>
@@ -190,5 +247,18 @@ const handleAgentToken = async (row: FreeSwitchNodeVO) => {
   await proxy?.$modal.alert(`请立即保存，该 Token 仅展示一次：\n${res.data}`);
   await getList();
 };
+const handleProfilePreview = async (row: FreeSwitchNodeVO) => {
+  const res = await previewFreeSwitchNodeSipProfile(row.id);
+  profilePreview.data = res.data;
+  profilePreview.visible = true;
+};
 onMounted(getList);
 </script>
+
+<style scoped>
+.preview-title {
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+</style>

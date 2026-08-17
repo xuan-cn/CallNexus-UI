@@ -1,5 +1,5 @@
 <template>
-  <el-dialog v-model="visible" :title="businessType === 'CUSTOMER' ? '新建客户' : '创建工单'" width="760px" append-to-body>
+  <el-dialog v-model="visible" :title="dialogTitle" width="760px" append-to-body>
     <el-form label-position="top">
       <div class="default-field-section">
         <div class="section-title">默认信息</div>
@@ -105,6 +105,12 @@ const submitting = ref(false);
 const existingCustomer = ref<CustomerVO>();
 const selectedTemplate = computed(() => templates.value.find((template) => String(template.id) === String(templateId.value)));
 const enabledTemplates = computed(() => templates.value.filter((template) => template.enabled));
+const dialogTitle = computed(() => {
+  if (props.businessType !== 'CUSTOMER') {
+    return '创建工单';
+  }
+  return existingCustomer.value ? '编辑客户' : '新建客户';
+});
 let lookupTimer: ReturnType<typeof setTimeout> | undefined;
 
 const populateFormData = (template?: FormTemplate) => {

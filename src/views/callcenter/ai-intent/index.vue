@@ -150,8 +150,18 @@
             />
           </el-select>
         </el-form-item>
+        <el-form-item v-else-if="form.actionType === 'TRANSFER_ONLINE_SERVICE'" label="在线客服组">
+          <el-select v-model="actionOnlineSkillGroupId" filterable style="width: 100%" placeholder="请选择在线客服技能组">
+            <el-option
+              v-for="group in skillGroups"
+              :key="group.id"
+              :label="`${group.groupName}（${group.groupCode}）`"
+              :value="String(group.id)"
+            />
+          </el-select>
+        </el-form-item>
         <el-alert
-          v-if="['TRANSFER_QUEUE', 'TRANSFER_EXTENSION', 'TRANSFER_IVR'].includes(form.actionType)"
+          v-if="['TRANSFER_QUEUE', 'TRANSFER_EXTENSION', 'TRANSFER_IVR', 'TRANSFER_ONLINE_SERVICE'].includes(form.actionType)"
           title="动作参数由系统根据所选目标自动生成，无需手工填写。"
           type="info"
           :closable="false"
@@ -209,6 +219,8 @@ import { listIvrFlows } from '@/api/callcenter/ivr-flow';
 import type { IvrFlowVO } from '@/api/callcenter/ivr-flow/types';
 import { listSipAccounts } from '@/api/callcenter/sip-account';
 import type { SipAccountVO } from '@/api/callcenter/sip-account/types';
+import { listSkillGroups } from '@/api/callcenter/skill-group';
+import type { SkillGroupVO } from '@/api/callcenter/skill-group/types';
 import type {
   AiAgentVO,
   AiIntentActionType,
@@ -233,6 +245,7 @@ const actionMeta: Record<AiIntentActionType, string> = {
   TRANSFER_QUEUE: '转技能组',
   TRANSFER_EXTENSION: '转分机',
   TRANSFER_IVR: '转 IVR',
+  TRANSFER_ONLINE_SERVICE: '转在线客服',
   END_CALL: '结束通话',
   KNOWLEDGE_QUERY: '发起知识查询'
 };
@@ -242,9 +255,11 @@ const agents = ref<AiAgentVO[]>([]);
 const queues = ref<CallQueueVO[]>([]);
 const sipAccounts = ref<SipAccountVO[]>([]);
 const ivrFlows = ref<IvrFlowVO[]>([]);
+const skillGroups = ref<SkillGroupVO[]>([]);
 const actionQueueCode = ref('');
 const actionExtension = ref('');
 const actionIvrFlowId = ref('');
+const actionOnlineSkillGroupId = ref('');
 const editorVisible = ref(false);
 const testVisible = ref(false);
 const saving = ref(false);
@@ -280,18 +295,20 @@ const rules = {
 };
 
 const load = async () => {
-  const [intentResponse, agentResponse, queueResponse, sipAccountResponse, ivrFlowResponse] = await Promise.all([
+  const [intentResponse, agentResponse, queueResponse, sipAccountResponse, ivrFlowResponse, skillGroupResponse] = await Promise.all([
     listAiIntents(),
     listAiAgents(),
     listCallQueues(),
     listSipAccounts({ pageNum: 1, pageSize: 1000 }),
-    listIvrFlows()
+    listIvrFlows(),
+    listSkillGroups()
   ]);
   intents.value = intentResponse.data || [];
   agents.value = (agentResponse.data || []).filter((item) => item.enabled);
   queues.value = queueResponse.data || [];
   sipAccounts.value = (sipAccountResponse.rows || []).filter((item) => item.enabled);
   ivrFlows.value = (ivrFlowResponse.data || []).filter((item) => item.enabled && item.publishStatus === 'PUBLISHED');
+  skillGroups.value = (skillGroupResponse.data || []).filter((item) => item.enabled);
 };
 const positiveCount = (row: AiIntentVO) => row.utterances.filter((item) => item.utteranceType === 'POSITIVE').length;
 const negativeCount = (row: AiIntentVO) => row.utterances.filter((item) => item.utteranceType === 'NEGATIVE').length;
@@ -302,12 +319,19 @@ const openEditor = (row?: AiIntentVO) => {
   actionQueueCode.value = '';
   actionExtension.value = '';
   actionIvrFlowId.value = '';
+  actionOnlineSkillGroupId.value = '';
   if (row?.actionConfigJson) {
     try {
-      const config = JSON.parse(row.actionConfigJson) as { queueCode?: string; extension?: string; ivrFlowId?: string | number };
+      const config = JSON.parse(row.actionConfigJson) as {
+        queueCode?: string;
+        extension?: string;
+        ivrFlowId?: string | number;
+        skillGroupId?: string | number;
+      };
       actionQueueCode.value = config.queueCode || '';
       actionExtension.value = config.extension || '';
       actionIvrFlowId.value = config.ivrFlowId == null ? '' : String(config.ivrFlowId);
+      actionOnlineSkillGroupId.value = config.skillGroupId == null ? '' : String(config.skillGroupId);
     } catch {
       // 历史异常配置由后端校验，编辑页不再向用户暴露原始 JSON。
     }
@@ -332,6 +356,10 @@ const save = async () => {
     proxy?.$modal.msgError('请选择目标 IVR 流程');
     return;
   }
+  if (form.value.actionType === 'TRANSFER_ONLINE_SERVICE' && !actionOnlineSkillGroupId.value) {
+    proxy?.$modal.msgError('请选择目标在线客服技能组');
+    return;
+  }
   const actionConfigJson =
     form.value.actionType === 'TRANSFER_QUEUE'
       ? JSON.stringify({ queueCode: actionQueueCode.value })
@@ -339,6 +367,8 @@ const save = async () => {
         ? JSON.stringify({ extension: actionExtension.value })
         : form.value.actionType === 'TRANSFER_IVR'
           ? JSON.stringify({ ivrFlowId: actionIvrFlowId.value })
+          : form.value.actionType === 'TRANSFER_ONLINE_SERVICE'
+            ? JSON.stringify({ skillGroupId: actionOnlineSkillGroupId.value })
           : '';
   saving.value = true;
   try {
@@ -389,6 +419,7 @@ watch(
     if (actionType !== 'TRANSFER_QUEUE') actionQueueCode.value = '';
     if (actionType !== 'TRANSFER_EXTENSION') actionExtension.value = '';
     if (actionType !== 'TRANSFER_IVR') actionIvrFlowId.value = '';
+    if (actionType !== 'TRANSFER_ONLINE_SERVICE') actionOnlineSkillGroupId.value = '';
   }
 );
 onMounted(load);

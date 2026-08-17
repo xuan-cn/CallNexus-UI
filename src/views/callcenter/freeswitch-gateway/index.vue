@@ -42,12 +42,16 @@
         <el-table-column label="方向" width="100">
           <template #default="{ row }">{{ directionLabel(row.direction) }}</template>
         </el-table-column>
-        <el-table-column label="SIP 服务器" prop="proxy" min-width="180" />
-        <el-table-column label="认证用户" prop="username" min-width="120" />
-        <el-table-column label="注册" width="90">
+        <el-table-column label="SIP 服务器/注册账号" min-width="180">
+          <template #default="{ row }">{{ row.accessMode === 'DEVICE_REGISTER' ? row.registeredIdentity : row.proxy || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="接入模式" width="150">
           <template #default="{ row }">
-            <el-tag :type="row.registerEnabled ? 'success' : 'info'">{{ row.registerEnabled ? '注册' : '不注册' }}</el-tag>
+            <el-tag :type="gatewayModeTagType(row)">{{ gatewayModeLabel(row) }}</el-tag>
           </template>
+        </el-table-column>
+        <el-table-column label="认证用户" prop="username" min-width="120">
+          <template #default="{ row }">{{ row.username || '-' }}</template>
         </el-table-column>
         <el-table-column label="传输" prop="transport" width="90" />
         <el-table-column label="探测" width="100">
@@ -106,12 +110,12 @@
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col v-if="form.accessMode !== 'DEVICE_REGISTER'" :span="12">
             <el-form-item label="SIP服务器" prop="proxy">
               <el-input v-model="form.proxy" placeholder="例如 sip.example.com:5060" />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col v-if="form.accessMode !== 'DEVICE_REGISTER'" :span="12">
             <el-form-item label="SIP域" prop="realm">
               <el-input v-model="form.realm" placeholder="为空时由网关配置决定" />
             </el-form-item>
@@ -124,6 +128,19 @@
           <el-col :span="12">
             <el-form-item :label="form.id ? '新认证密码' : '认证密码'" prop="password">
               <el-input v-model="form.password" type="password" show-password :placeholder="form.id ? '留空表示不修改' : '运营商提供的密码'" />
+            </el-form-item>
+          </el-col>
+          <el-col v-if="form.accessMode === 'DEVICE_REGISTER'" :span="12">
+            <el-form-item label="注册账号" prop="registeredIdentity">
+              <el-input v-model="form.registeredIdentity" placeholder="对端向 FreeSWITCH 注册的 SIP 账号" />
+            </el-form-item>
+          </el-col>
+          <el-col v-if="form.accessMode === 'DEVICE_REGISTER'" :span="12">
+            <el-form-item label="接收注册 Profile" prop="sipProfile">
+              <el-select v-model="form.sipProfile" style="width: 100%">
+                <el-option label="internal（推荐）" value="internal" />
+                <el-option label="external" value="external" />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -140,10 +157,29 @@
               <el-input v-model="form.callerIdNumber" placeholder="默认外呼主叫号码" />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
-            <el-form-item label="注册到网关" prop="registerEnabled">
-              <el-switch v-model="form.registerEnabled" active-text="是" inactive-text="否" />
+          <el-col :span="24">
+            <el-form-item label="接入模式" prop="accessMode">
+              <el-radio-group v-model="form.accessMode" class="gateway-mode-radio" @change="handleAccessModeChange">
+                <el-radio-button value="IP_TRUNK">IP注册</el-radio-button>
+                <el-radio-button value="OUTBOUND_REGISTER">SIP线路注册</el-radio-button>
+                <el-radio-button value="DEVICE_REGISTER">向内注册</el-radio-button>
+              </el-radio-group>
             </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-alert
+              :title="
+                form.accessMode === 'DEVICE_REGISTER'
+                  ? '接收注册模式：对端 SIP 设备或系统向 FreeSWITCH 发起 REGISTER。平台保存认证信息，呼叫时实时使用当前 Contact，无需固定配置对端 IP 和端口。'
+                  : form.accessMode === 'OUTBOUND_REGISTER'
+                    ? '主动注册模式：FreeSWITCH 使用配置的账号密码向运营商、上级 PBX 或其他 SIP 服务发送 REGISTER，注册成功后状态通常为 REGED。'
+                    : '免注册模式：双方通过固定 SIP 地址和 IP 互信通信，FreeSWITCH 不发送 REGISTER；NOREG + UP 通常是正常状态。'
+              "
+              type="info"
+              :closable="false"
+              show-icon
+              class="mb-3"
+            />
           </el-col>
           <el-col v-if="form.id" :span="12">
             <el-form-item label="状态" prop="enabled">
@@ -168,14 +204,14 @@
                     <el-form-item label="注册续期间隔" prop="expireSeconds">
                       <el-input-number
                         v-model="form.expireSeconds"
-                        :disabled="!form.registerEnabled"
+                        :disabled="form.accessMode !== 'OUTBOUND_REGISTER'"
                         :min="10"
                         :max="86400"
                         :step="10"
                         style="width: 100%"
                       />
                       <div class="text-xs text-gray-400 mt-1">
-                        {{ form.registerEnabled ? '单位秒，NAT 环境建议 60-120' : '启用“注册到网关”后生效' }}
+                        {{ form.accessMode === 'OUTBOUND_REGISTER' ? '单位秒，NAT 环境建议 60-120' : '仅 FreeSWITCH 主动注册时生效' }}
                       </div>
                     </el-form-item>
                   </el-col>
@@ -183,7 +219,7 @@
                     <el-form-item label="注册重试间隔" prop="retrySeconds">
                       <el-input-number
                         v-model="form.retrySeconds"
-                        :disabled="!form.registerEnabled"
+                        :disabled="form.accessMode !== 'OUTBOUND_REGISTER'"
                         :min="1"
                         :max="3600"
                         :step="5"
@@ -290,10 +326,13 @@ const initialForm: FreeSwitchGatewayForm = {
   gatewayCode: '',
   gatewayName: '',
   direction: 'BOTH',
+  accessMode: 'IP_TRUNK',
   proxy: '',
   realm: '',
   username: '',
   password: '',
+  registeredIdentity: '',
+  sipProfile: 'internal',
   registerEnabled: false,
   transport: 'UDP',
   callerIdNumber: '',
@@ -319,7 +358,35 @@ const data = reactive<PageData<FreeSwitchGatewayForm, FreeSwitchGatewayQuery>>({
     gatewayCode: [{ required: true, pattern: /^[A-Za-z0-9_-]{2,32}$/, message: '请输入合法网关编码', trigger: 'blur' }],
     gatewayName: [{ required: true, message: '网关名称不能为空', trigger: 'blur' }],
     direction: [{ required: true, message: '请选择网关方向', trigger: 'change' }],
-    proxy: [{ required: true, message: 'SIP服务器不能为空', trigger: 'blur' }],
+    accessMode: [{ required: true, message: '请选择接入模式', trigger: 'change' }],
+    proxy: [
+      {
+        validator: (_rule: unknown, value: string, callback: (error?: Error) => void) =>
+          form.value.accessMode === 'DEVICE_REGISTER' || value ? callback() : callback(new Error('请输入 SIP 服务器')),
+        trigger: 'blur'
+      }
+    ],
+    registeredIdentity: [
+      {
+        validator: (_rule: unknown, value: string, callback: (error?: Error) => void) =>
+          form.value.accessMode !== 'DEVICE_REGISTER' || value ? callback() : callback(new Error('请输入对端注册账号')),
+        trigger: 'blur'
+      }
+    ],
+    username: [
+      {
+        validator: (_rule: unknown, value: string, callback: (error?: Error) => void) =>
+          form.value.accessMode === 'IP_TRUNK' || value ? callback() : callback(new Error('请输入认证用户')),
+        trigger: 'blur'
+      }
+    ],
+    password: [
+      {
+        validator: (_rule: unknown, value: string, callback: (error?: Error) => void) =>
+          form.value.accessMode === 'IP_TRUNK' || form.value.id || value ? callback() : callback(new Error('请输入认证密码')),
+        trigger: 'blur'
+      }
+    ],
     transport: [{ required: true, message: '请选择传输协议', trigger: 'change' }],
     ping: [{ required: true, message: '请输入探测间隔', trigger: 'blur' }],
     expireSeconds: [{ required: true, message: '请输入注册续期间隔', trigger: 'blur' }],
@@ -331,6 +398,18 @@ const data = reactive<PageData<FreeSwitchGatewayForm, FreeSwitchGatewayQuery>>({
 const { form, queryParams, rules } = toRefs(data);
 
 const directionLabel = (value: GatewayDirection) => directionOptions.find((item) => item.value === value)?.label || value;
+const gatewayModeLabel = (row: FreeSwitchGatewayVO) =>
+  row.accessMode === 'DEVICE_REGISTER' ? '接收注册' : row.accessMode === 'OUTBOUND_REGISTER' ? '主动注册' : '免注册';
+const gatewayModeTagType = (row: FreeSwitchGatewayVO) =>
+  row.accessMode === 'DEVICE_REGISTER' ? 'primary' : row.accessMode === 'OUTBOUND_REGISTER' ? 'success' : 'warning';
+const handleAccessModeChange = () => {
+  form.value.registerEnabled = form.value.accessMode === 'OUTBOUND_REGISTER';
+  if (form.value.accessMode === 'DEVICE_REGISTER') {
+    form.value.proxy = '';
+    form.value.realm = '';
+    form.value.ping = 0;
+  }
+};
 const loadNodes = async () => {
   const res = await listFreeSwitchNodes({ pageNum: 1, pageSize: 200, enabled: true });
   nodeOptions.value = res.rows;
@@ -397,3 +476,10 @@ onMounted(async () => {
   await getList();
 });
 </script>
+
+<style scoped>
+.gateway-mode-radio {
+  display: flex;
+  flex-wrap: wrap;
+}
+</style>

@@ -84,7 +84,7 @@
             <el-icon><Tickets /></el-icon>创建工单
           </button>
         </div>
-<!--        <p v-if="webRtcFirstLegWaiting" class="webrtc-first-leg-tip">正在自动接通浏览器软电话，接通后将继续呼叫目标号码。</p>-->
+        <!--        <p v-if="webRtcFirstLegWaiting" class="webrtc-first-leg-tip">正在自动接通浏览器软电话，接通后将继续呼叫目标号码。</p>-->
         <button v-if="webRtcIncoming" type="button" class="call-button" :disabled="callActionLoading" @click="answerWebRtcCall">
           <el-icon><PhoneFilled /></el-icon>接听电话
         </button>
@@ -299,6 +299,7 @@ const incomingNumber = ref('');
 const incomingLocation = ref('');
 const activeNumberLocation = ref('');
 const activeCallId = ref('');
+const callConnected = ref(false);
 const outboundDestination = ref('');
 const callSeconds = ref(0);
 const customerDialogVisible = ref(false);
@@ -436,6 +437,7 @@ const applyCurrentAgent = (agent: CurrentAgentVO) => {
     dialNumber.value = agent.activeCallNumber || dialNumber.value;
     agentStatus.value = 'busy';
     callActive.value = true;
+    callConnected.value = true;
     if (!wasActive) panelOpen.value = true;
     startCallTimer();
     nextTick(constrainPosition);
@@ -525,6 +527,7 @@ const performWebRtcRegistration = async (remoteAudio: HTMLAudioElement) => {
         stopWebRtcFirstLegWaiting();
         stopRingTone();
         callActive.value = true;
+        callConnected.value = true;
         agentStatus.value = 'busy';
         startCallTimer();
       },
@@ -1231,6 +1234,7 @@ const showIncomingCall = (event: Record<string, unknown>) => {
   dialNumber.value = incomingNumber.value;
   incomingCall.value = true;
   callActive.value = false;
+  callConnected.value = false;
   resetCallControls();
   stopCallTimer();
   panelOpen.value = true;
@@ -1250,9 +1254,7 @@ const showActiveCall = (event: Record<string, unknown>) => {
   if (eventCallId && recentlyEndedCallIds.has(eventCallId)) return;
   if (isSourceConsultLegEvent(eventLegUuid, callerNumber)) return;
   if (eventCallId) activeCallId.value = eventCallId;
-  const peerNumber = isCurrentAgentIdentity(callerNumber)
-    ? outboundDestination.value || calledNumber
-    : callerNumber;
+  const peerNumber = isCurrentAgentIdentity(callerNumber) ? outboundDestination.value || calledNumber : callerNumber;
   dialNumber.value = peerNumber;
   activeNumberLocation.value = isCurrentAgentIdentity(callerNumber) ? '' : buildNumberLocation(event);
   incomingCall.value = false;
@@ -1307,14 +1309,14 @@ const handleCallEvent = (event: Record<string, unknown>) => {
   }
   if (type === 'CALL_ANSWER' || type === 'CALL_BRIDGE') {
     if (isSourceConsultLegEvent(eventLegUuid, callerNumber)) return;
+    callConnected.value = true;
     showActiveCall(event);
     return;
   }
   if (type === 'CALL_CREATE' || type === 'CALL_PROGRESS' || type === 'CALL_PROGRESS_MEDIA') {
-    // SIP.js may report the local session as answered before delayed ESL ringing events arrive.
-    // Keep the business call id, but never move an answered WebRTC call back to ringing.
-    if (webRtcPhoneEnabled.value && callActive.value && !webRtcIncoming.value) {
-      if (eventCallId) activeCallId.value = eventCallId;
+    // FreeSWITCH may deliver a delayed queue ringing event after the agent leg has answered.
+    // Once connected, no phone mode may regress to ringing until the current call ends.
+    if (callConnected.value) {
       return;
     }
     const isIncomingToCurrentAgent = isCurrentAgentIdentity(agentExtension) && !isCurrentAgentIdentity(callerNumber) && calledNumber !== '';
@@ -1332,6 +1334,7 @@ const clearActiveCallState = () => {
   incomingLocation.value = '';
   activeNumberLocation.value = '';
   callActive.value = false;
+  callConnected.value = false;
   activeCallId.value = '';
   outboundDestination.value = '';
   matchedCustomer.value = undefined;

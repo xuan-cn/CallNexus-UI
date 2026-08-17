@@ -1,10 +1,10 @@
 <template>
-  <div class="audio-waveform">
+  <div class="audio-waveform" :class="{ 'is-compact': compact }">
     <button class="play-button" type="button" :disabled="loading || failed" :aria-label="playing ? '暂停' : '播放'" @click="togglePlayback">
       {{ playing ? '❚❚' : '▶' }}
     </button>
     <div class="waveform-content">
-      <div ref="waveformRef" class="waveform-container"></div>
+      <div ref="waveformRef" class="waveform-container" :style="{ minHeight: waveformMinHeight }"></div>
       <span v-if="loading" class="waveform-message">正在加载录音波形...</span>
       <span v-else-if="failed" class="waveform-message error">录音波形加载失败</span>
     </div>
@@ -15,9 +15,17 @@
 <script setup lang="ts">
 import WaveSurfer from 'wavesurfer.js';
 
-const props = defineProps<{
-  src: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    src: string;
+    height?: number;
+    compact?: boolean;
+  }>(),
+  {
+    height: 76,
+    compact: false
+  }
+);
 
 const waveformRef = ref<HTMLDivElement>();
 const duration = ref(0);
@@ -26,6 +34,8 @@ const playing = ref(false);
 const loading = ref(true);
 const failed = ref(false);
 let waveSurfer: WaveSurfer | undefined;
+
+const waveformMinHeight = computed(() => `${props.height}px`);
 
 const formatTime = (seconds: number) => {
   if (!Number.isFinite(seconds)) return '00:00';
@@ -51,7 +61,7 @@ const createWaveSurfer = () => {
   waveSurfer = WaveSurfer.create({
     container: waveformRef.value,
     url: props.src,
-    height: 76,
+    height: props.height,
     waveColor: '#cbd5e1',
     progressColor: '#053b70',
     cursorColor: '#053b70',
@@ -149,6 +159,20 @@ onBeforeUnmount(destroyWaveSurfer);
   color: #475569;
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+.audio-waveform.is-compact {
+  grid-template-columns: 34px minmax(0, 1fr) 92px;
+  gap: 10px;
+  padding: 10px 12px;
+}
+.audio-waveform.is-compact .play-button {
+  width: 34px;
+  height: 34px;
+  font-size: 12px;
+  box-shadow: 0 4px 12px rgb(5 59 112 / 18%);
+}
+.audio-waveform.is-compact .time-label {
+  font-size: 12px;
 }
 @media (width <= 768px) {
   .audio-waveform {
