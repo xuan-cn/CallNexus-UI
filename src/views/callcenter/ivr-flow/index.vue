@@ -23,7 +23,7 @@
             ><el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag></template
           >
         </el-table-column>
-        <el-table-column label="操作" width="350" align="center">
+        <el-table-column label="操作" width="350" align="center" fixed="right">
           <template #default="{ row }">
             <el-button v-hasPermi="['callcenter:ivr-flow:update']" link type="primary" icon="Share" @click="openDesigner(row)">设计</el-button>
             <el-button v-hasPermi="['callcenter:ivr-flow:query']" link type="primary" icon="Clock" @click="openVersions(row)">版本</el-button>
@@ -107,7 +107,7 @@
         <el-table-column label="与最新版本差异" min-width="280">
           <template #default="{ row }">{{ versionDifference(row) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="140" align="center">
+        <el-table-column label="操作" width="140" align="center" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="previewVersion(row)">预览</el-button>
             <el-button

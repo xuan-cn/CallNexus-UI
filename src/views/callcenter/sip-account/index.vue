@@ -49,7 +49,7 @@
           </template>
         </el-table-column>
         <el-table-column label="创建时间" prop="createTime" width="180" />
-        <el-table-column label="操作" width="120" align="center">
+        <el-table-column label="操作" width="120" align="center" fixed="right">
           <template #default="{ row }">
             <el-button v-hasPermi="['callcenter:sip-account:update']" link type="primary" icon="Edit" @click="handleUpdate(row)" />
             <el-button v-hasPermi="['callcenter:sip-account:delete']" link type="danger" icon="Delete" @click="handleDelete(row)" />

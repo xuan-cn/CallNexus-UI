@@ -33,7 +33,11 @@ const handleLanguageChange = (lang: any) => {
 
 <style lang="scss" scoped>
 .lang-select--style {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
   font-size: 18px;
-  line-height: 50px;
+  line-height: 1;
 }
 </style>

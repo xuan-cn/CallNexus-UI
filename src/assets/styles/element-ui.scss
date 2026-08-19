@@ -74,18 +74,21 @@
 
     .el-dialog {
       margin: 0 auto !important;
-      border-radius: var(--app-radius-base);
-      box-shadow: var(--app-shadow-md);
       overflow: hidden;
+      border-radius: var(--app-radius-lg);
+      box-shadow: var(--app-shadow-lg);
 
       .el-dialog__body {
-        padding: 15px !important;
+        padding: 20px 24px !important;
       }
       .el-dialog__header {
-        padding: 16px 16px 8px 16px;
+        padding: 16px 20px;
+        margin-right: 0;
         box-sizing: border-box;
         border-bottom: 1px solid var(--brder-color);
-        margin-right: 0;
+      }
+      .el-dialog__footer {
+        padding: 12px 20px 16px;
       }
     }
   }
@@ -215,22 +218,44 @@
 }
 
 .el-drawer {
-  border-radius: var(--app-radius-base);
-  box-shadow: var(--app-shadow-md);
+  box-shadow: var(--app-shadow-lg);
+}
+
+.el-drawer.rtl {
+  border-radius: var(--app-radius-lg) 0 0 var(--app-radius-lg);
+}
+
+.el-drawer.ltr {
+  border-radius: 0 var(--app-radius-lg) var(--app-radius-lg) 0;
+}
+
+.el-drawer.ttb {
+  border-radius: 0 0 var(--app-radius-lg) var(--app-radius-lg);
+}
+
+.el-drawer.btt {
+  border-radius: var(--app-radius-lg) var(--app-radius-lg) 0 0;
 }
 
 .el-drawer__header {
   margin-bottom: 0;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--el-border-color-light);
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.el-drawer__body {
+  padding: 20px 24px;
+}
+
+.el-drawer__footer {
+  padding: 12px 20px 16px;
 }
 
 // Table polish
 .el-table {
-  border-radius: var(--app-radius-base);
   overflow: hidden;
-  box-shadow: var(--app-shadow-sm);
   border: 1px solid var(--el-border-color-lighter);
+  border-radius: var(--app-radius-base);
 }
 
 .el-table__header-wrapper,

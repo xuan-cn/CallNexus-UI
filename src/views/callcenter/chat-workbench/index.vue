@@ -6,7 +6,7 @@
           <h2>在线会话</h2>
           <span>{{ total }} 个会话</span>
         </div>
-        <el-button circle :icon="Refresh" :loading="loading" @click="refreshAll()" />
+        <el-button circle plain :icon="Refresh" :loading="loading" @click="refreshAll()" />
       </div>
 
       <el-segmented
@@ -26,6 +26,7 @@
         <button
           v-for="item in rows"
           :key="item.id"
+          type="button"
           class="conversation-item"
           :class="{ active: String(selectedId) === String(item.id) }"
           @click="selectConversation(item)"
@@ -40,7 +41,7 @@
             <small>{{ timeOnly(item.lastMessageAt || item.queuedAt) }}</small>
           </span>
         </button>
-        <el-empty v-if="!loading && !rows.length" description="暂无会话" :image-size="72" />
+        <el-empty v-if="!loading && !rows.length" description="暂无会话" :image-size="64" />
       </div>
 
       <pagination
@@ -60,9 +61,12 @@
     <main class="dialog-panel">
       <template v-if="detail">
         <header class="dialog-heading">
-          <div>
-            <h2>{{ detail.conversation.visitorName || '访客' }}</h2>
-            <span>{{ statusLabel(detail.conversation.status) }} · {{ detail.conversation.conversationNo }}</span>
+          <div class="dialog-heading-copy">
+            <div class="dialog-title-row">
+              <h2>{{ detail.conversation.visitorName || '访客' }}</h2>
+              <el-tag size="small" effect="light" round>{{ statusLabel(detail.conversation.status) }}</el-tag>
+            </div>
+            <span>{{ detail.conversation.conversationNo }}</span>
           </div>
           <div class="dialog-actions">
             <el-button
@@ -100,7 +104,7 @@
           <el-input
             v-model="draft"
             type="textarea"
-            :rows="4"
+            :rows="3"
             resize="none"
             maxlength="4000"
             show-word-limit
@@ -109,9 +113,7 @@
           />
           <div class="composer-footer">
             <span>消息将保存到完整会话记录</span>
-            <el-button type="primary" :disabled="!draft.trim()" :loading="sending" @click="send">
-              发送
-            </el-button>
+            <el-button type="primary" :disabled="!draft.trim()" :loading="sending" @click="send">发送</el-button>
           </div>
         </footer>
         <footer v-else class="message-composer readonly-composer">
@@ -119,25 +121,26 @@
         </footer>
       </template>
 
-      <el-empty v-else description="从左侧选择一个会话开始处理" />
+      <div v-else class="dialog-empty">
+        <el-empty description="从左侧选择一个会话开始处理" :image-size="96" />
+      </div>
     </main>
 
     <aside v-if="detail" class="visitor-panel">
-      <h3>访客信息</h3>
-      <dl>
-        <dt>访客名称</dt>
-        <dd>{{ detail.conversation.visitorName || '-' }}</dd>
-        <dt>联系电话</dt>
-        <dd>{{ detail.conversation.phone || '-' }}</dd>
-        <dt>邮箱</dt>
-        <dd>{{ detail.conversation.email || '-' }}</dd>
-        <dt>接入渠道</dt>
-        <dd>{{ detail.conversation.channelName || '-' }}</dd>
-        <dt>排队时间</dt>
-        <dd>{{ detail.conversation.queuedAt || '-' }}</dd>
-        <dt>接待客服</dt>
-        <dd>{{ detail.conversation.assignedUserName || '尚未领取' }}</dd>
-      </dl>
+      <div class="visitor-panel-head">
+        <h3>访客信息</h3>
+        <small>接待侧栏</small>
+      </div>
+      <div class="visitor-card">
+        <dl>
+          <div><dt>访客名称</dt><dd>{{ detail.conversation.visitorName || '-' }}</dd></div>
+          <div><dt>联系电话</dt><dd>{{ detail.conversation.phone || '-' }}</dd></div>
+          <div><dt>邮箱</dt><dd>{{ detail.conversation.email || '-' }}</dd></div>
+          <div><dt>接入渠道</dt><dd>{{ detail.conversation.channelName || '-' }}</dd></div>
+          <div><dt>排队时间</dt><dd>{{ detail.conversation.queuedAt || '-' }}</dd></div>
+          <div><dt>接待客服</dt><dd>{{ detail.conversation.assignedUserName || '尚未领取' }}</dd></div>
+        </dl>
+      </div>
       <el-alert
         title="客户、工单联动"
         description="第一阶段保留关联字段，下一阶段从这里识别或新建客户、创建工单。"
@@ -335,31 +338,32 @@ onBeforeUnmount(() => {
 });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .chat-workbench {
   display: grid;
-  grid-template-columns: 310px minmax(480px, 1fr) 280px;
-  height: calc(100vh - 136px);
+  grid-template-columns: 300px minmax(460px, 1fr) 270px;
+  height: calc(100% - 16px);
   min-height: 0;
   margin: 8px;
   overflow: hidden;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 14px;
-  background: var(--el-bg-color);
+  border: 1px solid #dce8f6;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(28, 48, 78, 0.05);
 }
 
 .conversation-panel,
 .visitor-panel {
   min-width: 0;
   min-height: 0;
-  padding: 18px;
-  background: var(--el-fill-color-extra-light);
+  padding: 14px;
+  background: linear-gradient(180deg, #f8fbff, #f4f7fb);
 }
 
 .conversation-panel {
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--el-border-color-light);
+  border-right: 1px solid #e4ecf6;
 }
 
 .panel-heading,
@@ -368,39 +372,62 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
 }
 
 h2,
 h3 {
   margin: 0;
+  color: #15233d;
+}
+
+.panel-heading h2 {
+  font-size: 16px;
 }
 
 .panel-heading span,
 .dialog-heading span,
 .composer-footer span {
-  color: var(--el-text-color-secondary);
+  color: #7b8798;
   font-size: 12px;
 }
 
 .conversation-status-tabs {
   width: 100%;
   margin-top: 12px;
+  padding: 3px;
+  border-radius: 10px;
+  background: #eef4fb;
+}
+
+.conversation-status-tabs :deep(.el-segmented) {
+  background: transparent;
 }
 
 .conversation-status-tabs :deep(.el-segmented__item) {
   min-width: 0;
-  padding: 0 6px;
+  padding: 0 4px;
 }
 
 .conversation-status-tabs :deep(.el-segmented__item-label) {
   overflow: visible;
-  font-size: 13px;
+  color: #5b6b82;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
 
+.conversation-status-tabs :deep(.el-segmented__item.is-selected .el-segmented__item-label) {
+  color: #1d4ed8;
+}
+
 .conversation-search {
-  margin: 14px 0 10px;
+  margin: 12px 0 10px;
+}
+
+.conversation-search :deep(.el-input__wrapper) {
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px #e4ecf6 inset;
 }
 
 .conversation-list {
@@ -413,11 +440,13 @@ h3 {
   display: flex;
   flex-shrink: 0;
   justify-content: center;
-  padding-top: 10px;
+  padding-top: 8px;
 }
 
 .conversation-pagination :deep(.pagination-container) {
   width: 100%;
+  margin: 0;
+  padding: 0;
 }
 
 .conversation-pagination :deep(.el-pagination) {
@@ -429,31 +458,40 @@ h3 {
 
 .conversation-item {
   display: grid;
-  grid-template-columns: 42px 1fr auto;
+  grid-template-columns: 40px 1fr auto;
   gap: 10px;
   width: 100%;
-  margin-bottom: 7px;
-  padding: 11px;
+  margin-bottom: 6px;
+  padding: 10px;
   text-align: left;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
   cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
 }
 
-.conversation-item:hover,
+.conversation-item:hover {
+  border-color: #d7e6fb;
+  background: #fff;
+}
+
 .conversation-item.active {
-  background: var(--el-color-primary-light-9);
+  border-color: #93c5fd;
+  background: #eff6ff;
+  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.08);
 }
 
 .visitor-avatar {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
-  color: white;
+  width: 40px;
+  height: 40px;
+  color: #fff;
+  font-weight: 700;
   border-radius: 50%;
-  background: var(--el-color-primary);
+  background: linear-gradient(135deg, #38bdf8, #2563eb);
+  box-shadow: 0 6px 12px rgba(37, 99, 235, 0.2);
 }
 
 .conversation-summary,
@@ -461,19 +499,29 @@ h3 {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
+}
+
+.conversation-summary strong {
+  overflow: hidden;
+  color: #15233d;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .conversation-summary small {
   overflow: hidden;
-  color: var(--el-text-color-secondary);
+  color: #8b97aa;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .conversation-meta {
   align-items: flex-end;
-  color: var(--el-text-color-placeholder);
+  color: #9aa6b8;
+  font-size: 12px;
 }
 
 .dialog-panel {
@@ -482,27 +530,67 @@ h3 {
   min-height: 0;
   overflow: hidden;
   flex-direction: column;
+  background: #fff;
 }
 
 .dialog-heading {
-  min-height: 68px;
-  padding: 0 20px;
-  border-bottom: 1px solid var(--el-border-color-light);
+  flex: none;
+  min-height: 64px;
+  padding: 12px 18px;
+  border-bottom: 1px solid #eef3f8;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+}
+
+.dialog-heading-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dialog-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+
+  h2 {
+    overflow: hidden;
+    font-size: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.dialog-actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.dialog-empty {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(56, 189, 248, 0.1), transparent 42%),
+    linear-gradient(180deg, #f8fbff, #f4f7fb);
 }
 
 .message-list {
   flex: 1;
   min-height: 0;
-  padding: 18px 22px;
+  padding: 18px 20px;
   overflow-y: auto;
-  background: #f6f8fb;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.08), transparent 34%),
+    linear-gradient(180deg, #f8fbff, #f3f6fa);
 }
 
 .message-row {
   display: flex;
   min-width: 0;
   max-width: 100%;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   flex-direction: column;
   align-items: flex-start;
 }
@@ -514,7 +602,7 @@ h3 {
 .message-author,
 .message-time {
   margin: 0 8px 5px;
-  color: var(--el-text-color-secondary);
+  color: #7b8798;
   font-size: 12px;
 }
 
@@ -530,13 +618,14 @@ h3 {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
   word-break: break-word;
+  border: 1px solid #e8eef6;
   border-radius: 4px 14px 14px;
-  background: white;
-  box-shadow: 0 4px 14px rgb(31 45 61 / 6%);
+  background: #fff;
+  box-shadow: 0 6px 14px rgba(28, 48, 78, 0.05);
 }
 
 .message-bubble :deep(a) {
-  color: var(--el-color-primary);
+  color: #2563eb;
   overflow-wrap: anywhere;
   text-decoration: underline !important;
   text-underline-offset: 2px;
@@ -545,36 +634,51 @@ h3 {
 }
 
 .message-row.agent .message-bubble {
-  color: white;
+  color: #fff;
+  border-color: transparent;
   border-radius: 14px 4px 14px 14px;
-  background: var(--el-color-primary);
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  box-shadow: 0 10px 18px rgba(37, 99, 235, 0.18);
 }
 
 .message-row.agent .message-bubble :deep(a) {
-  color: white;
+  color: #fff;
   text-decoration-color: currentcolor;
+}
+
+.message-row.ai .message-bubble {
+  border-color: #d7e6fb;
+  background: #f2f7ff;
 }
 
 .system-message {
   align-self: center;
   padding: 5px 12px;
-  color: var(--el-text-color-secondary);
+  color: #7b8798;
   font-size: 12px;
-  border-radius: 14px;
-  background: var(--el-fill-color);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid #e8eef6;
 }
 
 .message-composer {
   flex-shrink: 0;
-  padding: 12px 18px 14px;
-  border-top: 1px solid var(--el-border-color-light);
+  padding: 12px 16px 14px;
+  border-top: 1px solid #eef3f8;
+  background: #fff;
+}
+
+.message-composer :deep(.el-textarea__inner) {
+  border-radius: 12px;
+  background: #f7faff;
+  box-shadow: 0 0 0 1px #e4ecf6 inset;
 }
 
 .readonly-composer {
-  color: var(--el-text-color-secondary);
+  color: #7b8798;
   font-size: 13px;
   text-align: center;
-  background: var(--el-fill-color-extra-light);
+  background: #f7faff;
 }
 
 .composer-footer {
@@ -583,12 +687,59 @@ h3 {
 
 .visitor-panel {
   overflow-y: auto;
-  border-left: 1px solid var(--el-border-color-light);
+  border-left: 1px solid #e4ecf6;
+}
+
+.visitor-panel-head {
+  margin-bottom: 12px;
+
+  h3 {
+    font-size: 15px;
+  }
+
+  small {
+    color: #7b8798;
+    font-size: 12px;
+  }
+}
+
+.visitor-card {
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid #e4ecf6;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.visitor-panel dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.visitor-panel dl > div {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 8px;
+  align-items: start;
+}
+
+.visitor-panel dt {
+  color: #7b8798;
+  font-size: 12px;
+}
+
+.visitor-panel dd {
+  min-width: 0;
+  margin: 0;
+  color: #15233d;
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 @media (max-height: 760px) {
   .chat-workbench {
-    height: calc(100vh - 112px);
+    height: calc(100% - 8px);
     margin-top: 4px;
     margin-bottom: 4px;
   }
@@ -599,7 +750,7 @@ h3 {
   }
 
   .dialog-heading {
-    min-height: 60px;
+    min-height: 58px;
   }
 
   .message-composer {
@@ -607,27 +758,9 @@ h3 {
   }
 }
 
-.visitor-panel dl {
-  display: grid;
-  grid-template-columns: 76px 1fr;
-  gap: 14px 8px;
-  margin: 24px 0;
-  font-size: 13px;
-}
-
-.visitor-panel dt {
-  color: var(--el-text-color-secondary);
-}
-
-.visitor-panel dd {
-  min-width: 0;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
 @media (max-width: 1250px) {
   .chat-workbench {
-    grid-template-columns: 290px minmax(440px, 1fr);
+    grid-template-columns: 280px minmax(420px, 1fr);
   }
 
   .visitor-panel {

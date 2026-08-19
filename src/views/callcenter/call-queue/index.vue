@@ -29,7 +29,7 @@
             ><el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag></template
           >
         </el-table-column>
-        <el-table-column label="操作" width="200" align="center">
+        <el-table-column label="操作" width="200" align="center" fixed="right">
           <template #default="{ row }">
             <el-button v-hasPermi="['callcenter:call-queue:update']" link type="primary" icon="Edit" @click="handleUpdate(row)" />
             <el-button v-hasPermi="['callcenter:call-queue:update']" link type="success" :loading="syncingId === row.id" @click="handleSync(row)">

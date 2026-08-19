@@ -74,8 +74,8 @@ const setting: DefaultSettings = {
   layout: '',
 
   /**
-   * 页面圆角大小
+   * 页面圆角大小（与列表页皮肤默认值对齐）
    */
-  radiusBase: 8
+  radiusBase: 10
 };
 export default setting;

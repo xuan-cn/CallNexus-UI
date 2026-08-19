@@ -1000,51 +1000,75 @@ onBeforeUnmount(stopImportPolling);
 </script>
 
 <style scoped>
+.customer-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.filter-card {
+  border-color: #e4ecf6;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+}
+
 .filter-card :deep(.el-card__body) {
-  padding: 16px 18px 8px;
+  padding: 14px 18px 6px;
 }
 
 .filter-panel {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) auto;
-  align-items: start;
-  column-gap: 18px;
-  row-gap: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
 }
 
 .filter-panel :deep(.el-form-item) {
   margin-right: 0;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .filter-panel :deep(.el-form-item__label) {
-  width: 78px;
-  justify-content: flex-start;
-  color: var(--el-text-color-regular);
+  width: 88px !important;
+  justify-content: flex-end;
+  color: #5b6b82;
   font-weight: 600;
-}
-
-.filter-panel :deep(.el-form-item__content),
-.filter-panel :deep(.el-input),
-.filter-panel :deep(.el-select) {
-  width: 100%;
-}
-
-.filter-actions {
-  justify-self: end;
   white-space: nowrap;
 }
 
+.filter-panel :deep(.el-form-item__content) {
+  width: 180px;
+}
+
+.filter-panel :deep(.el-input),
+.filter-panel :deep(.el-select) {
+  width: 180px;
+}
+
+.filter-actions {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.filter-actions :deep(.el-form-item__label) {
+  display: none;
+}
+
 .filter-actions :deep(.el-form-item__content) {
+  display: flex;
   width: auto;
+  gap: 8px;
 }
 
 .table-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
   gap: 8px;
+  border: 1px solid #e8eef6;
+  border-radius: 12px;
+  background: #f7faff;
 }
 
 .table-toolbar-left {
@@ -1081,9 +1105,9 @@ onBeforeUnmount(stopImportPolling);
 .customer-phone-summary {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   min-width: 0;
-  white-space: nowrap;
 }
 
 .customer-detail-link,
@@ -1093,11 +1117,16 @@ onBeforeUnmount(stopImportPolling);
 }
 
 .customer-detail-link {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .phone-dial-link {
   gap: 4px;
+  font-weight: 600;
+}
+
+.customer-phone-summary :deep(.el-tag) {
+  border-radius: 999px;
 }
 
 .primary-phone {

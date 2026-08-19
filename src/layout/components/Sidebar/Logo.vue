@@ -78,27 +78,33 @@ const getLogoTextColor = computed(() => {
   background: v-bind(getLogoBackground);
   text-align: center;
   overflow: hidden;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 
   & .sidebar-logo-link {
     height: 100%;
     width: 100%;
 
     & .sidebar-logo {
-      width: 32px;
-      height: 32px;
+      width: 30px;
+      height: 30px;
       vertical-align: middle;
-      margin-right: 12px;
-      //margin-left: 12px;
+      margin-right: 10px;
+      border-radius: 8px;
     }
 
     & .sidebar-title {
       display: inline-block;
       margin: 0;
       color: v-bind(getLogoTextColor);
-      font-weight: 600;
+      font-weight: 700;
       line-height: 50px;
       font-size: 14px;
-      font-family: Avenir, Helvetica Neue, Arial, Helvetica, sans-serif;
+      letter-spacing: 0.2px;
+      font-family:
+        'MiSans',
+        'PingFang SC',
+        'Microsoft YaHei',
+        sans-serif;
       vertical-align: middle;
     }
   }

@@ -69,13 +69,13 @@ const moveToTarget = (currentTag: RouteLocationNormalized) => {
     }
 
     // the tag's offsetLeft after of nextTag
-    const afterNextTagOffsetLeft = nextTag.offsetLeft + nextTag.offsetWidth + tagAndTagSpacing.value;
+    const afterNextTagOffsetLeft = nextTag ? nextTag.offsetLeft + nextTag.offsetWidth + tagAndTagSpacing.value : 0;
 
     // the tag's offsetLeft before of prevTag
-    const beforePrevTagOffsetLeft = prevTag.offsetLeft - tagAndTagSpacing.value;
-    if (afterNextTagOffsetLeft > $scrollWrapper.scrollLeft + $containerWidth) {
+    const beforePrevTagOffsetLeft = prevTag ? prevTag.offsetLeft - tagAndTagSpacing.value : 0;
+    if (nextTag && afterNextTagOffsetLeft > $scrollWrapper.scrollLeft + $containerWidth) {
       $scrollWrapper.scrollLeft = afterNextTagOffsetLeft - $containerWidth;
-    } else if (beforePrevTagOffsetLeft < $scrollWrapper.scrollLeft) {
+    } else if (prevTag && beforePrevTagOffsetLeft < $scrollWrapper.scrollLeft) {
       $scrollWrapper.scrollLeft = beforePrevTagOffsetLeft;
     }
   }
@@ -92,11 +92,20 @@ defineExpose({
   position: relative;
   overflow: hidden;
   width: 100%;
+  height: 34px;
+
   :deep(.el-scrollbar__bar) {
     bottom: 0px;
   }
+
   :deep(.el-scrollbar__wrap) {
-    height: 49px;
+    height: 34px;
+  }
+
+  :deep(.el-scrollbar__view) {
+    display: flex;
+    align-items: center;
+    height: 34px;
   }
 }
 </style>

@@ -10,7 +10,15 @@
   >
     <div v-loading="loading" class="detail-container">
       <div ref="leftPanelRef" class="detail-left">
-        <el-descriptions v-if="detail" :column="2" border>
+        <div v-if="businessType === 'CUSTOMER' && customerDetail" class="customer-hero">
+          <div class="customer-avatar">{{ (customerDetail.customerName || '客').slice(0, 1) }}</div>
+          <div class="customer-hero-copy">
+            <strong>{{ customerDetail.customerName || '未命名客户' }}</strong>
+            <small>{{ customerDetail.primaryPhone || '暂无主号码' }}</small>
+          </div>
+          <el-tag v-if="customerDetail.customerType" effect="plain" round>{{ customerDetail.customerType }}</el-tag>
+        </div>
+        <el-descriptions v-if="detail" class="detail-summary" :column="2" border>
           <template v-if="businessType === 'CUSTOMER'">
             <el-descriptions-item label="主号码">{{ customerDetail?.primaryPhone }}</el-descriptions-item>
             <el-descriptions-item label="客户姓名">{{ customerDetail?.customerName || '未提供' }}</el-descriptions-item>
@@ -456,59 +464,150 @@ defineExpose({ reload: loadDetail });
   display: flex;
   gap: 18px;
 }
+
 :deep(.customer-detail-drawer .el-drawer__body) {
   padding: 16px 20px 20px;
   overflow-y: auto;
+  background: linear-gradient(180deg, #f7faff 0%, #ffffff 28%);
 }
+
 .detail-left {
   flex: 14;
   min-width: 0;
 }
+
 .detail-right {
   flex: 10;
   min-width: 0;
   display: flex;
   flex-direction: column;
 }
+
+.customer-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 1px solid #dce8f8;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.16), transparent 42%),
+    linear-gradient(135deg, #f4f9ff, #eef5ff);
+}
+
+.customer-avatar {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #38bdf8, #2563eb);
+  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.22);
+}
+
+.customer-hero-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+
+  strong {
+    overflow: hidden;
+    color: #15233d;
+    font-size: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  small {
+    color: #6b7c94;
+    font-size: 12px;
+  }
+}
+
+.detail-summary {
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.detail-summary :deep(.el-descriptions__label) {
+  width: 92px;
+  color: #5b6b82;
+  font-weight: 600;
+  background: #f5f8fc;
+}
+
+.detail-summary :deep(.el-descriptions__content) {
+  color: #24324c;
+  font-weight: 500;
+}
+
 .custom-detail {
   padding: 14px;
   margin-top: 16px;
-  border: 1px dashed #9eb2cc;
-  border-radius: 10px;
+  border: 1px solid #dce8f8;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
 }
+
 .custom-field {
   min-height: 60px;
-  padding: 10px;
+  padding: 10px 12px;
   margin-bottom: 10px;
-  border: 1px solid #e4e7ed;
-  border-radius: 8px;
+  border: 1px solid #e4eaf3;
+  border-radius: 10px;
   background: #fff;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
+
+.custom-field:hover {
+  border-color: #c9dbf8;
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.06);
+}
+
 .custom-field-label {
   margin-bottom: 6px;
   font-size: 12px;
-  color: #909399;
+  color: #7b8798;
 }
+
 .custom-field-value {
   font-size: 13px;
   line-height: 20px;
-  color: #303133;
+  color: #24324c;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
 .section-title {
   margin-bottom: 12px;
-  font-weight: 600;
+  color: #15233d;
+  font-weight: 700;
 }
+
 .side-panel {
   padding: 0 14px 14px;
-  border: 1px solid #e4e7ed;
-  border-radius: 10px;
+  border: 1px solid #dce8f8;
+  border-radius: 14px;
   background: #fff;
+  box-shadow: 0 10px 24px rgba(28, 48, 78, 0.05);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   min-height: 240px;
+
+  :deep(.el-tabs__header) {
+    margin: 0 0 12px;
+  }
+
+  :deep(.el-tabs__item) {
+    font-weight: 600;
+  }
+
   :deep(.el-tabs) {
     display: flex;
     flex-direction: column;
@@ -516,55 +615,71 @@ defineExpose({ reload: loadDetail });
     min-height: 0;
     overflow: hidden;
   }
+
   :deep(.el-tabs__content) {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
     scrollbar-color: transparent transparent;
     scrollbar-width: thin;
+
     &::-webkit-scrollbar {
       width: 6px;
     }
+
     &::-webkit-scrollbar-thumb {
       border-radius: 6px;
       background: transparent;
     }
   }
+
   :deep(.el-tab-pane) {
     height: 100%;
   }
+
   &.is-scrolling :deep(.el-tabs__content) {
     scrollbar-color: #c0c4cc transparent;
+
     &::-webkit-scrollbar-thumb {
       background: #c0c4cc;
     }
   }
 }
+
 .follow-up-actions {
   margin: 10px 0 18px;
   text-align: right;
 }
+
 .phone-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e8eef6;
+  border-radius: 10px;
+  background: #f7faff;
 }
+
 .phone-tip {
-  color: #909399;
+  color: #7b8798;
   font-size: 12px;
   line-height: 18px;
 }
+
 .disabled-phone {
   color: #a8abb2;
   text-decoration: line-through;
 }
+
 .phone-dial-link {
   height: auto;
   padding: 0;
-  font-weight: 500;
+  font-weight: 600;
 }
+
 .phone-actions {
   display: flex;
   align-items: center;
@@ -575,43 +690,71 @@ defineExpose({ reload: loadDetail });
     margin-left: 0;
   }
 }
+
 .follow-up-content {
   white-space: pre-line;
   line-height: 1.8;
   overflow-wrap: anywhere;
+  color: #24324c;
 }
+
 .follow-up-user {
   margin-top: 8px;
   font-size: 12px;
-  color: #909399;
+  color: #7b8798;
 }
+
+:deep(.el-timeline-item__timestamp) {
+  color: #8b97aa;
+}
+
+:deep(.el-timeline .el-card) {
+  border: 1px solid #e8eef6;
+  border-radius: 12px;
+  background: #fafcff;
+  box-shadow: none;
+}
+
 .call-record-item {
   margin-bottom: 12px;
+  border: 1px solid #e8eef6;
+  border-radius: 12px;
+  background: #fafcff;
 }
+
+.call-record-item :deep(.el-card__body) {
+  padding: 14px;
+}
+
 .call-record-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: #909399;
+  color: #7b8798;
   font-size: 12px;
 }
+
 .call-record-number {
   margin: 12px 0;
+  color: #15233d;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
 }
+
 .call-record-meta {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  color: #606266;
+  color: #5f6e86;
   font-size: 13px;
 }
+
 .call-record-audio {
   width: 100%;
   height: 34px;
   margin-top: 12px;
 }
+
 .el-timeline.is-start {
   padding-left: 20px;
   padding-right: 20px;

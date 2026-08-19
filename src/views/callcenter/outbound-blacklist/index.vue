@@ -81,50 +81,102 @@
       >
     </el-dialog>
 
-    <el-dialog v-model="importDialog.visible" title="Excel 导入外呼黑名单" width="920px" append-to-body>
-      <div class="import-options">
-        <el-radio-group v-model="importDialog.scopeType"
-          ><el-radio-button value="GLOBAL">租户全局</el-radio-button><el-radio-button value="TASK">指定任务</el-radio-button></el-radio-group
-        >
-        <el-select v-if="importDialog.scopeType === 'TASK'" v-model="importDialog.taskId" placeholder="选择外呼任务" style="width: 240px"
-          ><el-option v-for="task in tasks" :key="task.id" :label="task.taskName" :value="task.id"
-        /></el-select>
-        <el-upload :auto-upload="false" :limit="1" accept=".xlsx,.xls" :on-change="(file) => (importDialog.file = file.raw)"
-          ><el-button plain>选择 Excel 文件</el-button></el-upload
-        >
-        <el-button plain icon="Download" @click="downloadTemplate">下载模板</el-button>
-        <el-button
-          type="success"
-          :disabled="!importDialog.file || (importDialog.scopeType === 'TASK' && !importDialog.taskId)"
-          :loading="importDialog.previewing"
-          @click="previewImport"
-          >开始预检</el-button
-        >
+    <el-dialog v-model="importDialog.visible" class="blacklist-import-dialog" title="Excel 导入外呼黑名单" width="920px" append-to-body>
+      <el-alert
+        class="import-tip"
+        type="info"
+        :closable="false"
+        show-icon
+        title="先选择限制范围并上传 Excel，预检通过后再确认导入有效号码。"
+      />
+
+      <div class="import-panel">
+        <div class="import-section">
+          <div class="import-section-label">限制范围</div>
+          <div class="import-section-body">
+            <el-radio-group v-model="importDialog.scopeType">
+              <el-radio-button value="GLOBAL">租户全局</el-radio-button>
+              <el-radio-button value="TASK">指定任务</el-radio-button>
+            </el-radio-group>
+            <el-select
+              v-if="importDialog.scopeType === 'TASK'"
+              v-model="importDialog.taskId"
+              placeholder="选择外呼任务"
+              filterable
+              class="import-task-select"
+            >
+              <el-option v-for="task in tasks" :key="task.id" :label="task.taskName" :value="task.id" />
+            </el-select>
+          </div>
+        </div>
+
+        <div class="import-section">
+          <div class="import-section-label">文件与预检</div>
+          <div class="import-section-body import-actions">
+            <el-upload
+              class="import-upload"
+              :auto-upload="false"
+              :limit="1"
+              accept=".xlsx,.xls"
+              :on-change="(file) => (importDialog.file = file.raw)"
+              :on-remove="() => (importDialog.file = undefined)"
+            >
+              <el-button plain icon="Upload">选择 Excel 文件</el-button>
+            </el-upload>
+            <el-button plain icon="Download" @click="downloadTemplate">下载模板</el-button>
+            <el-button
+              type="success"
+              :disabled="!importDialog.file || (importDialog.scopeType === 'TASK' && !importDialog.taskId)"
+              :loading="importDialog.previewing"
+              @click="previewImport"
+            >
+              开始预检
+            </el-button>
+            <span v-if="importDialog.file" class="import-file-name">已选：{{ importDialog.file.name }}</span>
+          </div>
+        </div>
       </div>
+
       <template v-if="importDialog.batch">
         <div class="summary">
-          <el-tag>总计 {{ importDialog.batch.totalCount }}</el-tag
-          ><el-tag type="success">有效 {{ importDialog.batch.validCount }}</el-tag
-          ><el-tag type="warning">重复 {{ importDialog.batch.duplicateCount }}</el-tag
-          ><el-tag type="danger">无效 {{ importDialog.batch.invalidCount }}</el-tag>
+          <div class="summary-item">
+            <span>总计</span>
+            <strong>{{ importDialog.batch.totalCount }}</strong>
+          </div>
+          <div class="summary-item is-success">
+            <span>有效</span>
+            <strong>{{ importDialog.batch.validCount }}</strong>
+          </div>
+          <div class="summary-item is-warning">
+            <span>重复</span>
+            <strong>{{ importDialog.batch.duplicateCount }}</strong>
+          </div>
+          <div class="summary-item is-danger">
+            <span>无效</span>
+            <strong>{{ importDialog.batch.invalidCount }}</strong>
+          </div>
         </div>
-        <el-table :data="importDialog.batch.rows" max-height="420">
+        <el-table class="import-result-table" :data="importDialog.batch.rows" max-height="420">
           <el-table-column label="行号" prop="rowNumber" width="70" />
-          <el-table-column label="原始号码" prop="originalPhone" />
-          <el-table-column label="标准化号码" prop="normalizedPhone" />
-          <el-table-column label="原因" prop="reason" />
+          <el-table-column label="原始号码" prop="originalPhone" min-width="140" show-overflow-tooltip />
+          <el-table-column label="标准化号码" prop="normalizedPhone" min-width="140" show-overflow-tooltip />
+          <el-table-column label="原因" prop="reason" min-width="140" show-overflow-tooltip />
           <el-table-column label="结果" prop="status" width="150" />
-          <el-table-column label="说明" prop="errorMessage" min-width="220" />
+          <el-table-column label="说明" prop="errorMessage" min-width="220" show-overflow-tooltip />
         </el-table>
       </template>
+      <div v-else class="import-empty">
+        <el-empty description="完成预检后，这里会展示号码明细" :image-size="72" />
+      </div>
+
       <template #footer>
-        <el-button v-if="importDialog.batch && importDialog.batch.invalidCount + importDialog.batch.duplicateCount > 0" @click="downloadErrors"
-          >下载失败明细</el-button
-        >
+        <el-button v-if="importDialog.batch && importDialog.batch.invalidCount + importDialog.batch.duplicateCount > 0" @click="downloadErrors">
+          下载失败明细
+        </el-button>
         <el-button @click="importDialog.visible = false">取消</el-button>
-        <el-button type="primary" :disabled="!importDialog.batch?.validCount" :loading="importDialog.confirming" @click="confirmImport"
-          >确认导入有效黑名单</el-button
-        >
+        <el-button type="primary" :disabled="!importDialog.batch?.validCount" :loading="importDialog.confirming" @click="confirmImport">
+          确认导入有效黑名单
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -262,14 +314,127 @@ onMounted(load);
 </script>
 
 <style scoped>
-.toolbar,
-.import-options,
-.summary {
+.toolbar {
   display: flex;
   align-items: center;
   gap: 10px;
 }
+
+.import-tip {
+  margin-bottom: 14px;
+}
+
+.import-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.import-section {
+  padding: 14px 16px;
+  border: 1px solid #e4ecf6;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+}
+
+.import-section-label {
+  margin-bottom: 10px;
+  color: #5b6b82;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
+.import-section-body,
+.import-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.import-task-select {
+  width: 260px;
+}
+
+.import-upload :deep(.el-upload-list) {
+  margin: 0;
+}
+
+.import-file-name {
+  color: #5f6e86;
+  font-size: 12px;
+}
+
 .summary {
-  margin: 16px 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0 12px;
+}
+
+.summary-item {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid #e4ecf6;
+  border-radius: 12px;
+  background: #f7faff;
+}
+
+.summary-item span {
+  color: #7b8798;
+  font-size: 12px;
+}
+
+.summary-item strong {
+  color: #15233d;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-item.is-success {
+  border-color: #c7eedd;
+  background: #f2fbf7;
+}
+
+.summary-item.is-success strong {
+  color: #0f9f78;
+}
+
+.summary-item.is-warning {
+  border-color: #f3e0b5;
+  background: #fffaf0;
+}
+
+.summary-item.is-warning strong {
+  color: #d97706;
+}
+
+.summary-item.is-danger {
+  border-color: #f3c9cf;
+  background: #fff5f6;
+}
+
+.summary-item.is-danger strong {
+  color: #e11d48;
+}
+
+.import-result-table {
+  overflow: hidden;
+  border: 1px solid #e8eef6;
+  border-radius: 12px;
+}
+
+.import-empty {
+  margin-top: 8px;
+  border: 1px dashed #d7e4f5;
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
+@media (max-width: 900px) {
+  .summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 </style>

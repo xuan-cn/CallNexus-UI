@@ -1,7 +1,7 @@
 <template>
-  <div class="p-2">
-    <el-card class="mb-2" shadow="hover">
-      <el-form ref="queryFormRef" :model="queryParams" :inline="true">
+  <div class="p-2 call-record-page">
+    <el-card class="mb-2 filter-card" shadow="hover">
+      <el-form ref="queryFormRef" :model="queryParams" :inline="true" class="filter-form">
         <el-form-item label="主叫号码" prop="callerNumber">
           <el-input v-model="queryParams.callerNumber" clearable @keyup.enter="handleQuery" />
         </el-form-item>
@@ -30,8 +30,8 @@
       </el-form>
     </el-card>
 
-    <el-card shadow="hover">
-      <el-table v-loading="loading" :data="recordList">
+    <el-card shadow="hover" class="table-card">
+      <el-table v-loading="loading" :data="recordList" class="record-table" max-height="calc(100vh - 280px)">
         <el-table-column label="呼叫方向" width="100">
           <template #default="{ row }">
             <el-tag :type="directionTag(row.direction)">{{ directionLabel(row.direction) }}</el-tag>
@@ -65,57 +65,127 @@
         <el-table-column label="挂断原因" min-width="220" show-overflow-tooltip>
           <template #default="{ row }">{{ hangupCauseLabel(row.hangupCause) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="80" align="center">
+        <el-table-column label="操作" width="80" align="center" fixed="right">
           <template #default="{ row }">
             <el-button v-hasPermi="['callcenter:call-record:query']" link type="primary" @click="handleDetail(row)">详情</el-button>
           </template>
         </el-table-column>
       </el-table>
-      <pagination v-show="total > 0" v-model:page="queryParams.pageNum" v-model:limit="queryParams.pageSize" :total="total" @pagination="getList" />
+      <pagination
+        v-show="total > 0"
+        v-model:page="queryParams.pageNum"
+        v-model:limit="queryParams.pageSize"
+        class="record-pagination"
+        :total="total"
+        :auto-scroll="false"
+        @pagination="getList"
+      />
     </el-card>
 
     <el-drawer v-model="detailVisible" class="call-record-detail-drawer" title="通话记录详情" size="82%" append-to-body destroy-on-close>
       <el-tabs v-if="detail" v-model="detailTab" class="detail-tabs">
         <el-tab-pane label="基本信息" name="basic">
-          <el-descriptions :column="3" border>
-            <el-descriptions-item label="业务通话ID" :span="3">{{ detail.businessCallId || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="呼叫方向">{{ directionLabel(detail.direction) }}</el-descriptions-item>
-            <el-descriptions-item label="状态">{{ statusLabel(detail.callStatus) }}</el-descriptions-item>
-            <el-descriptions-item label="坐席分机">{{ detail.agentExtension || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="主叫号码">{{ detail.callerNumber || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="被叫号码">{{ detail.calledNumber || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="主叫归属地">{{ formatNumberLocation(detail, 'caller') }}</el-descriptions-item>
-            <el-descriptions-item label="被叫归属地">{{ formatNumberLocation(detail, 'called') }}</el-descriptions-item>
-            <el-descriptions-item label="挂断原因">{{ hangupCauseLabel(detail.hangupCause) }}</el-descriptions-item>
-            <el-descriptions-item label="接听队列">
-              <el-tag v-if="detail.handlingQueueName" type="info" size="small">{{ detail.handlingQueueName }}</el-tag>
-              <span v-else>-</span>
-            </el-descriptions-item>
-            <el-descriptions-item label="关联客户ID">
-              <el-button v-if="detail.customerId" link type="primary" class="id-link" @click="openCustomerDetail(detail.customerId)">
-                {{ detail.customerId }}
-              </el-button>
-              <span v-else>-</span>
-            </el-descriptions-item>
-            <el-descriptions-item label="关联工单ID">
-              <el-button v-if="detail.ticketId" link type="primary" class="id-link" @click="openTicketDetail(detail.ticketId)">
-                {{ detail.ticketId }}
-              </el-button>
-              <span v-else>-</span>
-            </el-descriptions-item>
-            <el-descriptions-item label="开始时间">{{ detail.startedAt || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="振铃时间">{{ detail.ringingAt || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="接听时间">{{ detail.answeredAt || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="结束时间">{{ detail.endedAt || '-' }}</el-descriptions-item>
-          </el-descriptions>
-          <div class="metric-grid">
-            <div v-for="item in summaryMetrics" :key="item.label" class="metric-item">
-              <span>{{ item.label }}</span>
-              <div v-if="item.rating !== undefined" class="satisfaction-rating">
-                <el-rate :model-value="item.rating" :max="5" disabled />
+          <div class="basic-panel">
+            <div class="detail-hero">
+              <div class="detail-hero-copy">
+                <span class="detail-eyebrow">业务通话</span>
+                <strong class="detail-call-id">{{ detail.businessCallId || '-' }}</strong>
+                <div class="detail-hero-tags">
+                  <el-tag effect="light" round>{{ directionLabel(detail.direction) }}</el-tag>
+                  <el-tag effect="light" round type="info">{{ statusLabel(detail.callStatus) }}</el-tag>
+                  <el-tag v-if="detail.handlingQueueName" effect="plain" round type="info">{{ detail.handlingQueueName }}</el-tag>
+                </div>
               </div>
-              <strong v-else>{{ item.value }}</strong>
+              <div class="detail-hero-side">
+                <span>挂断原因</span>
+                <strong>{{ hangupCauseLabel(detail.hangupCause) }}</strong>
+              </div>
             </div>
+
+            <section class="detail-section">
+              <div class="detail-section-title">号码与坐席</div>
+              <div class="info-grid">
+                <div class="info-cell">
+                  <span>主叫号码</span>
+                  <strong>{{ detail.callerNumber || '-' }}</strong>
+                </div>
+                <div class="info-cell">
+                  <span>被叫号码</span>
+                  <strong>{{ detail.calledNumber || '-' }}</strong>
+                </div>
+                <div class="info-cell">
+                  <span>坐席分机</span>
+                  <strong>{{ detail.agentExtension || '-' }}</strong>
+                </div>
+                <div class="info-cell">
+                  <span>主叫归属地</span>
+                  <strong>{{ formatNumberLocation(detail, 'caller') }}</strong>
+                </div>
+                <div class="info-cell">
+                  <span>被叫归属地</span>
+                  <strong>{{ formatNumberLocation(detail, 'called') }}</strong>
+                </div>
+                <div class="info-cell">
+                  <span>接听队列</span>
+                  <strong>{{ detail.handlingQueueName || '-' }}</strong>
+                </div>
+              </div>
+            </section>
+
+            <section class="detail-section">
+              <div class="detail-section-title">关联业务</div>
+              <div class="info-grid">
+                <div class="info-cell">
+                  <span>关联客户ID</span>
+                  <el-button v-if="detail.customerId" link type="primary" class="id-link" @click="openCustomerDetail(detail.customerId)">
+                    {{ detail.customerId }}
+                  </el-button>
+                  <strong v-else>-</strong>
+                </div>
+                <div class="info-cell">
+                  <span>关联工单ID</span>
+                  <el-button v-if="detail.ticketId" link type="primary" class="id-link" @click="openTicketDetail(detail.ticketId)">
+                    {{ detail.ticketId }}
+                  </el-button>
+                  <strong v-else>-</strong>
+                </div>
+              </div>
+            </section>
+
+            <section class="detail-section">
+              <div class="detail-section-title">时间节点</div>
+              <div class="info-grid time-grid">
+                <div class="info-cell">
+                  <span>开始时间</span>
+                  <strong>{{ detail.startedAt || '-' }}</strong>
+                </div>
+                <div class="info-cell">
+                  <span>振铃时间</span>
+                  <strong>{{ detail.ringingAt || '-' }}</strong>
+                </div>
+                <div class="info-cell">
+                  <span>接听时间</span>
+                  <strong>{{ detail.answeredAt || '-' }}</strong>
+                </div>
+                <div class="info-cell">
+                  <span>结束时间</span>
+                  <strong>{{ detail.endedAt || '-' }}</strong>
+                </div>
+              </div>
+            </section>
+
+            <section class="detail-section metric-section">
+              <div class="detail-section-title">时长与评价</div>
+              <div class="metric-grid">
+                <div v-for="item in summaryMetrics" :key="item.label" class="metric-item">
+                  <span>{{ item.label }}</span>
+                  <div v-if="item.rating !== undefined" class="satisfaction-rating">
+                    <el-rate :model-value="item.rating" :max="5" disabled />
+                  </div>
+                  <strong v-else>{{ item.value }}</strong>
+                </div>
+              </div>
+            </section>
           </div>
         </el-tab-pane>
         <el-tab-pane label="通话录音" name="recording">
@@ -889,264 +959,502 @@ onBeforeUnmount(() => {
 });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+.call-record-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-sizing: border-box;
+  height: 100%;
+  overflow: hidden;
+}
+
+.filter-card {
+  flex: none;
+
+  :deep(.el-card__body) {
+    padding: 12px 16px 2px;
+  }
+}
+
+.filter-form {
+  :deep(.el-form-item) {
+    margin-bottom: 12px;
+  }
+}
+
+.table-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+
+  :deep(.el-card__body) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    padding: 12px 14px;
+    overflow: hidden;
+  }
+}
+
+.record-table {
+  width: 100%;
+}
+
+.record-pagination {
+  flex: none;
+  margin-top: 8px !important;
+  padding: 0 !important;
+}
+
 .detail-tabs {
   min-height: 100%;
+
+  :deep(.el-tabs__header) {
+    margin-bottom: 14px;
+  }
+
+  :deep(.el-tabs__item) {
+    color: #5b6b82;
+    font-weight: 600;
+  }
+
+  :deep(.el-tabs__item.is-active) {
+    color: #1d4ed8;
+  }
 }
-.call-record-detail-drawer :deep(.el-drawer__body) {
-  padding-top: 8px;
+
+:global(.call-record-detail-drawer .el-drawer__body) {
+  padding: 12px 20px 20px;
+  background: #f5f8fc;
 }
+
 .call-record-detail-drawer :deep(.el-tabs__content) {
   overflow: visible;
 }
+
+.basic-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.detail-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid #dce8f8;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.14), transparent 40%),
+    linear-gradient(135deg, #f4f9ff, #eef5ff);
+}
+
+.detail-hero-copy {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.detail-eyebrow {
+  color: #6b7c93;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.detail-call-id {
+  overflow: hidden;
+  color: #15233d;
+  font-size: 15px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-hero-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.detail-hero-side {
+  display: grid;
+  gap: 6px;
+  flex: none;
+  min-width: 140px;
+  padding: 10px 12px;
+  border: 1px solid #d7e4f5;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+
+  span {
+    color: #7b8798;
+    font-size: 12px;
+  }
+
+  strong {
+    color: #15233d;
+    font-size: 14px;
+  }
+}
+
+.detail-section {
+  padding: 14px 16px;
+  border: 1px solid #e4ecf6;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.detail-section-title {
+  margin-bottom: 12px;
+  color: #15233d;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.time-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.info-cell {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #eef3f8;
+  border-radius: 12px;
+  background: #f8fbff;
+
+  span {
+    color: #7b8798;
+    font-size: 12px;
+  }
+
+  strong {
+    overflow: hidden;
+    color: #15233d;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.metric-section {
+  padding-bottom: 12px;
+}
+
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 12px;
-  padding: 16px;
-  margin-top: 16px;
-  border: 1px solid #e4e7ed;
-  border-radius: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 10px;
 }
+
 .metric-item {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  color: #909399;
+  min-height: 78px;
+  padding: 12px;
+  color: #7b8798;
+  border: 1px solid #e4ecf6;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff, #f7faff);
 }
+
 .metric-item strong {
-  color: #303133;
+  color: #15233d;
+  font-size: 16px;
+  line-height: 1.3;
 }
+
 .satisfaction-rating {
-  min-height: 24px;
   display: flex;
   align-items: center;
+  min-height: 24px;
 }
+
 .satisfaction-rating :deep(.el-rate__icon) {
   margin-right: 2px;
-  font-size: 20px;
+  font-size: 18px;
 }
+
 .timeline-layout {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
-  gap: 16px;
+  gap: 14px;
 }
+
 .timeline-list,
 .flow-panel {
-  border: 1px solid #e4e7ed;
-  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e4ecf6;
+  border-radius: 14px;
+  background: #fff;
 }
+
 .timeline-row {
   display: grid;
   grid-template-columns: 105px 20px 1fr;
   gap: 14px;
   align-items: center;
-  min-height: 76px;
-  padding: 0 20px;
-  border-bottom: 1px solid #ebeef5;
+  min-height: 72px;
+  padding: 0 18px;
+  border-bottom: 1px solid #eef3f8;
 }
+
 .timeline-row:last-child {
   border-bottom: 0;
 }
+
 .timeline-row time {
-  color: #606266;
+  color: #5b6b82;
+  font-variant-numeric: tabular-nums;
 }
+
 .timeline-marker {
   width: 14px;
   height: 14px;
   border: 4px solid #d9e7ff;
   border-radius: 50%;
-  background: #409eff;
+  background: #2563eb;
 }
+
 .timeline-marker.success {
   border-color: #d9f3e7;
   background: #20b26b;
 }
+
 .timeline-marker.warning {
   border-color: #fdf0d5;
   background: #e6a23c;
 }
+
 .timeline-marker.danger {
   border-color: #fde2e2;
   background: #f56c6c;
 }
+
 .timeline-content {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
+
 .timeline-content span {
-  color: #606266;
+  color: #7b8798;
   font-size: 13px;
 }
+
 .flow-panel {
   padding: 16px;
 }
+
 .flow-panel h4 {
-  margin: 0 0 16px;
+  margin: 0 0 14px;
+  color: #15233d;
 }
+
 .flow-track {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 4px;
 }
-/* 节点：左侧圆形图标 + 右侧文案 */
+
 .flow-node {
   position: relative;
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  padding: 14px 16px;
   margin-top: 18px;
-  border-radius: 10px;
-  background: #f5f9ff;
+  padding: 14px 16px;
   border: 1px solid #d6e4ff;
+  border-radius: 12px;
+  background: #f5f9ff;
 }
-/* 第一个节点不留顶部间距 */
+
 .flow-node:first-child {
   margin-top: 0;
 }
+
 .flow-node-marker {
-  flex-shrink: 0;
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   width: 38px;
   height: 38px;
-  border-radius: 50%;
-  background: #409eff;
   color: #fff;
+  border-radius: 50%;
+  background: #2563eb;
 }
+
 .flow-node-body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-top: 6px;
   min-width: 0;
+  padding-top: 6px;
 }
+
 .flow-node-body strong {
+  color: #15233d;
   font-size: 14px;
-  color: #303133;
 }
+
 .flow-node-body span {
-  color: #606266;
+  color: #5b6b82;
   font-size: 12px;
   line-height: 1.5;
   word-break: break-all;
 }
-/* 节点色调 */
+
 .flow-node.success {
-  background: #f0fbf6;
   border-color: #a8e5c8;
+  background: #f0fbf6;
 }
+
 .flow-node.success .flow-node-marker {
   background: #20b26b;
 }
+
 .flow-node.warning {
-  background: #fffaf0;
   border-color: #f5d49b;
+  background: #fffaf0;
 }
+
 .flow-node.warning .flow-node-marker {
   background: #e6a23c;
 }
+
 .flow-node.danger {
-  background: #fff5f5;
   border-color: #f7b2b2;
+  background: #fff5f5;
 }
+
 .flow-node.danger .flow-node-marker {
   background: #f56c6c;
 }
+
 .flow-node.primary .flow-node-marker {
-  background: #409eff;
+  background: #2563eb;
 }
-/* 节点之间的连接线：圆心对齐 */
+
 .flow-node:not(:first-child)::before {
-  content: '';
   position: absolute;
   top: -18px;
   left: 30px;
   width: 2px;
   height: 18px;
+  content: '';
   background: #d6e4ff;
 }
-/* 耗时药丸：穿插在节点之间 */
+
 .flow-gap {
+  position: relative;
   display: flex;
   align-items: center;
+  align-self: flex-start;
   justify-content: center;
   margin: 14px 0 0 49px;
   padding: 4px 14px;
-  align-self: flex-start;
-  border-radius: 12px;
-  background: #f4f4f5;
-  color: #909399;
+  color: #7b8798;
   font-size: 12px;
-  position: relative;
+  border-radius: 12px;
+  background: #f4f7fb;
 }
-/* 药丸上方与节点的连接线 */
+
 .flow-gap::before {
-  content: '';
   position: absolute;
   top: -14px;
   left: 50%;
   width: 2px;
   height: 14px;
+  content: '';
   background: #d6e4ff;
   transform: translateX(-50%);
 }
+
 .flow-gap.warning {
-  background: #fdf6ec;
   color: #e6a23c;
+  background: #fdf6ec;
 }
+
 .flow-gap.success {
-  background: #f0fbf6;
   color: #20b26b;
+  background: #f0fbf6;
 }
+
 .flow-gap.danger {
-  background: #fef0f0;
   color: #f56c6c;
+  background: #fef0f0;
 }
+
 .flow-gap.muted {
-  background: #f4f4f5;
-  color: #909399;
+  color: #7b8798;
+  background: #f4f7fb;
 }
+
 .timeline-metrics {
-  margin-top: 16px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid #e4ecf6;
+  border-radius: 14px;
+  background: #fff;
 }
+
 .recording-player {
-  padding: 20px 0;
+  padding: 18px;
+  border: 1px solid #e4ecf6;
+  border-radius: 14px;
+  background: #fff;
 }
+
 .transcript-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 16px;
   margin-bottom: 14px;
-  border: 1px solid #e4e7ed;
-  border-radius: 10px;
-  background: #f8fbff;
+  padding: 14px 16px;
+  border: 1px solid #dce8f8;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f4f9ff, #eef5ff);
 }
+
 .transcript-toolbar > div {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
+
 .transcript-title-line {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
 .transcript-toolbar span {
-  color: #909399;
+  color: #7b8798;
   font-size: 13px;
 }
+
 .transcript-content {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
+
 .transcript-chat {
   display: flex;
   flex-direction: column;
@@ -1154,161 +1462,211 @@ onBeforeUnmount(() => {
   max-height: 520px;
   padding: 14px;
   overflow-y: auto;
-  border-radius: 10px;
-  background: #f5f7fb;
+  border: 1px solid #e4ecf6;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f8fbff, #f4f7fb);
 }
+
 .transcript-message {
   display: flex;
   align-items: flex-start;
   gap: 8px;
   max-width: 78%;
 }
+
 .transcript-message.is-agent,
 .transcript-message.is-ai {
   align-self: flex-end;
   flex-direction: row-reverse;
 }
+
 .transcript-message.is-customer,
 .transcript-message.is-system,
 .transcript-message.is-unknown {
   align-self: flex-start;
 }
+
 .transcript-avatar {
-  flex: 0 0 30px;
   display: flex;
+  flex: 0 0 30px;
   align-items: center;
   justify-content: center;
   width: 30px;
   height: 30px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
   border-radius: 50%;
   background: #909399;
-  color: #fff;
-  font-weight: 600;
-  font-size: 12px;
 }
+
 .transcript-message.is-customer .transcript-avatar {
-  background: #0b4a7a;
+  background: linear-gradient(135deg, #38bdf8, #2563eb);
 }
+
 .transcript-message.is-agent .transcript-avatar {
   background: #1f9d55;
 }
+
 .transcript-message.is-ai .transcript-avatar {
   background: #23856d;
 }
+
 .transcript-message.is-system .transcript-avatar {
   background: #e6a23c;
 }
+
 .transcript-bubble-wrap {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
+
 .transcript-message.is-agent .transcript-bubble-wrap,
 .transcript-message.is-ai .transcript-bubble-wrap {
   align-items: flex-end;
 }
+
 .transcript-meta {
   display: flex;
-  align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  color: #909399;
+  align-items: center;
+  color: #7b8798;
   font-size: 11px;
 }
+
 .transcript-message.is-agent .transcript-meta,
 .transcript-message.is-ai .transcript-meta {
   justify-content: flex-end;
 }
+
 .transcript-meta span:first-child {
-  color: #606266;
+  color: #5b6b82;
   font-weight: 600;
 }
+
 .transcript-bubble {
   padding: 8px 12px;
-  border: 1px solid #e4e7ed;
-  border-radius: 10px;
+  color: #15233d;
   font-size: 13px;
   line-height: 1.6;
   white-space: pre-wrap;
+  border: 1px solid #e4ecf6;
+  border-radius: 12px;
   background: #fff;
-  color: #303133;
-  box-shadow: 0 2px 8px rgba(31, 45, 61, 0.04);
+  box-shadow: 0 4px 10px rgba(28, 48, 78, 0.04);
 }
+
 .transcript-message.is-agent .transcript-bubble {
   color: #25364a;
   border-color: #d6e7f7;
   background: #eaf4fc;
 }
+
 .transcript-message.is-ai .transcript-bubble {
   color: #245247;
   border-color: #d4ebe3;
   background: #eaf7f2;
 }
+
 .transcript-message.is-system .transcript-bubble,
 .transcript-message.is-unknown .transcript-bubble {
-  background: #f4f4f5;
+  background: #f4f7fb;
 }
+
 .transcript-raw {
-  border-radius: 10px;
   overflow: hidden;
+  border-radius: 12px;
 }
+
 .transcript-full-text {
-  white-space: pre-wrap;
-  line-height: 1.8;
-  color: #303133;
   padding: 4px 0;
+  color: #15233d;
+  line-height: 1.8;
+  white-space: pre-wrap;
 }
+
 .voicemail-list {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
+
 .voicemail-card {
-  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #e4ecf6;
+  border-radius: 14px;
 }
+
 .voicemail-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
+
 .voicemail-header > div {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
+
 .voicemail-header span {
-  color: #909399;
+  color: #7b8798;
   font-size: 12px;
 }
+
 .voicemail-actions {
   display: flex;
   align-items: center;
   gap: 10px;
 }
+
 .voicemail-player {
   padding-top: 14px;
 }
+
 .recording-file {
   margin-top: 12px;
-  color: #606266;
+  color: #5b6b82;
   font-size: 13px;
 }
+
 .diagnostic-tip {
   margin-bottom: 12px;
 }
+
 .diagnostic-collapse {
-  border-top: 1px solid #ebeef5;
-  border-bottom: 1px solid #ebeef5;
+  overflow: hidden;
+  border: 1px solid #e4ecf6;
+  border-radius: 14px;
+  background: #fff;
 }
+
 .diagnostic-collapse :deep(.el-collapse-item__content) {
   padding-bottom: 18px;
 }
-/* 描述项内的可点击 ID 链接：去除 button 默认内边距，贴合单元格 */
+
 .id-link {
-  padding: 0;
   height: auto;
-  vertical-align: baseline;
+  padding: 0;
   font-weight: inherit;
+  vertical-align: baseline;
+}
+
+@media (max-width: 1100px) {
+  .info-grid,
+  .time-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .timeline-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-hero {
+    flex-direction: column;
+  }
 }
 </style>

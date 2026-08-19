@@ -14,7 +14,7 @@
         <el-table-column label="周期数" width="90"><template #default="{ row }">{{ row.periods.length }}</template></el-table-column>
         <el-table-column label="特殊日期" width="100"><template #default="{ row }">{{ row.exceptions.length }}</template></el-table-column>
         <el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag></template></el-table-column>
-        <el-table-column label="操作" width="210">
+        <el-table-column label="操作" width="210" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openEdit(row)">修改</el-button>
             <el-button link type="success" @click="testPlan(row)">测试</el-button>

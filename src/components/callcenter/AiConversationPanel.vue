@@ -54,14 +54,14 @@
       <el-input
         v-model="question"
         type="textarea"
-        :rows="3"
+        :rows="2"
         resize="none"
         placeholder="输入问题，按 Ctrl + Enter 或 Enter 发送消息"
         @keydown.ctrl.enter.prevent="send"
         @keyup.enter="send"
       />
       <div class="composer-actions">
-        <span class="text-gray-400">回答将标明知识来源</span>
+        <span>回答将标明知识来源</span>
         <el-button type="primary" :loading="sending" :disabled="!question.trim()" @click="send">发送</el-button>
       </div>
     </div>
@@ -300,56 +300,80 @@ watch(() => props.agentId, reset, { immediate: true });
 onBeforeUnmount(abort);
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .assistant-shell {
-  height: 100%;
-  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
 }
+
 .conversation-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto auto auto auto;
+  flex: none;
+  grid-template-columns: minmax(160px, 1fr) auto auto auto auto;
   gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #e4ecf6;
+  border-radius: 12px;
+  background: #f7faff;
 }
+
 .message-box {
   flex: 1;
-  min-height: 280px;
+  min-height: 0;
+  padding: 16px 16px 12px;
   overflow: auto;
-  background: #f6f8fb;
-  border-radius: 12px;
-  padding: 16px;
+  border: 1px solid #e4ecf6;
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.08), transparent 36%),
+    linear-gradient(180deg, #f8fbff, #f4f7fb);
 }
+
 .message {
-  margin-bottom: 16px;
-  max-width: 92%;
+  max-width: 88%;
+  margin-bottom: 14px;
 }
+
 .message.user {
   margin-left: auto;
+
+  .message-label {
+    justify-content: flex-end;
+  }
 }
+
 .message-label {
-  font-size: 12px;
-  color: #64748b;
-  margin-bottom: 5px;
   display: flex;
   gap: 6px;
   align-items: center;
+  margin-bottom: 6px;
+  color: #6b7c93;
+  font-size: 12px;
+  font-weight: 600;
 }
+
 .message-content {
   padding: 11px 13px;
-  border-radius: 10px;
+  border: 1px solid #e8eef6;
+  border-radius: 14px;
   background: #fff;
+  box-shadow: 0 6px 14px rgba(28, 48, 78, 0.04);
   font-size: 14px;
   line-height: 1.7;
   word-break: break-word;
 }
+
 .typing-indicator {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 46px;
+  min-height: 42px;
 }
+
 .typing-indicator span {
   width: 7px;
   height: 7px;
@@ -357,12 +381,15 @@ onBeforeUnmount(abort);
   background: #b8c0cc;
   animation: typing-bounce 1.1s ease-in-out infinite;
 }
+
 .typing-indicator span:nth-child(2) {
   animation-delay: 0.14s;
 }
+
 .typing-indicator span:nth-child(3) {
   animation-delay: 0.28s;
 }
+
 @keyframes typing-bounce {
   0%,
   60%,
@@ -373,74 +400,112 @@ onBeforeUnmount(abort);
     transform: translateY(-5px);
   }
 }
+
 .user .message-content {
-  background: #053b70;
   color: #fff;
+  border-color: transparent;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  box-shadow: 0 10px 18px rgba(37, 99, 235, 0.18);
 }
+
 .retrieval-panel {
-  margin: 0 0 7px;
+  margin: 0 0 8px;
   border: 0;
   --el-collapse-border-color: transparent;
 }
+
 .retrieval-panel :deep(.el-collapse-item__header) {
-  height: 44px;
-  padding: 0 14px;
-  border: 0;
+  height: 40px;
+  padding: 0 12px;
+  color: #33598f;
+  border: 1px solid #d7e6fb;
   border-radius: 10px;
-  background: #eef1f6;
-  color: #25324b;
+  background: #f2f7ff;
 }
+
 .retrieval-panel :deep(.el-collapse-item__wrap) {
   border: 0;
   background: transparent;
 }
+
 .retrieval-panel :deep(.el-collapse-item__content) {
-  padding: 4px 14px 2px;
+  padding: 8px 4px 2px;
 }
+
 .retrieval-title {
   display: flex;
-  align-items: center;
   gap: 8px;
+  align-items: center;
   font-weight: 600;
 }
+
 .retrieval-title small {
   color: #8a94a6;
   font-weight: 400;
 }
+
 .citation {
-  padding: 12px 0;
-  border-bottom: 1px solid #e5e7eb;
+  padding: 10px 12px;
+  border: 1px solid #e8eef6;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  background: #fff;
 }
+
 .citation:last-child {
-  border-bottom: 0;
+  margin-bottom: 0;
 }
+
 .citation-heading {
   display: flex;
-  align-items: center;
   gap: 8px;
+  align-items: center;
 }
+
 .citation-heading span {
   color: #64748b;
 }
+
 .citation-heading small {
   margin-left: auto;
   color: #8a94a6;
 }
+
 .citation p {
-  margin: 7px 0 0;
+  margin: 8px 0 0;
   color: #4b5563;
   line-height: 1.65;
   white-space: pre-wrap;
 }
+
 .composer {
-  border-top: 1px solid #e5e7eb;
-  padding-top: 10px;
+  flex: none;
+  margin-top: -1px;
+  padding: 10px 12px 12px;
+  border: 1px solid #e4ecf6;
+  border-radius: 0 0 14px 14px;
+  background: #fff;
 }
+
+.composer :deep(.el-textarea__inner) {
+  min-height: 56px !important;
+  padding: 10px 12px;
+  border: 1px solid #e8eef6;
+  border-radius: 10px;
+  background: #f7faff;
+  box-shadow: none;
+}
+
+.composer :deep(.el-textarea__inner:focus) {
+  border-color: #93c5fd;
+}
+
 .composer-actions {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   margin-top: 8px;
+  color: #8b97aa;
   font-size: 12px;
 }
 </style>

@@ -203,7 +203,7 @@ const radiusBaseChange = (val: number) => {
   el.style.setProperty('--app-radius-base', `${val}px`);
   el.style.setProperty('--app-radius-sm', `${Math.round(val * 0.6)}px`);
   el.style.setProperty('--app-radius-md', `${val}px`);
-  el.style.setProperty('--app-radius-lg', `${Math.round(val * 1.4)}px`);
+  el.style.setProperty('--app-radius-lg', `${Math.round(val * 1.6)}px`);
   el.style.setProperty('--el-border-radius-base', `${val}px`);
   el.style.setProperty('--el-border-radius-small', `${Math.round(val * 0.6)}px`);
 };

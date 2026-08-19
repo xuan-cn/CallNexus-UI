@@ -39,8 +39,10 @@ VXETable.setConfig({
 });
 
 // 修改 el-dialog 默认点击遮照为不关闭
-import { ElDialog } from 'element-plus';
+import { ElDialog, ElTable } from 'element-plus';
 ElDialog.props.closeOnClickModal.default = false;
+// 列表过长默认省略，悬停看全文；自定义多行单元格仍可折行
+ElTable.props.showOverflowTooltip.default = true;
 
 // 全局类型声明：index.html 中注入的加载器控制函数
 declare global {

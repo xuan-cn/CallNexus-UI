@@ -47,7 +47,7 @@
             ><el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag></template
           ></el-table-column
         >
-        <el-table-column label="操作" width="180" align="center">
+        <el-table-column label="操作" width="180" align="center" fixed="right">
           <template #default="{ row }">
             <el-button v-hasPermi="['callcenter:freeswitch-node:query']" link type="primary" icon="Document" @click="handleProfilePreview(row)" />
             <el-button v-hasPermi="['callcenter:freeswitch-node:agent-token']" link type="primary" icon="Key" @click="handleAgentToken(row)" />

@@ -12,7 +12,7 @@
         </div>
       </div>
       <div class="summary-grid">
-        <div v-for="item in summaryItems" :key="item.label" class="summary-item">
+        <div v-for="item in summaryItems" :key="item.label" class="summary-item" :class="item.tone">
           <span>{{ item.label }}</span>
           <strong>{{ item.value }}</strong>
           <small>{{ item.extra }}</small>
@@ -20,8 +20,14 @@
       </div>
     </el-card>
 
-    <el-card shadow="never">
-      <el-table v-loading="loading" :data="queues" row-key="queueId">
+    <el-card shadow="never" class="table-card">
+      <div class="table-card-head">
+        <div>
+          <strong>队列列表</strong>
+          <small>共 {{ queues.length }} 个队列</small>
+        </div>
+      </div>
+      <el-table v-loading="loading" :data="queues" row-key="queueId" class="monitor-table" max-height="calc(100vh - 320px)">
         <el-table-column label="队列" min-width="190">
           <template #default="{ row }">
             <div class="queue-name">
@@ -32,14 +38,14 @@
         </el-table-column>
         <el-table-column label="健康状态" width="120">
           <template #default="{ row }">
-            <el-tag :type="healthTagType(row.healthStatus)" effect="light">{{ row.healthText }}</el-tag>
+            <el-tag :type="healthTagType(row.healthStatus)" effect="light" round>{{ row.healthText }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="当前排队" width="100" align="center" prop="waitingCount" />
         <el-table-column label="振铃中" width="90" align="center" prop="ringingCount" />
-        <el-table-column label="坐席" min-width="160">
+        <el-table-column label="坐席" min-width="180">
           <template #default="{ row }">
-            <span>空闲 {{ row.idleAgentCount }} / 在线 {{ row.onlineAgentCount }} / 总 {{ row.totalAgentCount }}</span>
+            <span class="agent-stat">空闲 {{ row.idleAgentCount }} / 在线 {{ row.onlineAgentCount }} / 总 {{ row.totalAgentCount }}</span>
           </template>
         </el-table-column>
         <el-table-column label="今日进入" width="100" align="center" prop="enteredCount" />
@@ -58,11 +64,11 @@
         <el-table-column label="同步状态" width="130">
           <template #default="{ row }">
             <el-tooltip :disabled="!hasSyncError(row)" :content="row.syncError" placement="top">
-              <el-tag :type="syncTagType(row.syncStatus)" effect="plain">{{ syncLabel(row.syncStatus) }}</el-tag>
+              <el-tag :type="syncTagType(row.syncStatus)" effect="plain" round>{{ syncLabel(row.syncStatus) }}</el-tag>
             </el-tooltip>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="100" fixed="right">
+        <el-table-column label="操作" width="90" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openDetail(row)">详情</el-button>
           </template>
@@ -70,22 +76,35 @@
       </el-table>
     </el-card>
 
-    <el-drawer v-model="detailVisible" :title="detailTitle" size="72%" append-to-body destroy-on-close @close="closeDetail">
+    <el-drawer
+      v-model="detailVisible"
+      class="queue-monitor-detail-drawer"
+      :title="detailTitle"
+      size="72%"
+      append-to-body
+      destroy-on-close
+      @close="closeDetail"
+    >
       <div v-if="currentQueue" class="detail-summary">
         <div>
-          <span>当前排队</span><strong>{{ currentQueue.waitingCount }}</strong>
+          <span>当前排队</span>
+          <strong>{{ currentQueue.waitingCount }}</strong>
         </div>
         <div>
-          <span>空闲坐席</span><strong>{{ currentQueue.idleAgentCount }}</strong>
+          <span>空闲坐席</span>
+          <strong>{{ currentQueue.idleAgentCount }}</strong>
         </div>
         <div>
-          <span>今日接通</span><strong>{{ currentQueue.answeredCount }}</strong>
+          <span>今日接通</span>
+          <strong>{{ currentQueue.answeredCount }}</strong>
         </div>
         <div>
-          <span>今日放弃</span><strong>{{ currentQueue.abandonedCount }}</strong>
+          <span>今日放弃</span>
+          <strong>{{ currentQueue.abandonedCount }}</strong>
         </div>
         <div>
-          <span>最长等待</span><strong>{{ formatSeconds(currentQueue.longestWaitSeconds) }}</strong>
+          <span>最长等待</span>
+          <strong>{{ formatSeconds(currentQueue.longestWaitSeconds) }}</strong>
         </div>
       </div>
       <el-tabs v-model="activeTab" class="detail-tabs">
@@ -100,12 +119,12 @@
             <el-table-column label="分机" width="110" prop="extension" />
             <el-table-column label="状态" width="110">
               <template #default="{ row }">
-                <el-tag :type="agentTagType(row.status)" effect="light">{{ row.statusText }}</el-tag>
+                <el-tag :type="agentTagType(row.status)" effect="light" round>{{ row.statusText }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column label="可分配" width="90">
               <template #default="{ row }">
-                <el-tag :type="row.assignable ? 'success' : 'info'" effect="plain">{{ row.assignable ? '是' : '否' }}</el-tag>
+                <el-tag :type="row.assignable ? 'success' : 'info'" effect="plain" round>{{ row.assignable ? '是' : '否' }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column label="最近接听" width="180" prop="lastAnsweredAt" />
@@ -125,9 +144,9 @@
           </div>
         </el-tab-pane>
         <el-tab-pane label="最近事件" name="events">
-          <el-timeline v-loading="detailLoading">
+          <el-timeline v-loading="detailLoading" class="event-timeline">
             <el-timeline-item v-for="item in events" :key="item.eventId" :timestamp="item.occurredAt" placement="top">
-              <el-card shadow="never">
+              <div class="event-card">
                 <strong>{{ item.eventText }}</strong>
                 <p>主叫：{{ item.callerNumber || '-' }}，被叫：{{ item.calledNumber || '-' }}</p>
                 <p>
@@ -136,14 +155,14 @@
                   }}
                 </p>
                 <p v-if="item.fromTarget || item.toTarget">从 {{ item.fromTarget || '-' }} 到 {{ item.toTarget || '-' }}</p>
-              </el-card>
+              </div>
             </el-timeline-item>
           </el-timeline>
           <el-empty v-if="!detailLoading && events.length === 0" description="暂无队列事件" />
         </el-tab-pane>
         <el-tab-pane label="最近通话" name="calls">
           <el-table v-loading="detailLoading" :data="calls">
-            <el-table-column label="通话ID" min-width="170" prop="sessionId" />
+            <el-table-column label="通话ID" min-width="170" prop="sessionId" show-overflow-tooltip />
             <el-table-column label="客户号码" min-width="140">
               <template #default="{ row }">{{ row.callerNumber || row.calledNumber || '-' }}</template>
             </el-table-column>
@@ -158,7 +177,7 @@
             <el-table-column label="状态" width="100">
               <template #default="{ row }">{{ callStatusLabel(row.callStatus) }}</template>
             </el-table-column>
-            <el-table-column label="挂断原因" min-width="150">
+            <el-table-column label="挂断原因" min-width="150" show-overflow-tooltip>
               <template #default="{ row }">{{ hangupCauseLabel(row.hangupCause) }}</template>
             </el-table-column>
             <el-table-column label="录音" width="90">
@@ -221,16 +240,42 @@ let timer: ReturnType<typeof setInterval> | undefined;
 
 const detailTitle = computed(() => (currentQueue.value ? `${currentQueue.value.queueName} - 监控详情` : '队列监控详情'));
 const summaryItems = computed(() => [
-  { label: '当前排队', value: overview.value?.currentWaitingCount || 0, extra: `振铃中 ${overview.value?.currentRingingCount || 0}` },
-  { label: '空闲坐席', value: overview.value?.idleAgentCount || 0, extra: `在线 ${overview.value?.onlineAgentCount || 0}` },
-  { label: '今日进入', value: overview.value?.todayEnteredCount || 0, extra: `接通 ${overview.value?.todayAnsweredCount || 0}` },
-  { label: '今日放弃', value: overview.value?.todayAbandonedCount || 0, extra: `超时 ${overview.value?.todayTimeoutCount || 0}` },
+  {
+    label: '当前排队',
+    value: overview.value?.currentWaitingCount || 0,
+    extra: `振铃中 ${overview.value?.currentRingingCount || 0}`,
+    tone: 'tone-wait'
+  },
+  {
+    label: '空闲坐席',
+    value: overview.value?.idleAgentCount || 0,
+    extra: `在线 ${overview.value?.onlineAgentCount || 0}`,
+    tone: 'tone-idle'
+  },
+  {
+    label: '今日进入',
+    value: overview.value?.todayEnteredCount || 0,
+    extra: `接通 ${overview.value?.todayAnsweredCount || 0}`,
+    tone: 'tone-enter'
+  },
+  {
+    label: '今日放弃',
+    value: overview.value?.todayAbandonedCount || 0,
+    extra: `超时 ${overview.value?.todayTimeoutCount || 0}`,
+    tone: 'tone-abandon'
+  },
   {
     label: '平均等待',
     value: formatSeconds(overview.value?.averageWaitSeconds || 0),
-    extra: `最长 ${formatSeconds(overview.value?.longestWaitSeconds || 0)}`
+    extra: `最长 ${formatSeconds(overview.value?.longestWaitSeconds || 0)}`,
+    tone: 'tone-avg'
   },
-  { label: '健康队列', value: overview.value?.healthyQueueCount || 0, extra: `异常 ${overview.value?.abnormalQueueCount || 0}` }
+  {
+    label: '健康队列',
+    value: overview.value?.healthyQueueCount || 0,
+    extra: `异常 ${overview.value?.abnormalQueueCount || 0}`,
+    tone: 'tone-health'
+  }
 ]);
 
 const loadData = async () => {
@@ -380,14 +425,31 @@ onBeforeUnmount(() => {
 
 <style lang="scss" scoped>
 .queue-monitor-page {
-  display: grid;
-  gap: 14px;
-  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 10px 12px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.summary-card,
+.table-card {
+  border: 1px solid #dce8f6;
+  border-radius: 16px;
+  box-shadow: 0 10px 24px rgba(28, 48, 78, 0.04);
 }
 
 .summary-card {
+  flex: none;
+
   :deep(.el-card__body) {
-    padding: 18px;
+    padding: 14px 16px;
+    background:
+      radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.1), transparent 36%),
+      linear-gradient(180deg, #ffffff, #f8fbff);
   }
 }
 
@@ -396,12 +458,12 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 
   h2 {
-    margin: 0 0 6px;
-    font-size: 20px;
-    color: #10233f;
+    margin: 0 0 4px;
+    color: #15233d;
+    font-size: 18px;
   }
 
   p {
@@ -413,21 +475,36 @@ onBeforeUnmount(() => {
 
 .summary-actions {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 10px;
 }
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(130px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  gap: 10px;
 }
 
 .summary-item {
-  padding: 14px;
-  border: 1px solid #e6edf5;
-  border-radius: 12px;
-  background: #f8fbff;
+  position: relative;
+  overflow: hidden;
+  padding: 12px 14px;
+  border: 1px solid #e4ecf6;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 6px 14px rgba(28, 48, 78, 0.04);
+
+  &::before {
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    left: 0;
+    width: 3px;
+    content: '';
+    border-radius: 0 3px 3px 0;
+    background: #93c5fd;
+  }
 
   span,
   small {
@@ -439,9 +516,74 @@ onBeforeUnmount(() => {
   strong {
     display: block;
     margin: 6px 0 4px;
-    color: #053b70;
+    color: #15233d;
     font-size: 24px;
+    line-height: 1.1;
   }
+}
+
+.summary-item.tone-wait::before {
+  background: linear-gradient(#38bdf8, #2563eb);
+}
+
+.summary-item.tone-idle::before {
+  background: linear-gradient(#34d399, #059669);
+}
+
+.summary-item.tone-enter::before {
+  background: linear-gradient(#60a5fa, #2563eb);
+}
+
+.summary-item.tone-abandon::before {
+  background: linear-gradient(#fbbf24, #f59e0b);
+}
+
+.summary-item.tone-avg::before {
+  background: linear-gradient(#a78bfa, #6366f1);
+}
+
+.summary-item.tone-health::before {
+  background: linear-gradient(#2dd4bf, #0d9488);
+}
+
+.table-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+
+  :deep(.el-card__body) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    padding: 12px 14px;
+    overflow: hidden;
+  }
+}
+
+.table-card-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+
+  strong {
+    display: block;
+    color: #15233d;
+    font-size: 15px;
+  }
+
+  small {
+    color: #7b8798;
+    font-size: 12px;
+  }
+}
+
+.monitor-table {
+  width: 100%;
 }
 
 .queue-name {
@@ -449,13 +591,23 @@ onBeforeUnmount(() => {
   gap: 2px;
 
   strong {
-    color: #172033;
+    color: #15233d;
   }
 
   span {
-    color: #8993a6;
+    color: #8b97aa;
     font-size: 12px;
   }
+}
+
+.agent-stat {
+  color: #5b6b82;
+  font-size: 13px;
+}
+
+:global(.queue-monitor-detail-drawer .el-drawer__body) {
+  padding: 14px 18px 18px;
+  background: #f5f8fc;
 }
 
 .detail-summary {
@@ -466,9 +618,9 @@ onBeforeUnmount(() => {
 
   div {
     padding: 12px;
-    border: 1px solid #e6edf5;
-    border-radius: 10px;
-    background: #f8fbff;
+    border: 1px solid #e4ecf6;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #ffffff, #f7faff);
   }
 
   span {
@@ -478,8 +630,23 @@ onBeforeUnmount(() => {
   }
 
   strong {
-    color: #053b70;
+    color: #15233d;
     font-size: 22px;
+  }
+}
+
+.detail-tabs {
+  padding: 12px 14px;
+  border: 1px solid #e4ecf6;
+  border-radius: 14px;
+  background: #fff;
+
+  :deep(.el-tabs__header) {
+    margin-bottom: 12px;
+  }
+
+  :deep(.el-tabs__item.is-active) {
+    color: #1d4ed8;
   }
 }
 
@@ -495,10 +662,14 @@ onBeforeUnmount(() => {
 .trend-row {
   display: grid;
   grid-template-columns: 56px minmax(180px, 1fr) 260px;
-  align-items: center;
   gap: 12px;
+  align-items: center;
+  padding: 8px 10px;
   color: #566176;
   font-size: 13px;
+  border: 1px solid #eef3f8;
+  border-radius: 10px;
+  background: #f8fbff;
 }
 
 .trend-bars {
@@ -507,23 +678,45 @@ onBeforeUnmount(() => {
 
   i {
     display: block;
-    height: 8px;
     min-width: 4px;
+    height: 8px;
     border-radius: 999px;
   }
 
   .entered {
-    background: #2f6bff;
+    background: linear-gradient(90deg, #60a5fa, #2563eb);
   }
 
   .answered {
-    background: #18b78c;
+    background: linear-gradient(90deg, #34d399, #059669);
   }
 }
 
 .trend-row em {
   color: #7b8798;
   font-style: normal;
+}
+
+.event-timeline {
+  padding-left: 4px;
+}
+
+.event-card {
+  padding: 12px 14px;
+  border: 1px solid #e4ecf6;
+  border-radius: 12px;
+  background: #fff;
+
+  strong {
+    color: #15233d;
+  }
+
+  p {
+    margin: 6px 0 0;
+    color: #5b6b82;
+    font-size: 13px;
+    line-height: 1.55;
+  }
 }
 
 .metric-explain {
@@ -534,10 +727,14 @@ onBeforeUnmount(() => {
 
   p {
     margin: 0;
+    padding: 10px 12px;
+    border: 1px solid #eef3f8;
+    border-radius: 10px;
+    background: #f8fbff;
   }
 
   strong {
-    color: #053b70;
+    color: #15233d;
   }
 }
 
@@ -545,6 +742,18 @@ onBeforeUnmount(() => {
   .summary-grid,
   .detail-summary {
     grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .summary-grid,
+  .detail-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .summary-header {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 </style>

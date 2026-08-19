@@ -3,7 +3,7 @@
     <router-view v-slot="{ Component, route }">
       <transition :enter-active-class="animate" mode="out-in">
         <keep-alive :include="tagsViewStore.cachedViews">
-          <component :is="Component" v-if="!route.meta.link" :key="route.path" />
+          <component :is="Component" v-if="!!Component && !route.meta.link" :key="route.path" />
         </keep-alive>
       </transition>
     </router-view>
@@ -53,11 +53,18 @@ function addIframe() {
 
 <style lang="scss" scoped>
 .app-main {
-  /* 50= navbar  50  */
-  min-height: calc(100vh - 50px);
+  /*
+   * 主内容区固定为视口高度：
+   * - 普通 CRUD 页内容超出时，在这里滚动（恢复可看全）
+   * - 需要「铺满 + 表内滚动」的页面自行 height: calc(100vh - 84px) + overflow: hidden
+   *   会刚好占满本区域，不会再叠一层外层滚动
+   */
+  box-sizing: border-box;
   width: 100%;
+  height: 100vh;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .fixed-header + .app-main {
@@ -65,11 +72,6 @@ function addIframe() {
 }
 
 .hasTagsView {
-  .app-main {
-    /* 84 = navbar + tags-view = 50 + 34 */
-    min-height: calc(100vh - 84px);
-  }
-
   .fixed-header + .app-main {
     padding-top: 84px;
   }

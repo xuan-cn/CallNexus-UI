@@ -220,7 +220,8 @@ watch(
 }
 
 :deep(.el-badge__content.is-fixed) {
-  top: 12px;
+  top: 6px;
+  right: 2px;
 }
 
 .flex {
@@ -235,28 +236,27 @@ watch(
   height: 50px;
   overflow: hidden;
   position: relative;
-  background: var(--el-bg-color);
-  border-bottom: 1px solid var(--el-border-color-lighter);
-  box-shadow: none;
+  background: #fff;
+  border-bottom: 1px solid #e8eef6;
   display: flex;
   align-items: center;
-  // padding: 0 8px;
   box-sizing: border-box;
+  padding-right: 8px;
 
   .hamburger-container {
-    line-height: 46px;
+    line-height: 50px;
     height: 100%;
-    //float: left;
     cursor: pointer;
     transition: background 0.3s;
     -webkit-tap-highlight-color: transparent;
     display: flex;
     align-items: center;
     flex-shrink: 0;
-    margin-right: 8px;
+    margin-right: 4px;
+    border-radius: 0 12px 12px 0;
 
     &:hover {
-      background: var(--el-fill-color-lighter);
+      background: #f3f7ff;
     }
   }
 
@@ -288,7 +288,9 @@ watch(
     height: 100%;
     display: flex;
     align-items: center;
+    gap: 2px;
     margin-left: auto;
+    padding-right: 8px;
 
     &:focus {
       outline: none;
@@ -298,11 +300,12 @@ watch(
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      min-width: 36px;
+      height: 36px;
       padding: 0 8px;
-      height: 32px;
       font-size: 18px;
-      color: var(--el-text-color-regular);
-      border-radius: var(--app-radius-md);
+      color: #5f6e86;
+      border-radius: 10px;
 
       &.hover-effect {
         cursor: pointer;
@@ -311,37 +314,62 @@ watch(
           color 0.2s ease;
 
         &:hover {
-          background: var(--el-fill-color-light);
+          background: #eef4ff;
           color: var(--el-color-primary);
         }
       }
     }
 
     .avatar-container {
-      margin-right: 40px;
+      margin: 0 4px 0 8px;
+      padding-left: 10px;
+      border-left: 1px solid #e8eef6;
+
+      .right-menu-item {
+        min-width: auto;
+        height: 40px;
+        padding: 0 8px;
+      }
 
       .avatar-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 6px;
         margin-top: 0;
         position: relative;
 
         .user-avatar {
           cursor: pointer;
-          width: 40px;
-          height: 40px;
-          border-radius: var(--app-radius-md);
+          width: 32px;
+          height: 32px;
+          border: 1px solid #e8eef6;
+          border-radius: 50%;
           margin-top: 0;
           display: block;
+          object-fit: cover;
         }
 
         i {
           cursor: pointer;
-          position: absolute;
-          right: -20px;
-          top: 25px;
+          position: static;
           font-size: 12px;
+          color: #8b97aa;
         }
       }
     }
+  }
+}
+
+html.dark .navbar {
+  background: var(--el-bg-color);
+  border-bottom-color: var(--el-border-color);
+
+  .avatar-container {
+    border-left-color: var(--el-border-color);
+  }
+
+  .user-avatar {
+    border-color: var(--el-border-color);
   }
 }
 </style>

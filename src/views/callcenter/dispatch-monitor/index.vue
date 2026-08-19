@@ -2,66 +2,83 @@
   <div class="dispatch-monitor-page">
     <el-card shadow="never" class="overview-card">
       <div class="page-header">
-        <div>
+        <div class="page-header-copy">
           <h2>调度台</h2>
           <p>统一查看分机注册、坐席状态、通话状态和实时通话拓扑。</p>
         </div>
         <div class="header-actions">
-          <el-select v-model="operatorSipAccountId" filterable placeholder="选择本机调度分机" style="width: 250px">
-            <el-option
-              v-for="item in availableOperatorExtensions"
-              :key="item.sipAccountId"
-              :label="`${item.extension} - ${item.displayName || item.nodeName || 'SIP分机'}`"
-              :value="item.sipAccountId"
-            />
-          </el-select>
-          <el-button
-            v-hasPermi="['callcenter:dispatch-control:operator-extension']"
-            :disabled="!operatorSipAccountId"
-            :loading="operatorSaving"
-            @click="handleBindOperatorExtension"
-            >绑定本机</el-button
-          >
-          <el-button v-hasPermi="['callcenter:dispatch-control:call']" :disabled="selectedExtensions.length !== 1" @click="handleSingleCall"
-            >单呼</el-button
-          >
-          <el-button
-            v-hasPermi="['callcenter:dispatch-control:intercom']"
-            type="primary"
-            :disabled="selectedExtensions.length !== 1"
-            @click="handleStartIntercom"
-            >对讲</el-button
-          >
-          <el-button
-            v-hasPermi="['callcenter:dispatch-control:group-call']"
-            type="success"
-            :disabled="selectedExtensions.length < 2"
-            @click="handleGroupCall"
-            >组呼</el-button
-          >
-          <el-button
-            v-hasPermi="['callcenter:dispatch-control:broadcast']"
-            type="warning"
-            :disabled="selectedExtensions.length === 0"
-            @click="openBroadcastDialog"
-            >预录音广播</el-button
-          >
-          <el-switch v-model="autoRefresh" active-text="5秒自动刷新" />
-          <el-button type="primary" :loading="loading || extensionLoading" @click="loadDispatchData">刷新</el-button>
+          <div class="action-group">
+            <el-select v-model="operatorSipAccountId" filterable placeholder="选择本机调度分机" style="width: 220px">
+              <el-option
+                v-for="item in availableOperatorExtensions"
+                :key="item.sipAccountId"
+                :label="`${item.extension} - ${item.displayName || item.nodeName || 'SIP分机'}`"
+                :value="item.sipAccountId"
+              />
+            </el-select>
+            <el-button
+              v-hasPermi="['callcenter:dispatch-control:operator-extension']"
+              plain
+              :disabled="!operatorSipAccountId"
+              :loading="operatorSaving"
+              @click="handleBindOperatorExtension"
+            >
+              绑定本机
+            </el-button>
+          </div>
+          <div class="action-group">
+            <el-button v-hasPermi="['callcenter:dispatch-control:call']" plain :disabled="selectedExtensions.length !== 1" @click="handleSingleCall">
+              单呼
+            </el-button>
+            <el-button
+              v-hasPermi="['callcenter:dispatch-control:intercom']"
+              type="primary"
+              :disabled="selectedExtensions.length !== 1"
+              @click="handleStartIntercom"
+            >
+              对讲
+            </el-button>
+            <el-button
+              v-hasPermi="['callcenter:dispatch-control:group-call']"
+              type="success"
+              plain
+              :disabled="selectedExtensions.length < 2"
+              @click="handleGroupCall"
+            >
+              组呼
+            </el-button>
+            <el-button
+              v-hasPermi="['callcenter:dispatch-control:broadcast']"
+              type="warning"
+              plain
+              :disabled="selectedExtensions.length === 0"
+              @click="openBroadcastDialog"
+            >
+              预录音广播
+            </el-button>
+          </div>
+          <div class="action-group">
+            <el-switch v-model="autoRefresh" active-text="5秒自动刷新" />
+            <el-button type="primary" :loading="loading || extensionLoading" @click="loadDispatchData">刷新</el-button>
+          </div>
         </div>
       </div>
       <div class="overview-grid">
-        <div>
-          <span>活动通话</span><strong>{{ calls.length }}</strong>
+        <div class="overview-item tone-call">
+          <span>活动通话</span>
+          <strong>{{ calls.length }}</strong>
         </div>
-        <div>
-          <span>通话中</span><strong>{{ bridgedCount }}</strong>
+        <div class="overview-item tone-talk">
+          <span>通话中</span>
+          <strong>{{ bridgedCount }}</strong>
         </div>
-        <div>
-          <span>活动电话腿</span><strong>{{ activeLegCount }}</strong>
+        <div class="overview-item tone-leg">
+          <span>活动电话腿</span>
+          <strong>{{ activeLegCount }}</strong>
         </div>
-        <div>
-          <span>拓扑异常</span><strong :class="{ danger: staleCount > 0 }">{{ staleCount }}</strong>
+        <div class="overview-item tone-alert">
+          <span>拓扑异常</span>
+          <strong :class="{ danger: staleCount > 0 }">{{ staleCount }}</strong>
         </div>
       </div>
     </el-card>
@@ -69,12 +86,15 @@
     <el-card shadow="never" class="extension-card">
       <template #header>
         <div class="section-header">
-          <strong>分机资源</strong>
+          <div class="section-title">
+            <strong>分机资源</strong>
+            <small>勾选分机后可发起单呼、对讲、组呼或广播</small>
+          </div>
           <div class="extension-summary">
-            <span>总数 {{ extensions.length }}</span>
-            <span class="success">已注册 {{ registeredExtensionCount }}</span>
-            <span>空闲 {{ idleExtensionCount }}</span>
-            <span class="danger">未注册 {{ unregisteredExtensionCount }}</span>
+            <span class="summary-pill">总数 {{ extensions.length }}</span>
+            <span class="summary-pill success">已注册 {{ registeredExtensionCount }}</span>
+            <span class="summary-pill idle">空闲 {{ idleExtensionCount }}</span>
+            <span class="summary-pill danger">未注册 {{ unregisteredExtensionCount }}</span>
           </div>
         </div>
       </template>
@@ -82,21 +102,22 @@
         v-loading="extensionLoading"
         :data="extensions"
         row-key="sipAccountId"
-        max-height="380"
+        max-height="calc((100vh - 390px) / 2)"
+        class="dispatch-table"
         @selection-change="handleExtensionSelectionChange"
       >
         <el-table-column type="selection" width="48" :selectable="isDispatchTargetSelectable" />
-        <el-table-column label="节点" min-width="150" prop="nodeName" />
+        <el-table-column label="节点" min-width="150" prop="nodeName" show-overflow-tooltip />
         <el-table-column label="分机" width="110" prop="extension" />
-        <el-table-column label="显示名称" min-width="150" prop="displayName" />
+        <el-table-column label="显示名称" min-width="150" prop="displayName" show-overflow-tooltip />
         <el-table-column label="配置" width="90" align="center">
-          <template #default="{ row }"
-            ><el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag></template
-          >
+          <template #default="{ row }">
+            <el-tag :type="row.enabled ? 'success' : 'info'" effect="light" round>{{ row.enabled ? '启用' : '停用' }}</el-tag>
+          </template>
         </el-table-column>
         <el-table-column label="SIP 状态" width="120" align="center">
           <template #default="{ row }">
-            <el-tag :type="registrationTagType(row.registrationStatus)">{{ registrationLabel(row.registrationStatus) }}</el-tag>
+            <el-tag :type="registrationTagType(row.registrationStatus)" effect="light" round>{{ registrationLabel(row.registrationStatus) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="绑定坐席（可选）" min-width="150">
@@ -106,9 +127,9 @@
           <template #default="{ row }">{{ presenceLabel(row.agentPresenceStatus) }}</template>
         </el-table-column>
         <el-table-column label="通话状态" width="110" align="center">
-          <template #default="{ row }"
-            ><el-tag :type="extensionCallTagType(row.callStatus)">{{ extensionCallLabel(row.callStatus) }}</el-tag></template
-          >
+          <template #default="{ row }">
+            <el-tag :type="extensionCallTagType(row.callStatus)" effect="light" round>{{ extensionCallLabel(row.callStatus) }}</el-tag>
+          </template>
         </el-table-column>
         <el-table-column label="操作" width="230" fixed="right">
           <template #default="{ row }">
@@ -149,7 +170,7 @@
               强接
             </el-button>
             <el-button v-if="row.businessCallId" link type="primary" @click="openTopologyById(row.businessCallId)">通话拓扑</el-button>
-            <span v-else>-</span>
+            <span v-else class="muted-dash">-</span>
           </template>
         </el-table-column>
       </el-table>
@@ -158,11 +179,13 @@
     <el-card shadow="never" class="task-card">
       <template #header>
         <div class="section-header">
-          <strong>最近调度呼叫</strong>
-          <span class="task-tip">单呼、组呼和广播都使用独立目标电话腿 UUID，广播不会创建组呼会议。</span>
+          <div class="section-title">
+            <strong>最近调度呼叫</strong>
+            <small>单呼、组呼和广播都使用独立目标电话腿 UUID，广播不会创建组呼会议。</small>
+          </div>
         </div>
       </template>
-      <el-table v-loading="taskLoading" :data="tasks" row-key="id" max-height="320">
+      <el-table v-loading="taskLoading" :data="tasks" row-key="id" max-height="calc((100vh - 390px) / 2)" class="dispatch-table">
         <el-table-column label="类型" width="90">
           <template #default="{ row }">{{ taskTypeLabel(row.taskType) }}</template>
         </el-table-column>
@@ -170,7 +193,7 @@
         <el-table-column label="广播媒体" min-width="150" show-overflow-tooltip prop="mediaName" />
         <el-table-column label="状态" width="110">
           <template #default="{ row }">
-            <el-tag :type="taskStateTagType(row.taskState)">{{ taskStateLabel(row.taskState) }}</el-tag>
+            <el-tag :type="taskStateTagType(row.taskState)" effect="light" round>{{ taskStateLabel(row.taskState) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="目标统计" min-width="210">
@@ -189,16 +212,18 @@
               link
               type="primary"
               @click="openIntercomTask(row.id)"
-              >打开对讲</el-button
             >
+              打开对讲
+            </el-button>
             <el-button
               v-if="row.taskType === 'BROADCAST' && (row.taskState === 'STARTING' || row.taskState === 'RUNNING')"
               v-hasPermi="['callcenter:dispatch-control:stop-broadcast']"
               link
               type="danger"
               @click="handleTerminateBroadcast(row)"
-              >终止广播</el-button
             >
+              终止广播
+            </el-button>
             <el-button
               v-if="row.taskType === 'INTERCOM' && (row.taskState === 'STARTING' || row.taskState === 'RUNNING')"
               v-hasPermi="['callcenter:dispatch-control:stop-intercom']"
@@ -993,135 +1018,293 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss">
 .dispatch-monitor-page {
-  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 10px 12px;
+  overflow: hidden;
+  box-sizing: border-box;
 }
-.overview-card {
-  margin-bottom: 16px;
-}
-.extension-card {
-  margin-bottom: 16px;
-}
+
+.overview-card,
+.extension-card,
 .task-card {
-  margin-bottom: 16px;
+  margin-bottom: 0;
+  border: 1px solid #dce8f6;
+  border-radius: 16px;
+  box-shadow: 0 10px 24px rgba(28, 48, 78, 0.04);
 }
+
+.overview-card {
+  flex: none;
+
+  :deep(.el-card__body) {
+    padding: 12px 14px;
+    background:
+      radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.1), transparent 36%),
+      linear-gradient(180deg, #ffffff, #f8fbff);
+  }
+}
+
+.extension-card,
+.task-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+
+  :deep(.el-card__header) {
+    flex: none;
+    padding: 10px 14px;
+    border-bottom: 1px solid #eef3f8;
+    background: linear-gradient(180deg, #ffffff, #f8fbff);
+  }
+
+  :deep(.el-card__body) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    padding: 10px 12px;
+    overflow: hidden;
+  }
+}
+
 .section-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
 }
+
+.section-title {
+  display: grid;
+  gap: 2px;
+
+  strong {
+    color: #15233d;
+    font-size: 15px;
+  }
+
+  small {
+    color: #7b8798;
+    font-size: 12px;
+    font-weight: 400;
+  }
+}
+
 .extension-summary {
   display: flex;
   flex-wrap: wrap;
-  gap: 18px;
-  color: #606266;
-  font-size: 13px;
+  gap: 8px;
 }
-.extension-summary .success {
-  color: #67c23a;
+
+.summary-pill {
+  padding: 4px 10px;
+  color: #5b6b82;
+  font-size: 12px;
+  border: 1px solid #e4ecf6;
+  border-radius: 999px;
+  background: #fff;
 }
-.extension-summary .danger {
-  color: #f56c6c;
+
+.summary-pill.success {
+  color: #059669;
+  border-color: #a7f3d0;
+  background: #ecfdf5;
 }
-.task-tip {
-  color: #909399;
-  font-size: 13px;
-  font-weight: 400;
+
+.summary-pill.idle {
+  color: #b45309;
+  border-color: #fde68a;
+  background: #fffbeb;
 }
+
+.summary-pill.danger {
+  color: #dc2626;
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.page-header-copy {
+  min-width: 180px;
+
+  h2 {
+    margin: 0 0 4px;
+    color: #15233d;
+    font-size: 18px;
+  }
+
+  p {
+    margin: 0;
+    color: #7b8798;
+    font-size: 13px;
+  }
+}
+
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.action-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid #e4ecf6;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.overview-item {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 14px;
+  border: 1px solid #e4ecf6;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 6px 14px rgba(28, 48, 78, 0.04);
+
+  &::before {
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    left: 0;
+    width: 3px;
+    content: '';
+    border-radius: 0 3px 3px 0;
+    background: #93c5fd;
+  }
+
+  span {
+    display: block;
+    color: #7b8798;
+    font-size: 12px;
+  }
+
+  strong {
+    display: block;
+    margin-top: 6px;
+    color: #15233d;
+    font-size: 26px;
+    line-height: 1.1;
+  }
+
+  strong.danger {
+    color: #dc2626;
+  }
+}
+
+.overview-item.tone-call::before {
+  background: linear-gradient(#38bdf8, #2563eb);
+}
+
+.overview-item.tone-talk::before {
+  background: linear-gradient(#34d399, #059669);
+}
+
+.overview-item.tone-leg::before {
+  background: linear-gradient(#60a5fa, #2563eb);
+}
+
+.overview-item.tone-alert::before {
+  background: linear-gradient(#fbbf24, #f59e0b);
+}
+
+.dispatch-table {
+  width: 100%;
+  --el-table-header-bg-color: #f7faff;
+}
+
+.muted-dash {
+  color: #c0c4cc;
+}
+
 .broadcast-form {
   margin-top: 20px;
 }
+
 .broadcast-target-tag {
   margin: 0 8px 8px 0;
 }
+
 .intercom-panel {
   text-align: center;
 }
+
 .ptt-button {
   width: 220px;
   height: 220px;
   margin: 28px auto 16px;
-  border-radius: 50%;
-  border: 8px solid #d9e7f5;
-  background: #053b70;
   color: #fff;
   font-size: 22px;
   font-weight: 600;
   touch-action: none;
   user-select: none;
+  border: 8px solid #d9e7f5;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
 }
+
 .ptt-button:hover,
 .ptt-button:focus {
-  background: #064a8c;
   color: #fff;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
 }
+
 .ptt-button.talking {
   border-color: #fbc4c4;
-  background: #e34d59;
+  background: linear-gradient(135deg, #f87171, #dc2626);
 }
+
 .intercom-tip {
   margin: 0;
-  color: #909399;
+  color: #7b8798;
   line-height: 1.7;
 }
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-}
-.page-header h2 {
-  margin: 0 0 8px;
-  color: #053b70;
-}
-.page-header p {
-  margin: 0;
-  color: #909399;
-}
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.overview-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(140px, 1fr));
-  gap: 16px;
-  margin-top: 20px;
-}
-.overview-grid > div {
-  padding: 18px;
-  border: 1px solid #e5eaf2;
-  border-radius: 10px;
-  background: #f8fbff;
-}
-.overview-grid span {
-  display: block;
-  color: #909399;
-}
-.overview-grid strong {
-  display: block;
-  margin-top: 8px;
-  font-size: 28px;
-  color: #053b70;
-}
-.overview-grid strong.danger {
-  color: #f56c6c;
-}
+
 .call-summary {
   margin: 16px 0 22px;
 }
+
 h3 {
   margin: 24px 0 12px;
-  color: #053b70;
+  color: #15233d;
 }
-@media (max-width: 900px) {
+
+@media (max-width: 1100px) {
+  .page-header {
+    flex-direction: column;
+  }
+
+  .header-actions {
+    justify-content: flex-start;
+  }
+
   .overview-grid {
     grid-template-columns: repeat(2, 1fr);
-  }
-  .page-header {
-    align-items: flex-start;
-    flex-direction: column;
   }
 }
 </style>

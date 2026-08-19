@@ -12,7 +12,7 @@
           <template #default="{ row }"><el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag></template>
         </el-table-column>
         <el-table-column label="备注" prop="remark" min-width="200" show-overflow-tooltip />
-        <el-table-column label="操作" width="130" align="center">
+        <el-table-column label="操作" width="130" align="center" fixed="right">
           <template #default="{ row }">
             <el-button v-hasPermi="['callcenter:freeswitch-node-group:update']" link type="primary" icon="Edit" @click="handleUpdate(row)" />
             <el-button v-hasPermi="['callcenter:freeswitch-node-group:delete']" link type="danger" icon="Delete" @click="handleDelete(row)" />
