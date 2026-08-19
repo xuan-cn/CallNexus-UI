@@ -122,7 +122,8 @@
     word-break: keep-all;
   }
 
-  .el-table .cell:has(> div) {
+  /* :has 用插值写出，避免旧 SCSS/IDE 把选择器当语法错误 */
+  #{'.el-table .cell:has(> div)'} {
     white-space: normal;
     text-overflow: clip;
     word-break: break-word;
@@ -309,7 +310,7 @@ html.dark .app-main {
     font-weight: 600;
   }
 
-  .el-radio-group:has(.el-radio-button) {
+  #{'.el-radio-group:has(.el-radio-button)'} {
     padding: 3px;
     background: #f4f7fb;
     border-radius: 10px;
@@ -357,7 +358,7 @@ html.dark .el-drawer__body {
     border-color: var(--el-border-color);
   }
 
-  .el-radio-group:has(.el-radio-button) {
+  #{'.el-radio-group:has(.el-radio-button)'} {
     background: var(--el-fill-color-light);
   }
 
