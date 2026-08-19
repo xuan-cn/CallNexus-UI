@@ -1071,7 +1071,7 @@ $blue: #3b82f6;
 
 .captcha {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 148px;
+  grid-template-columns: minmax(0, 1fr) 104px;
   gap: 10px;
   width: 100%;
   align-items: center;
