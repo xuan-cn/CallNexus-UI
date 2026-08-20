@@ -1,33 +1,88 @@
 <template>
   <div
     ref="phoneShellRef"
-    class="agent-phone-shell"
-    :class="{ incoming: incomingCall, dragging: isDragging }"
-    :style="phonePositionStyle"
-    @pointerenter="revealDockedPhone"
-    @pointerleave="scheduleDockedPhoneHide"
+    class="agent-phone-shell is-embedded"
+    :class="{ incoming: incomingCall, open: panelOpen, calling: callActive }"
   >
-    <button
-      v-if="!panelOpen"
-      type="button"
-      class="toolbar-trigger"
-      :class="{ calling: callActive, incoming: incomingCall }"
-      title="拖动可调整位置，松开后自动吸附到屏幕边缘"
-      @pointerdown="startCollapsedDrag"
-      @click="handleTriggerClick"
-    >
-      <span class="trigger-icon" :class="{ incoming: incomingCall }">
-        <el-icon><PhoneFilled /></el-icon>
-      </span>
-      <div>
-        <strong>{{ incomingCall ? incomingNumber : callActive ? dialNumber : currentAgent.agentName || '坐席电话' }}</strong>
-        <small>{{ incomingCall ? '来电振铃中' : callActive ? `通话中 · ${callDuration}` : agentSummary }}</small>
+    <div class="soft-bar">
+      <div class="soft-status" :class="softbarTone">
+        <i class="soft-status-dot" aria-hidden="true"></i>
+        <span class="soft-status-text">{{ softbarStatusText }}</span>
+        <span v-if="softTimerText" class="soft-timer">{{ softTimerText }}</span>
       </div>
-      <i :class="statusClass"></i>
-    </button>
 
-    <aside v-else class="agent-panel">
-      <div class="panel-heading" @pointerdown="startDrag">
+      <div class="soft-actions">
+        <div class="soft-dial">
+          <input
+            v-model="dialNumber"
+            class="soft-dial-input"
+            maxlength="20"
+            :disabled="incomingCall || callActive"
+            placeholder="外呼号码"
+            @keyup.enter="makeCall"
+          />
+          <button
+            v-if="incomingCall && webRtcIncoming"
+            type="button"
+            class="soft-call-btn is-answer"
+            title="接听"
+            :disabled="callActionLoading"
+            @click="answerWebRtcCall"
+          >
+            <el-icon><PhoneFilled /></el-icon>
+          </button>
+          <button
+            v-else-if="incomingCall || callActive"
+            type="button"
+            class="soft-call-btn is-hangup"
+            title="挂断"
+            @click="hangup"
+          >
+            <el-icon><CloseBold /></el-icon>
+          </button>
+          <button
+            v-else
+            type="button"
+            class="soft-call-btn"
+            :class="{ 'is-ready': canDial }"
+            :title="dialButtonTitle"
+            @click="makeCall"
+          >
+            <el-icon><PhoneFilled /></el-icon>
+          </button>
+        </div>
+
+        <div class="soft-tags">
+          <el-dropdown trigger="click" @command="changeStatus">
+            <button type="button" class="soft-tag status" :class="statusClass">
+              <i></i>
+              {{ signedIn ? currentStatusLabel : '未签入' }}
+              <el-icon class="soft-caret"><ArrowDown /></el-icon>
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item v-if="!signedIn" command="signIn">签入坐席</el-dropdown-item>
+                <template v-else>
+                  <el-dropdown-item command="idle">示闲</el-dropdown-item>
+                  <el-dropdown-item command="busy">示忙</el-dropdown-item>
+                  <el-dropdown-item command="afterCall">话后处理</el-dropdown-item>
+                  <el-dropdown-item divided command="signOut">签出坐席</el-dropdown-item>
+                </template>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <span class="soft-tag agent" :title="currentAgent.agentName || currentAgent.agentCode">
+            {{ currentAgent.agentCode || currentAgent.agentName || '坐席' }}
+          </span>
+          <button type="button" class="soft-more" :class="{ active: panelOpen }" title="更多功能" @click="togglePanel">
+            <el-icon><Operation /></el-icon>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <aside v-show="panelOpen" class="agent-panel">
+      <div class="panel-heading">
         <div>
           <strong>{{ currentAgent.agentName || '坐席电话' }}</strong>
           <small>{{ extensionSummary }} · {{ displayedRegistrationSummary }}</small>
@@ -41,22 +96,6 @@
               <el-dropdown-menu>
                 <el-dropdown-item command="EXTERNAL_SOFTPHONE">外置软电话</el-dropdown-item>
                 <el-dropdown-item v-if="WEBRTC_MODE_ENABLED" command="WEBRTC">浏览器 WebRTC</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-          <el-dropdown trigger="click" @command="changeStatus">
-            <button type="button" class="agent-status" :class="statusClass">
-              <i></i>{{ signedIn ? currentStatusLabel : '未签入' }}<el-icon><ArrowDown /></el-icon>
-            </button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item v-if="!signedIn" command="signIn">签入坐席</el-dropdown-item>
-                <template v-else>
-                  <el-dropdown-item command="idle">示闲</el-dropdown-item>
-                  <el-dropdown-item command="busy">示忙</el-dropdown-item>
-                  <el-dropdown-item command="afterCall">话后处理</el-dropdown-item>
-                  <el-dropdown-item divided command="signOut">签出坐席</el-dropdown-item>
-                </template>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -211,7 +250,7 @@
 </template>
 
 <script setup lang="ts">
-import { ArrowDown, CloseBold, Phone, PhoneFilled, Tickets, User } from '@element-plus/icons-vue';
+import { ArrowDown, CloseBold, Operation, Phone, PhoneFilled, Tickets, User } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   changeCurrentAgentStatus,
@@ -379,6 +418,59 @@ const currentStatusLabel = computed(() => {
 const agentSummary = computed(() => {
   if (!currentAgent.value.configured) return '未配置坐席';
   return signedIn.value ? currentStatusLabel.value : '未签入';
+});
+const softbarWarn = computed(() => {
+  if (incomingCall.value || callActive.value) return false;
+  if (!currentAgent.value.configured) return true;
+  if (!currentAgent.value.extension) return true;
+  if (!signedIn.value) return true;
+  if (webRtcPhoneEnabled.value && !webRtcRegistered.value) return true;
+  return false;
+});
+const softbarTone = computed(() => {
+  if (incomingCall.value || callActive.value) return 'live';
+  if (softbarWarn.value) return 'warn';
+  // 左侧只表示软电话是否就绪，坐席示闲/示忙颜色交给右侧标签，避免两边抢色
+  return 'ready';
+});
+const softbarStatusText = computed(() => {
+  if (incomingCall.value) return `来电振铃中 ${incomingNumber.value || ''}`.trim();
+  if (callActive.value) {
+    if (callHeld.value) return '通话已保持';
+    if (callMuted.value) return '坐席已静音';
+    return `通话中 ${dialNumber.value || ''}`.trim();
+  }
+  if (!currentAgent.value.configured) return '未配置坐席，请先绑定分机';
+  if (!currentAgent.value.extension) return '分机未绑定，请先配置分机后再签入';
+  if (!signedIn.value) {
+    if (webRtcPhoneEnabled.value && !webRtcRegistered.value && !webRtcConnecting.value) {
+      return '分机未注册，请先注册后再签入';
+    }
+    return '未签入，请先签入坐席';
+  }
+  if (webRtcPhoneEnabled.value && webRtcConnecting.value) return 'WebRTC 注册中';
+  if (webRtcPhoneEnabled.value && !webRtcRegistered.value) return '分机未注册，请检查注册状态';
+  if (webRtcPhoneEnabled.value && webRtcRegistered.value) return 'WebRTC 已就绪';
+  return '外置软电话已就绪';
+});
+const softTimerText = computed(() => {
+  if (!incomingCall.value && !callActive.value) return '';
+  const total = callSeconds.value;
+  const hours = Math.floor(total / 3600)
+    .toString()
+    .padStart(2, '0');
+  const minutes = Math.floor((total % 3600) / 60)
+    .toString()
+    .padStart(2, '0');
+  const seconds = (total % 60).toString().padStart(2, '0');
+  return `${hours}:${minutes}:${seconds}`;
+});
+const canDial = computed(() => phoneRegistered.value && !!dialNumber.value.trim());
+const dialButtonTitle = computed(() => {
+  if (!signedIn.value) return '请先签入坐席';
+  if (!currentAgent.value.extension) return '请先配置分机';
+  if (!dialNumber.value.trim()) return '请输入外呼号码';
+  return '拨打';
 });
 const statusClass = computed(() => ({
   offline: !signedIn.value,
@@ -677,7 +769,22 @@ const saveNote = async () => {
 
 const makeCall = async () => {
   void unlockRingAudio();
-  if (!phoneRegistered.value || !dialNumber.value) return;
+  if (!signedIn.value) {
+    ElMessage.warning('请先签入坐席');
+    return;
+  }
+  if (!currentAgent.value.extension) {
+    ElMessage.warning('请先配置分机后再拨打');
+    return;
+  }
+  if (!dialNumber.value.trim()) {
+    ElMessage.warning('请输入外呼号码');
+    return;
+  }
+  if (!phoneRegistered.value) {
+    ElMessage.warning('坐席未就绪，请确认已签入并绑定分机');
+    return;
+  }
   if (webRtcPhoneEnabled.value && !webRtcRegistered.value) {
     ElMessage.warning('WebRTC 未注册，请检查 WSS 配置或切换为外置软电话模式');
     return;
@@ -1017,57 +1124,44 @@ const createTicket = () => {
 const handleTriggerClick = () => {
   if (suppressTriggerClick) return;
   void unlockRingAudio();
-  revealDockedPhone();
   panelOpen.value = true;
-  nextTick(constrainPosition);
 };
 
+const togglePanel = () => {
+  void unlockRingAudio();
+  panelOpen.value = !panelOpen.value;
+};
+
+const collapsePanel = () => {
+  panelOpen.value = false;
+};
+
+const handleDocumentPointerDown = (event: PointerEvent) => {
+  if (!panelOpen.value || !phoneShellRef.value) return;
+  const target = event.target as Node | null;
+  if (!target) return;
+  if (phoneShellRef.value.contains(target)) return;
+  if ((target as HTMLElement).closest?.('.el-popper, .el-overlay, .el-message-box, .el-dialog')) return;
+  if (incomingCall.value || callActive.value) return;
+  panelOpen.value = false;
+};
+
+/** 顶栏嵌入后不再吸附边缘，保留空实现避免通话流程改动过大 */
 const clearDockedPhoneHideTimer = () => {
   if (!dockedPhoneHideTimer) return;
   clearTimeout(dockedPhoneHideTimer);
   dockedPhoneHideTimer = undefined;
 };
-
 const revealDockedPhone = () => {
   clearDockedPhoneHideTimer();
   dockedPhoneHidden.value = false;
 };
-
 const scheduleDockedPhoneHide = () => {
   clearDockedPhoneHideTimer();
-  if (panelOpen.value || incomingCall.value || isDragging.value) return;
-  dockedPhoneHideTimer = setTimeout(() => {
-    if (!panelOpen.value && !incomingCall.value && !isDragging.value) {
-      dockedPhoneHidden.value = true;
-    }
-  }, 500);
 };
-
-const persistPhonePosition = () => {
-  sessionStorage.setItem(
-    'callnexus-agent-phone-position',
-    JSON.stringify({ left: phonePosition.left, top: phonePosition.top, dockSide: dockSide.value })
-  );
-};
-
-const snapCollapsedPhoneToEdge = () => {
-  if (panelOpen.value || !phoneShellRef.value) return;
-  const width = phoneShellRef.value.offsetWidth || 140;
-  const height = phoneShellRef.value.offsetHeight || 46;
-  phoneShellWidth.value = width;
-  dockSide.value = phonePosition.left + width / 2 <= window.innerWidth / 2 ? 'left' : 'right';
-  phonePosition.left = dockSide.value === 'left' ? DOCK_EDGE_GAP : Math.max(DOCK_EDGE_GAP, window.innerWidth - width - DOCK_EDGE_GAP);
-  phonePosition.top = Math.min(Math.max(DOCK_EDGE_GAP, phonePosition.top), Math.max(DOCK_EDGE_GAP, window.innerHeight - height - DOCK_EDGE_GAP));
-  persistPhonePosition();
-};
-
-const collapsePanel = () => {
-  panelOpen.value = false;
-  nextTick(() => {
-    snapCollapsedPhoneToEdge();
-    scheduleDockedPhoneHide();
-  });
-};
+const persistPhonePosition = () => undefined;
+const snapCollapsedPhoneToEdge = () => undefined;
+const constrainPosition = () => undefined;
 
 const startDrag = (event: PointerEvent) => {
   if ((event.target as HTMLElement).closest('button, .el-dropdown, input')) return;
@@ -1127,46 +1221,6 @@ const stopDrag = () => {
   setTimeout(() => {
     suppressTriggerClick = false;
   }, 0);
-};
-
-const constrainPosition = () => {
-  const width = phoneShellRef.value?.offsetWidth || 140;
-  const height = phoneShellRef.value?.offsetHeight || 46;
-  phoneShellWidth.value = width;
-  phonePosition.left = Math.min(Math.max(DOCK_EDGE_GAP, phonePosition.left), Math.max(DOCK_EDGE_GAP, window.innerWidth - width - DOCK_EDGE_GAP));
-  phonePosition.top = Math.min(Math.max(DOCK_EDGE_GAP, phonePosition.top), Math.max(DOCK_EDGE_GAP, window.innerHeight - height - DOCK_EDGE_GAP));
-};
-
-const initializePosition = () => {
-  const saved = sessionStorage.getItem('callnexus-agent-phone-position');
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved) as { left?: number; top?: number; dockSide?: 'left' | 'right' };
-      if (Number.isFinite(parsed.left)) phonePosition.left = Number(parsed.left);
-      if (Number.isFinite(parsed.top)) phonePosition.top = Number(parsed.top);
-      if (parsed.dockSide === 'left' || parsed.dockSide === 'right') dockSide.value = parsed.dockSide;
-      constrainPosition();
-      snapCollapsedPhoneToEdge();
-      scheduleDockedPhoneHide();
-      return;
-    } catch {
-      sessionStorage.removeItem('callnexus-agent-phone-position');
-    }
-  }
-  const width = phoneShellRef.value?.offsetWidth || 140;
-  const height = phoneShellRef.value?.offsetHeight || 46;
-  phonePosition.left = window.innerWidth - width - 18;
-  phonePosition.top = (window.innerHeight - height) / 2;
-  snapCollapsedPhoneToEdge();
-  scheduleDockedPhoneHide();
-};
-
-const handleViewportResize = () => {
-  if (!panelOpen.value) {
-    nextTick(snapCollapsedPhoneToEdge);
-    return;
-  }
-  constrainPosition();
 };
 
 const startCallTimer = () => {
@@ -1438,9 +1492,8 @@ onMounted(async () => {
   await loadCurrentAgent();
   await nextTick();
   await registerWebRtcPhone();
-  initializePosition();
   presenceTimer = setInterval(() => void syncActiveCallPresence(), 3000);
-  window.addEventListener('resize', handleViewportResize);
+  document.addEventListener('pointerdown', handleDocumentPointerDown, true);
 });
 
 onBeforeUnmount(() => {
@@ -1452,7 +1505,7 @@ onBeforeUnmount(() => {
   if (presenceTimer) clearInterval(presenceTimer);
   if (matchedCustomerLookupTimer) clearTimeout(matchedCustomerLookupTimer);
   clearDockedPhoneHideTimer();
-  window.removeEventListener('resize', handleViewportResize);
+  document.removeEventListener('pointerdown', handleDocumentPointerDown, true);
   window.removeEventListener('pointermove', handleDrag);
 });
 </script>
@@ -1470,12 +1523,330 @@ button {
   will-change: left, top;
 }
 
+.agent-phone-shell.is-embedded {
+  position: relative;
+  z-index: 20;
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  max-width: none;
+  filter: none;
+  will-change: auto;
+}
+
+.agent-phone-shell.is-embedded.open {
+  z-index: 1200;
+}
+
+.soft-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  height: 42px;
+  gap: 16px;
+  padding: 0 2px 0 6px;
+}
+
+.soft-status {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 46%;
+  gap: 8px;
+  padding: 0 12px;
+  height: 30px;
+  overflow: hidden;
+  border: 1px solid #e4ecf6;
+  border-radius: 999px;
+  background: #f4f8ff;
+  color: #3b4f6b;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.soft-status-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8aa0c2;
+  box-shadow: 0 0 0 3px rgba(138, 160, 194, 0.2);
+}
+
+.soft-status.warn {
+  border-color: #ffd0d0;
+  background: #fff5f5;
+  color: #d4380d;
+}
+
+.soft-status.warn .soft-status-dot {
+  background: #f5222d;
+  box-shadow: 0 0 0 3px rgba(245, 34, 45, 0.14);
+}
+
+.soft-status.ok,
+.soft-status.ready,
+.soft-status.idle {
+  border-color: #c5d8ff;
+  background: #eef4ff;
+  color: #245dcc;
+}
+
+.soft-status.ok .soft-status-dot,
+.soft-status.ready .soft-status-dot,
+.soft-status.idle .soft-status-dot {
+  background: #2f6bff;
+  box-shadow: 0 0 0 3px rgba(47, 107, 255, 0.16);
+}
+
+.soft-status.busy {
+  border-color: #fecdd3;
+  background: #fff1f2;
+  color: #e11d48;
+}
+
+.soft-status.busy .soft-status-dot {
+  background: #e11d48;
+  box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.14);
+}
+
+.soft-status.afterCall {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.soft-status.afterCall .soft-status-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.16);
+}
+
+.soft-status.live {
+  border-color: #c5d8ff;
+  background: #eef4ff;
+  color: #245dcc;
+}
+
+.soft-status.live .soft-status-dot {
+  background: #2f6bff;
+  box-shadow: 0 0 0 3px rgba(47, 107, 255, 0.18);
+  animation: soft-dot-pulse 1.2s ease-in-out infinite;
+}
+
+.soft-status-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.soft-timer {
+  flex: none;
+  padding-left: 6px;
+  border-left: 1px solid rgba(47, 107, 255, 0.22);
+  color: #2f6bff;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.soft-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.soft-dial {
+  display: flex;
+  flex: none;
+  align-items: stretch;
+  width: 228px;
+  height: 32px;
+  overflow: hidden;
+  border: 1px solid #d7e4f4;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.soft-dial:focus-within {
+  border-color: #2f6bff;
+  box-shadow: 0 0 0 3px rgba(47, 107, 255, 0.14);
+}
+
+.soft-dial-input {
+  min-width: 0;
+  flex: 1;
+  height: 100%;
+  padding: 0 12px;
+  color: #172033;
+  font-size: 13px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+}
+
+.soft-dial-input::placeholder {
+  color: #9aabbc;
+}
+
+.soft-dial-input:disabled {
+  color: #7b8798;
+  background: #f7faff;
+}
+
+.soft-call-btn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 100%;
+  color: #fff;
+  cursor: pointer;
+  border: 0;
+  background: linear-gradient(135deg, #3b82f6 0%, #2f6bff 52%, #2459cf 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  transition: filter 0.2s ease, box-shadow 0.2s ease;
+}
+
+.soft-call-btn:hover {
+  filter: brightness(1.05);
+}
+
+.soft-call-btn.is-ready {
+  background: linear-gradient(135deg, #43d3ff 0%, #2f6bff 48%, #1e4fc7 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 6px 14px rgba(36, 89, 207, 0.28);
+}
+
+.soft-call-btn.is-answer {
+  background: linear-gradient(135deg, #20bd8d 0%, #14b88b 100%);
+}
+
+.soft-call-btn.is-hangup {
+  background: linear-gradient(135deg, #ff6b6b 0%, #e5484d 100%);
+}
+
+.soft-tags {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding-left: 10px;
+  border-left: 1px solid #e4ecf6;
+}
+
+.soft-tag {
+  display: inline-flex;
+  align-items: center;
+  max-width: 108px;
+  height: 26px;
+  padding: 0 8px;
+  overflow: hidden;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 26px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.soft-tag.status {
+  gap: 5px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.soft-tag.status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.soft-caret {
+  margin-left: 1px;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.soft-tag.status.offline {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #c2410c;
+}
+
+.soft-tag.status.busy {
+  background: #fff1f2;
+  border-color: #fecdd3;
+  color: #e11d48;
+}
+
+.soft-tag.status.afterCall {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #b45309;
+}
+
+.soft-tag.status.idle {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #0f766e;
+}
+
+.soft-tag.agent {
+  background: #eef4ff;
+  border: 1px solid #c5d8ff;
+  color: #245dcc;
+}
+
+.soft-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  color: #5b6b82;
+  cursor: pointer;
+  border: 1px solid #d7e4f4;
+  border-radius: 6px;
+  background: #fff;
+  transition: all 0.2s ease;
+}
+
+.soft-more:hover,
+.soft-more.active {
+  color: #245dcc;
+  border-color: #c5d8ff;
+  background: #eef4ff;
+}
+
+@keyframes soft-dot-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.72;
+  }
+}
+
 .agent-phone-shell.dragging {
   cursor: grabbing;
 }
 
 .agent-phone-shell.incoming {
   animation: shell-ring 0.55s ease-in-out infinite !important;
+}
+
+.agent-phone-shell.is-embedded.incoming {
+  animation: none !important;
 }
 
 .toolbar-trigger {
@@ -1550,6 +1921,39 @@ button {
   box-shadow: 0 14px 28px rgba(28, 73, 158, 0.16);
 }
 
+.agent-phone-shell.is-embedded .toolbar-trigger {
+  min-width: 156px;
+  height: 40px;
+  padding: 4px 12px 4px 4px;
+  gap: 8px;
+  cursor: pointer;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.agent-phone-shell.is-embedded .toolbar-trigger:hover {
+  transform: none;
+  box-shadow: none;
+  background: #f4f8ff;
+}
+
+.agent-phone-shell.is-embedded .trigger-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  font-size: 15px;
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.28);
+}
+
+.agent-phone-shell.is-embedded .toolbar-trigger strong {
+  max-width: 110px;
+  font-size: 12px;
+}
+
+.agent-phone-shell.is-embedded .toolbar-trigger small {
+  font-size: 10px;
+}
+
 .toolbar-trigger.calling {
   border-color: #93c5fd;
   background: linear-gradient(180deg, #f4f9ff, #eaf3ff);
@@ -1596,13 +2000,20 @@ button {
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
+.agent-phone-shell.is-embedded .agent-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+}
+
 .panel-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding-bottom: 12px;
   border-bottom: 1px solid #e8eef6;
-  cursor: move;
+  cursor: default;
   user-select: none;
 
   > div {

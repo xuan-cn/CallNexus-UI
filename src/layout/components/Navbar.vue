@@ -9,30 +9,13 @@
       <logo v-show="showLogo" :collapse="false"></logo>
       <top-bar id="topbar-container" class="topbar-container" />
     </template>
+
+    <agent-toolbar v-if="appStore.device !== 'mobile'" ref="agentToolbarRef" class="navbar-agent-phone" />
+
+    <span v-if="appStore.device !== 'mobile'" class="navbar-split" aria-hidden="true" />
+
     <div class="right-menu flex align-center">
       <template v-if="appStore.device !== 'mobile'">
-<!--TODO 租户选择功能 暂时屏蔽-->
-<!--        <el-select-->
-<!--          v-if="userId === 1 && tenantEnabled"-->
-<!--          v-model="companyName"-->
-<!--          class="min-w-244px mr-2"-->
-<!--          clearable-->
-<!--          filterable-->
-<!--          reserve-keyword-->
-<!--          :placeholder="proxy.$t('navbar.selectTenant')"-->
-<!--          @change="dynamicTenantEvent"-->
-<!--          @clear="dynamicClearEvent"-->
-<!--        >-->
-<!--          <el-option v-for="item in tenantList" :key="item.tenantId" :label="item.companyName" :value="item.tenantId"> </el-option>-->
-<!--          <template #prefix><svg-icon icon-class="company" class="el-input__icon input-icon" /></template>-->
-<!--        </el-select>-->
-
-        <search-menu ref="searchMenuRef" />
-        <el-tooltip content="搜索" effect="dark" placement="bottom">
-          <div class="right-menu-item hover-effect" @click="openSearchMenu">
-            <svg-icon class-name="search-icon" icon-class="search" />
-          </div>
-        </el-tooltip>
         <!-- 消息 -->
         <el-tooltip :content="proxy.$t('navbar.message')" effect="dark" placement="bottom">
           <div style="display: flex; align-items: center">
@@ -48,18 +31,7 @@
             </el-popover>
           </div>
         </el-tooltip>
-<!--TODO 暂时屏蔽 -->
-<!--        <el-tooltip :content="proxy.$t('navbar.full')" effect="dark" placement="bottom">
-          <screenfull id="screenfull" class="right-menu-item hover-effect" />
-        </el-tooltip>-->
 
-        <el-tooltip :content="proxy.$t('navbar.language')" effect="dark" placement="bottom">
-          <lang-select id="lang-select" class="right-menu-item hover-effect" />
-        </el-tooltip>
-
-        <el-tooltip :content="proxy.$t('navbar.layoutSize')" effect="dark" placement="bottom">
-          <size-select id="size-select" class="right-menu-item hover-effect" />
-        </el-tooltip>
         <AiAssistantDrawer v-if="canUseAiAssistant" />
       </template>
       <div class="avatar-container">
@@ -88,7 +60,6 @@
 </template>
 
 <script setup lang="ts">
-import SearchMenu from './TopBar/search.vue';
 import { useAppStore } from '@/store/modules/app';
 import { useUserStore } from '@/store/modules/user';
 import { useSettingsStore } from '@/store/modules/settings';
@@ -103,12 +74,14 @@ import { NavTypeEnum } from '@/enums/NavTypeEnum';
 import Logo from '@/layout/components/Sidebar/Logo.vue';
 import TopBar from './TopBar';
 import AiAssistantDrawer from './AiAssistantDrawer.vue';
+import AgentToolbar from './AgentToolbar.vue';
 
 const appStore = useAppStore();
 const userStore = useUserStore();
 const settingsStore = useSettingsStore();
 const noticeStore = storeToRefs(useNoticeStore());
 const newNotice = ref(<number>0);
+const agentToolbarRef = ref<InstanceType<typeof AgentToolbar>>();
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 
@@ -123,12 +96,6 @@ const tenantList = ref<TenantVO[]>([]);
 const dynamic = ref(false);
 // 租户开关
 const tenantEnabled = ref(true);
-// 搜索菜单
-const searchMenuRef = ref<InstanceType<typeof SearchMenu>>();
-
-const openSearchMenu = () => {
-  searchMenuRef.value?.openSearch();
-};
 
 // 动态切换
 const dynamicTenantEvent = async (tenantId: string) => {
@@ -159,7 +126,8 @@ const initTenantList = async () => {
 };
 
 defineExpose({
-  initTenantList
+  initTenantList,
+  agentToolbarRef
 });
 
 const toggleSideBar = () => {
@@ -234,7 +202,7 @@ watch(
 
 .navbar {
   height: 50px;
-  overflow: hidden;
+  overflow: visible;
   position: relative;
   background: #fff;
   border-bottom: 1px solid #e8eef6;
@@ -242,6 +210,21 @@ watch(
   align-items: center;
   box-sizing: border-box;
   padding-right: 8px;
+  gap: 8px;
+
+  .navbar-agent-phone {
+    flex: 1;
+    min-width: 0;
+    margin: 0 4px;
+  }
+
+  .navbar-split {
+    flex: none;
+    width: 1px;
+    height: 22px;
+    margin: 0 10px 0 6px;
+    background: linear-gradient(180deg, transparent, #d7e4f4 18%, #d7e4f4 82%, transparent);
+  }
 
   .hamburger-container {
     line-height: 50px;
@@ -284,12 +267,13 @@ watch(
     vertical-align: top;
   }
 
-  .right-menu {
+    .right-menu {
     height: 100%;
     display: flex;
     align-items: center;
     gap: 2px;
-    margin-left: auto;
+    margin-left: 0;
+    flex: none;
     padding-right: 8px;
 
     &:focus {

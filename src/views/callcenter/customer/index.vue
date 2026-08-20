@@ -1,84 +1,124 @@
 <template>
   <div class="p-2 customer-page">
-    <el-card class="mb-2 filter-card" shadow="hover">
-      <el-form :model="query" class="filter-panel">
+    <el-card class="mb-2 hero-card" shadow="never">
+      <div class="page-header">
+        <div>
+          <div class="page-title">客户列表</div>
+          <div class="page-description">查询客户资料、一键拨号，并支持批量资料分配。</div>
+        </div>
+        <div class="header-actions">
+          <el-button v-hasPermi="['callcenter:customer:create']" type="primary" @click="openCreateCustomer">
+            <el-icon><Plus /></el-icon>
+            新增客户
+          </el-button>
+          <el-button
+            v-hasPermi="['callcenter:customer:assign']"
+            type="warning"
+            plain
+            :disabled="!selectedCustomers.length"
+            @click="openAssign"
+          >
+            资料分配{{ selectedCustomers.length ? `（${selectedCustomers.length}）` : '' }}
+          </el-button>
+        </div>
+      </div>
+
+      <div class="filter-divider" />
+
+      <el-form :model="query" :inline="true" class="filter-form" @submit.prevent>
+        <el-form-item label="分配状态">
+          <el-segmented v-model="query.assignmentState" :options="assignmentStateOptions" @change="handleSearch" />
+        </el-form-item>
         <el-form-item label="客户电话">
-          <el-input v-model="query.primaryPhone" clearable placeholder="请输入客户电话" @keyup.enter="load" />
+          <el-input v-model="query.primaryPhone" clearable placeholder="手机号或电话" style="width: 168px" @keyup.enter="handleSearch" />
         </el-form-item>
         <el-form-item label="客户姓名">
-          <el-input v-model="query.customerName" clearable placeholder="请输入客户姓名" @keyup.enter="load" />
+          <el-input v-model="query.customerName" clearable placeholder="客户姓名" style="width: 140px" @keyup.enter="handleSearch" />
         </el-form-item>
         <el-form-item label="客户类型">
-          <el-input v-model="query.customerType" clearable placeholder="例如：意向客户" @keyup.enter="load" />
+          <el-input v-model="query.customerType" clearable placeholder="意向客户等" style="width: 140px" @keyup.enter="handleSearch" />
         </el-form-item>
-        <el-form-item label="归属技能组">
-          <el-select v-model="query.skillGroupId" clearable filterable placeholder="请选择">
+        <el-form-item label="技能组">
+          <el-select v-model="query.skillGroupId" clearable filterable placeholder="全部" style="width: 150px">
             <el-option v-for="group in skillGroups" :key="group.id" :label="group.groupName" :value="group.id" />
           </el-select>
         </el-form-item>
-        <el-form-item class="filter-actions">
-          <el-button type="primary" @click="load">查询</el-button>
-          <el-button @click="resetQuery">重置</el-button>
+        <el-form-item>
+          <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
+          <el-button :icon="Refresh" @click="resetQuery">重置</el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
-    <el-card shadow="hover">
+    <el-card class="table-card" shadow="never">
       <div class="table-toolbar">
         <div class="table-toolbar-left">
-          <el-button v-hasPermi="['callcenter:customer:create']" type="primary" plain @click="openCreateCustomer">
-            <el-icon><Plus /></el-icon>
-            新增客户
-          </el-button>
-          <el-button v-hasPermi="['callcenter:customer:assign']" type="warning" plain :disabled="!selectedCustomers.length" @click="openAssign">
-            资料分配
-          </el-button>
+          <span class="stat-pill">
+            共 <b>{{ total }}</b> 位
+          </span>
+          <span v-if="selectedCustomers.length" class="stat-pill is-active">
+            已选 <b>{{ selectedCustomers.length }}</b>
+          </span>
         </div>
-        <el-popover placement="bottom-end" :width="260" trigger="click">
-          <template #reference>
-            <el-button plain>列设置</el-button>
-          </template>
-          <div class="column-setting-title">固定字段显示</div>
-          <el-checkbox-group v-model="visibleFixedColumns" class="column-setting-list">
-            <el-checkbox v-for="column in configurableFixedColumns" :key="column.key" :label="column.key">
-              {{ column.label }}
-            </el-checkbox>
-          </el-checkbox-group>
-          <div class="column-setting-tip">自定义字段请在客户表单模板中打开“列表显示”。</div>
-        </el-popover>
+        <div class="table-toolbar-right">
+          <el-button circle :icon="Refresh" title="刷新" @click="load" />
+          <el-popover placement="bottom-end" :width="260" trigger="click">
+            <template #reference>
+              <el-button plain :icon="Setting">列设置</el-button>
+            </template>
+            <div class="column-setting-title">可选字段显示</div>
+            <el-checkbox-group v-model="visibleFixedColumns" class="column-setting-list">
+              <el-checkbox v-for="column in configurableFixedColumns" :key="column.key" :label="column.key">
+                {{ column.label }}
+              </el-checkbox>
+            </el-checkbox-group>
+            <div class="column-setting-tip">自定义字段请在客户表单模板中打开“列表显示”。</div>
+          </el-popover>
+        </div>
       </div>
 
-      <el-table v-loading="loading" :data="rows" @selection-change="handleSelectionChange">
-        <el-table-column type="selection" width="48" />
-        <el-table-column label="客户姓名" min-width="150">
+      <el-table
+        v-loading="loading"
+        :data="rows"
+        class="customer-table"
+        row-key="id"
+        stripe
+        max-height="calc(100vh - 300px)"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="46" fixed="left" />
+        <el-table-column label="客户" min-width="168" fixed="left">
           <template #default="{ row }">
-            <el-button class="customer-detail-link" link type="primary" @click="showDetail(row)">
-              {{ row.customerName || '未命名客户' }}
-            </el-button>
+            <button class="customer-cell" type="button" @click="showDetail(row)">
+              <span class="customer-avatar" :style="{ background: avatarTone(row) }">{{ customerInitial(row) }}</span>
+              <span class="customer-meta">
+                <span class="customer-name">{{ row.customerName || '未命名客户' }}</span>
+                <span class="customer-sub">
+                  <i class="status-dot" :class="isAssigned(row) ? 'is-on' : 'is-off'" />
+                  {{ isAssigned(row) ? '已分配' : '未分配' }}
+                  <template v-if="row.customerType"> · {{ row.customerType }}</template>
+                </span>
+              </span>
+            </button>
           </template>
         </el-table-column>
-        <el-table-column label="客户电话" min-width="280">
+        <el-table-column label="客户电话" min-width="210">
           <template #default="{ row }">
-            <div class="customer-phone-summary">
-              <template v-if="primaryPhone(row)">
-                <el-button
-                  v-if="primaryPhone(row)?.enabled"
-                  class="phone-dial-link"
-                  link
-                  type="primary"
-                  title="点击拨打主号码"
-                  @click="requestDialPhone(row, primaryPhone(row)!)"
-                >
-                  <el-icon><Phone /></el-icon>
-                  {{ primaryPhone(row)?.phoneNumber }}
-                </el-button>
-                <span v-else class="primary-phone is-disabled">{{ primaryPhone(row)?.phoneNumber }}</span>
-                <el-tag size="small" type="primary" effect="plain">主号</el-tag>
-              </template>
-              <span v-else>-</span>
+            <div v-if="primaryPhone(row)" class="customer-phone-summary">
+              <button
+                v-if="primaryPhone(row)?.enabled"
+                class="phone-chip"
+                type="button"
+                title="点击拨打主号码"
+                @click="requestDialPhone(row, primaryPhone(row)!)"
+              >
+                <el-icon><Phone /></el-icon>
+                <span>{{ primaryPhone(row)?.phoneNumber }}</span>
+              </button>
+              <span v-else class="phone-chip is-disabled">{{ primaryPhone(row)?.phoneNumber }}</span>
               <el-popover v-if="customerPhones(row).length > 1" placement="bottom-start" :width="380" trigger="click">
                 <template #reference>
-                  <el-button class="more-phone-count" link type="primary">全部 {{ customerPhones(row).length }} 个号码</el-button>
+                  <button class="phone-more" type="button">+{{ customerPhones(row).length - 1 }}</button>
                 </template>
                 <div class="phone-popover-title">选择要拨打的号码</div>
                 <div class="phone-popover-list">
@@ -96,40 +136,81 @@
                     </el-button>
                     <span v-else class="is-disabled">{{ phone.phoneNumber }}</span>
                     <div class="phone-popover-tags">
-                      <el-tag v-if="phone.primaryFlag" size="small" type="primary" effect="plain">主号</el-tag>
-                      <el-tag v-if="phone.phoneLabel" size="small" type="info" effect="plain">{{ phone.phoneLabel }}</el-tag>
-                      <el-tag v-if="phone.enabled === false" size="small" type="danger" effect="plain">停用</el-tag>
+                      <el-tag v-if="phone.primaryFlag" size="small" type="primary" effect="plain" round>主号</el-tag>
+                      <el-tag v-if="phone.phoneLabel" size="small" type="info" effect="plain" round>{{ phone.phoneLabel }}</el-tag>
+                      <el-tag v-if="phone.enabled === false" size="small" type="danger" effect="plain" round>停用</el-tag>
                     </div>
                   </div>
                 </div>
               </el-popover>
             </div>
+            <span v-else class="cell-empty">暂无号码</span>
           </template>
         </el-table-column>
-        <el-table-column v-if="isFixedColumnVisible('sourceCallId')" label="来源通话" prop="sourceCallId" min-width="240" show-overflow-tooltip />
-        <el-table-column v-if="isFixedColumnVisible('customerType')" label="客户类型" prop="customerType" min-width="120" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.customerType || '-' }}</template>
+        <el-table-column label="归属" min-width="168">
+          <template #default="{ row }">
+            <div v-if="isAssigned(row)" class="ownership-cell">
+              <el-tag v-if="row.skillGroupId" type="success" effect="plain" round size="small">
+                {{ skillGroupName(row.skillGroupId) }}
+              </el-tag>
+              <span v-if="row.agentId" class="ownership-agent">坐席 {{ row.agentId }}</span>
+            </div>
+            <span v-else class="ownership-empty">未分配</span>
+          </template>
         </el-table-column>
-        <el-table-column v-if="isFixedColumnVisible('skillGroupId')" label="归属技能组" min-width="140" show-overflow-tooltip>
-          <template #default="{ row }">{{ skillGroupName(row.skillGroupId) }}</template>
+        <el-table-column v-if="isFixedColumnVisible('customerType')" label="客户类型" min-width="110">
+          <template #default="{ row }">
+            <el-tag v-if="row.customerType" effect="plain" round size="small">{{ row.customerType }}</el-tag>
+            <span v-else class="cell-empty">未设置</span>
+          </template>
         </el-table-column>
-        <el-table-column v-if="isFixedColumnVisible('agentId')" label="归属坐席" prop="agentId" min-width="120" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.agentId || '-' }}</template>
+        <el-table-column v-if="isFixedColumnVisible('tags')" label="标签" min-width="150">
+          <template #default="{ row }">
+            <div v-if="tagList(row.tags).length" class="tag-list">
+              <el-tag v-for="tag in tagList(row.tags).slice(0, 2)" :key="tag" size="small" effect="plain" round>{{ tag }}</el-tag>
+              <span v-if="tagList(row.tags).length > 2" class="tag-more">+{{ tagList(row.tags).length - 2 }}</span>
+            </div>
+            <span v-else class="cell-empty">无标签</span>
+          </template>
         </el-table-column>
-        <el-table-column v-if="isFixedColumnVisible('tags')" label="标签" prop="tags" min-width="140" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.tags || '-' }}</template>
+        <el-table-column v-if="isFixedColumnVisible('sourceChannel')" label="来源渠道" min-width="110" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.sourceChannel">{{ row.sourceChannel }}</span>
+            <span v-else class="cell-empty">未设置</span>
+          </template>
         </el-table-column>
-        <el-table-column v-for="field in listVisibleCustomerFields" :key="field.fieldCode" :label="field.fieldName" min-width="140" show-overflow-tooltip>
+        <el-table-column v-if="isFixedColumnVisible('sourceCallId')" label="来源通话" min-width="160" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.sourceCallId" class="mono-text">{{ row.sourceCallId }}</span>
+            <span v-else class="cell-empty">无</span>
+          </template>
+        </el-table-column>
+        <el-table-column v-for="field in listVisibleCustomerFields" :key="field.fieldCode" :label="field.fieldName" min-width="130" show-overflow-tooltip>
           <template #default="{ row }">{{ displayFormFieldValue(row.formData?.[field.fieldCode], field) }}</template>
         </el-table-column>
-        <el-table-column label="创建时间" prop="createTime" min-width="170" />
-        <el-table-column label="操作" width="110" fixed="right">
+        <el-table-column label="创建时间" width="148">
           <template #default="{ row }">
-            <el-button v-hasPermi="['callcenter:customer:edit']" link type="primary" @click="openEditCustomer(row)">编辑</el-button>
+            <span class="time-text">{{ formatCreateTime(row.createTime) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="118" fixed="right" align="center">
+          <template #default="{ row }">
+            <div class="row-actions">
+              <el-button link type="primary" @click="showDetail(row)">详情</el-button>
+              <el-button v-hasPermi="['callcenter:customer:edit']" link type="primary" @click="openEditCustomer(row)">编辑</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
-      <pagination v-show="total > 0" v-model:page="query.pageNum" v-model:limit="query.pageSize" :total="total" @pagination="load" />
+      <pagination
+        v-show="total > 0"
+        v-model:page="query.pageNum"
+        v-model:limit="query.pageSize"
+        class="customer-pagination"
+        :total="total"
+        :auto-scroll="false"
+        @pagination="load"
+      />
     </el-card>
 
     <CallCenterBusinessDetail v-model="detailVisible" business-type="CUSTOMER" :business-id="detailId" />
@@ -500,7 +581,7 @@ import { FormTemplate } from '@/api/callcenter/form-template/types';
 import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/index.vue';
 import DynamicBusinessFormDialog from '@/layout/components/DynamicBusinessFormDialog.vue';
 import { useAgentDialBus } from '@/composables/useAgentDial';
-import { Phone } from '@element-plus/icons-vue';
+import { Phone, Plus, Refresh, Search, Setting } from '@element-plus/icons-vue';
 import { ElMessageBox, type UploadFile, type UploadUserFile } from 'element-plus';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
@@ -512,8 +593,13 @@ const createVisible = ref(false);
 const customerDialogPhone = ref('');
 const detailVisible = ref(false);
 const detailId = ref<string | number>();
-const query = reactive<CustomerQuery>({ pageNum: 1, pageSize: 10 });
+const query = reactive<CustomerQuery>({ pageNum: 1, pageSize: 10, assignmentState: '' });
 const selectedCustomers = ref<CustomerVO[]>([]);
+const assignmentStateOptions = [
+  { label: '全部', value: '' },
+  { label: '未分配', value: 'UNASSIGNED' },
+  { label: '已分配', value: 'ASSIGNED' }
+];
 const defaultAssignmentForm = (): CustomerAssignmentForm => ({
   customerIds: [],
   customerType: '',
@@ -532,13 +618,13 @@ const importFileList = ref<UploadUserFile[]>([]);
 const skillGroups = ref<SkillGroupVO[]>([]);
 const customerFormTemplates = ref<FormTemplate[]>([]);
 const configurableFixedColumns = [
-  { key: 'sourceCallId', label: '来源通话' },
   { key: 'customerType', label: '客户类型' },
-  { key: 'skillGroupId', label: '归属技能组' },
-  { key: 'agentId', label: '归属坐席' },
-  { key: 'tags', label: '标签' }
+  { key: 'tags', label: '标签' },
+  { key: 'sourceChannel', label: '来源渠道' },
+  { key: 'sourceCallId', label: '来源通话' }
 ];
-const visibleFixedColumns = ref<string[]>([]);
+const visibleFixedColumns = ref<string[]>(['tags']);
+const AVATAR_TONES = ['#2563eb', '#0ea5e9', '#0891b2', '#4f46e5', '#0284c7', '#1d4ed8'];
 const defaultImportForm = (): CustomerImportForm => ({
   duplicateStrategy: 'SKIP',
   defaultCustomerType: '',
@@ -626,10 +712,38 @@ const primaryPhone = (row: CustomerVO) => {
 const skillGroupName = (skillGroupId?: string | number) => {
   if (!skillGroupId) return '-';
   const group = skillGroups.value.find((item) => String(item.id) === String(skillGroupId));
-  return group?.groupName || skillGroupId;
+  return group?.groupName || `${skillGroupId}`;
 };
 
 const isFixedColumnVisible = (key: string) => visibleFixedColumns.value.includes(key);
+
+const isAssigned = (row: CustomerVO) => !!(row.skillGroupId || row.agentId || row.assignmentId);
+
+const tagList = (tags?: string) =>
+  (tags || '')
+    .split(/[,，;；\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const customerInitial = (row: CustomerVO) => {
+  const name = (row.customerName || '').trim();
+  if (!name) return '客';
+  return name.slice(0, 1).toUpperCase();
+};
+
+const avatarTone = (row: CustomerVO) => {
+  const seed = String(row.id || row.customerName || '0');
+  let hash = 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = (hash * 31 + seed.charCodeAt(i)) % AVATAR_TONES.length;
+  }
+  return AVATAR_TONES[Math.abs(hash) % AVATAR_TONES.length];
+};
+
+const formatCreateTime = (time?: string) => {
+  if (!time) return '暂无时间';
+  return proxy?.parseTime(time, '{y}-{m}-{d} {h}:{i}') || time;
+};
 
 const displayFormFieldValue = (value: unknown, field: FormTemplate['fields'][number]) => {
   if (value === undefined || value === null || value === '') return '-';
@@ -669,12 +783,18 @@ const load = async () => {
   }
 };
 
+const handleSearch = () => {
+  query.pageNum = 1;
+  load();
+};
+
 const resetQuery = () => {
   query.pageNum = 1;
   query.primaryPhone = '';
   query.customerName = '';
   query.customerType = '';
   query.skillGroupId = undefined;
+  query.assignmentState = '';
   load();
 };
 
@@ -1003,78 +1123,117 @@ onBeforeUnmount(stopImportPolling);
 .customer-page {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
-.filter-card {
+.hero-card {
   border-color: #e4ecf6;
-  background: linear-gradient(180deg, #ffffff, #f8fbff);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(56, 189, 248, 0.08), transparent 42%),
+    linear-gradient(180deg, #ffffff, #f7fbff);
 }
 
-.filter-card :deep(.el-card__body) {
-  padding: 14px 18px 6px;
+.hero-card :deep(.el-card__body) {
+  padding: 16px 18px 8px !important;
 }
 
-.filter-panel {
+.filter-divider {
+  height: 1px;
+  margin: 14px 0 10px;
+  background: linear-gradient(90deg, transparent, #e8eef6 12%, #e8eef6 88%, transparent);
+}
+
+.filter-form {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 12px;
+  gap: 2px 2px;
 }
 
-.filter-panel :deep(.el-form-item) {
-  margin-right: 0;
-  margin-bottom: 8px;
+.filter-form :deep(.el-form-item) {
+  margin-right: 10px;
+  margin-bottom: 10px;
 }
 
-.filter-panel :deep(.el-form-item__label) {
-  width: 88px !important;
-  justify-content: flex-end;
+.filter-form :deep(.el-form-item__label) {
   color: #5b6b82;
   font-weight: 600;
-  white-space: nowrap;
 }
 
-.filter-panel :deep(.el-form-item__content) {
-  width: 180px;
+.filter-form :deep(.el-segmented) {
+  --el-segmented-item-selected-bg-color: #2563eb;
+  --el-segmented-item-selected-color: #fff;
+  background: #eef4fb;
 }
 
-.filter-panel :deep(.el-input),
-.filter-panel :deep(.el-select) {
-  width: 180px;
-}
-
-.filter-actions {
-  margin-left: auto;
-  white-space: nowrap;
-}
-
-.filter-actions :deep(.el-form-item__label) {
-  display: none;
-}
-
-.filter-actions :deep(.el-form-item__content) {
+.table-card :deep(.el-card__body) {
   display: flex;
-  width: auto;
-  gap: 8px;
+  flex-direction: column;
+  padding: 14px 16px 10px !important;
 }
 
 .table-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 14px;
-  padding: 10px 12px;
-  gap: 8px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  gap: 10px;
   border: 1px solid #e8eef6;
   border-radius: 12px;
-  background: #f7faff;
+  background: linear-gradient(180deg, #f8fbff, #f3f7fc);
+}
+
+.table-toolbar-left,
+.table-toolbar-right,
+.row-actions,
+.tag-list,
+.customer-phone-summary,
+.ownership-cell {
+  display: flex;
+  align-items: center;
 }
 
 .table-toolbar-left {
-  display: flex;
-  align-items: center;
+  min-width: 0;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.table-toolbar-right,
+.row-actions,
+.tag-list,
+.customer-phone-summary {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.stat-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #e4ecf6;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.stat-pill b {
+  margin: 0 2px;
+  color: #153b60;
+  font-weight: 700;
+}
+
+.stat-pill.is-active {
+  border-color: rgba(37, 99, 235, 0.28);
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+}
+
+.stat-pill.is-active b {
+  color: #1d4ed8;
 }
 
 .column-setting-title {
@@ -1098,54 +1257,210 @@ onBeforeUnmount(stopImportPolling);
   line-height: 1.5;
 }
 
-.assignment-form {
-  margin-top: 18px;
+.customer-table {
+  width: 100%;
 }
 
-.customer-phone-summary {
-  display: flex;
+.customer-table :deep(.el-table__header th) {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.customer-table :deep(.el-table__row) {
+  height: 56px;
+}
+
+.customer-table :deep(.el-table__cell) {
+  padding: 8px 0;
+}
+
+.customer-cell {
+  display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-width: 0;
-}
-
-.customer-detail-link,
-.phone-dial-link {
-  height: auto;
+  max-width: 100%;
   padding: 0;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
 }
 
-.customer-detail-link {
-  font-weight: 600;
+.customer-avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+    0 4px 10px rgba(37, 99, 235, 0.18);
 }
 
-.phone-dial-link {
-  gap: 4px;
-  font-weight: 600;
+.customer-meta {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.customer-phone-summary :deep(.el-tag) {
-  border-radius: 999px;
-}
-
-.primary-phone {
+.customer-name {
   overflow: hidden;
-  color: var(--el-color-primary);
+  min-width: 0;
+  color: #17324d;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.is-disabled {
-  color: var(--el-text-color-placeholder);
-  text-decoration: line-through;
+.customer-cell:hover .customer-name {
+  color: var(--el-color-primary);
 }
 
-.more-phone-count {
-  flex: none;
-  height: auto;
-  padding: 0 2px;
+.customer-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #94a3b8;
   font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #cbd5e1;
+}
+
+.status-dot.is-on {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.16);
+}
+
+.status-dot.is-off {
+  background: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.14);
+}
+
+.cell-empty,
+.ownership-empty {
+  color: #b6c2d2;
+  font-size: 12px;
+}
+
+.time-text {
+  color: #64748b;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mono-text {
+  color: #475569;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.phone-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 0 10px;
+  gap: 5px;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.1), rgba(37, 99, 235, 0.05));
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.phone-chip:hover {
+  border-color: rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.12);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+  transform: translateY(-1px);
+}
+
+.phone-chip.is-disabled {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  color: #94a3b8;
+  text-decoration: line-through;
+  cursor: default;
+  transform: none;
+  box-shadow: none;
+}
+
+.phone-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid #dbe5f2;
+  border-radius: 999px;
+  background: #fff;
+  color: #3b82f6;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.phone-more:hover {
+  border-color: rgba(59, 130, 246, 0.45);
+  background: #eff6ff;
+}
+
+.phone-dial-link {
+  height: auto;
+  padding: 0;
+  gap: 4px;
+  font-weight: 600;
+}
+
+.ownership-cell {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.ownership-agent {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.tag-list {
+  gap: 4px;
+}
+
+.tag-more {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.assignment-form {
+  margin-top: 18px;
+}
+
+.customer-pagination {
+  margin-top: 10px;
 }
 
 .phone-popover-title {
@@ -1178,6 +1493,11 @@ onBeforeUnmount(stopImportPolling);
   display: flex;
   flex: none;
   gap: 4px;
+}
+
+.is-disabled {
+  color: var(--el-text-color-placeholder);
+  text-decoration: line-through;
 }
 
 .import-help {
@@ -1254,6 +1574,8 @@ onBeforeUnmount(stopImportPolling);
 
 .import-summary {
   display: flex;
+  align-items: center;
+  margin-bottom: 12px;
   gap: 10px;
 }
 
@@ -1332,11 +1654,6 @@ onBeforeUnmount(stopImportPolling);
 .import-upload-actions .el-button {
   width: 100%;
   margin-left: 0;
-}
-
-.import-summary {
-  align-items: center;
-  margin-bottom: 12px;
 }
 
 @media (max-width: 960px) {

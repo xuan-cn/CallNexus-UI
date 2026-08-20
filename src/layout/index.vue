@@ -17,7 +17,6 @@
       </div>
       <app-main />
       <settings ref="settingRef" />
-      <agent-toolbar v-if="device !== 'mobile'" ref="agentToolbarRef" class="global-agent-toolbar" />
     </div>
   </div>
 </template>
@@ -30,7 +29,6 @@ import { useSettingsStore } from '@/store/modules/settings';
 import { NavTypeEnum } from '@/enums/NavTypeEnum';
 import { initWebSocket } from '@/utils/websocket';
 import { initSSE } from '@/utils/sse';
-import AgentToolbar from './components/AgentToolbar.vue';
 
 const settingsStore = useSettingsStore();
 const theme = computed(() => settingsStore.theme);
@@ -70,7 +68,7 @@ watchEffect(() => {
 
 const navbarRef = ref<InstanceType<typeof Navbar>>();
 const settingRef = ref<InstanceType<typeof Settings>>();
-const agentToolbarRef = ref<InstanceType<typeof AgentToolbar>>();
+const agentToolbarRef = computed(() => navbarRef.value?.agentToolbarRef ?? null);
 
 // 暴露给子组件使用
 provide('agentToolbarRef', agentToolbarRef);
@@ -129,11 +127,12 @@ const setLayout = () => {
   position: fixed;
   top: 0;
   right: 0;
-  z-index: 9;
+  z-index: 1002;
   width: calc(100% - #{$base-sidebar-width});
   transition: width 0.28s;
   background: $fixed-header-bg;
   box-shadow: 0 2px 8px rgba(0, 21, 41, 0.1);
+  overflow: visible;
 }
 
 .hideSidebar .fixed-header {
