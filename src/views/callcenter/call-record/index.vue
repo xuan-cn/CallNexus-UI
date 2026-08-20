@@ -223,7 +223,7 @@
                 <div class="timeline-marker" :class="event.tone || eventTone(event.eventType)"></div>
                 <div class="timeline-content">
                   <strong>{{ event.title || eventLabel(event.eventType) }}</strong>
-                  <span>{{ event.fromTarget || '-' }} → {{ event.toTarget || '-' }}</span>
+                  <span>{{ event.description || `${event.fromTarget || '-'} → ${event.toTarget || '-'}` }}</span>
                 </div>
               </div>
             </div>
@@ -352,6 +352,7 @@
                 <el-table-column label="关联 UUID" prop="relatedChannelUuid" min-width="260" show-overflow-tooltip />
                 <el-table-column label="来源" prop="fromTarget" min-width="120" />
                 <el-table-column label="目标" prop="toTarget" min-width="120" />
+                <el-table-column label="说明" prop="description" min-width="220" show-overflow-tooltip />
                 <el-table-column label="时间" prop="occurredAt" min-width="165" />
               </el-table>
             </el-collapse-item>
@@ -542,7 +543,8 @@ const eventLabel = (eventType: string) =>
     QUEUE_SATISFACTION: '满意度评价',
     QUEUE_TIMEOUT: '队列超时',
     ABANDON: '主叫放弃',
-    VOICEMAIL_RECORDED: '语音留言已录制'
+    VOICEMAIL_RECORDED: '语音留言已录制',
+    CALL_NOTE: '通话备注'
   })[eventType] || eventType;
 const legRoleLabel = (role?: string) =>
   ({

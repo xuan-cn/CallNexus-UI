@@ -159,6 +159,14 @@
                 <strong>阿里云 NLS</strong>
                 <small>智能语音交互 TTS / ASR</small>
               </el-radio-button>
+              <el-radio-button value="FUNASR">
+                <strong>FunASR</strong>
+                <small>本地部署 · 句级 ASR</small>
+              </el-radio-button>
+              <el-radio-button value="KOKORO_LOCAL">
+                <strong>Kokoro 本地 TTS</strong>
+                <small>本地部署 · 流式语音合成</small>
+              </el-radio-button>
               <el-radio-button value="OPENAI_COMPATIBLE">
                 <strong>OpenAI 兼容</strong>
                 <small>标准 Audio API</small>
@@ -245,6 +253,58 @@
               </el-form-item>
             </el-col>
           </el-row>
+          <el-row v-else-if="providerForm.providerType === 'FUNASR'" :gutter="16">
+            <el-col :span="12">
+              <el-form-item label="认证方式">
+                <el-select v-model="providerForm.authType" style="width: 100%">
+                  <el-option label="无认证（内网部署）" value="NONE" />
+                  <el-option label="Bearer Token" value="BEARER" />
+                  <el-option label="Header Token" value="HEADER" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col v-if="providerForm.authType === 'HEADER'" :span="12">
+              <el-form-item label="Header名称">
+                <el-input v-model="providerForm.authHeaderName" placeholder="例如 X-API-Key" />
+              </el-form-item>
+            </el-col>
+            <el-col v-if="providerForm.authType !== 'NONE'" :span="12">
+              <el-form-item label="访问密钥" :required="!editingAuthConfigured">
+                <el-input
+                  v-model="simpleCredential.secret"
+                  type="password"
+                  show-password
+                  :placeholder="editingAuthConfigured ? '已配置，留空表示不修改' : '反向代理启用认证时填写'"
+                />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row v-else-if="providerForm.providerType === 'KOKORO_LOCAL'" :gutter="16">
+            <el-col :span="12">
+              <el-form-item label="认证方式">
+                <el-select v-model="providerForm.authType" style="width: 100%">
+                  <el-option label="无认证（内网部署）" value="NONE" />
+                  <el-option label="Bearer Token" value="BEARER" />
+                  <el-option label="Header Token" value="HEADER" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col v-if="providerForm.authType === 'HEADER'" :span="12">
+              <el-form-item label="Header名称">
+                <el-input v-model="providerForm.authHeaderName" placeholder="例如 X-API-Key" />
+              </el-form-item>
+            </el-col>
+            <el-col v-if="providerForm.authType !== 'NONE'" :span="12">
+              <el-form-item label="访问密钥" :required="!editingAuthConfigured">
+                <el-input
+                  v-model="simpleCredential.secret"
+                  type="password"
+                  show-password
+                  :placeholder="editingAuthConfigured ? '已配置，留空表示不修改' : '反向代理启用认证时填写'"
+                />
+              </el-form-item>
+            </el-col>
+          </el-row>
           <el-row v-else :gutter="16">
             <el-col :span="12">
               <el-form-item label="API Key" :required="providerForm.authType !== 'NONE' && !editingAuthConfigured">
@@ -272,7 +332,7 @@
             </div>
           </div>
           <div class="capability-grid">
-            <div class="capability-card">
+            <div v-if="providerForm.providerType !== 'FUNASR'" class="capability-card">
               <div>
                 <strong>TTS 语音合成</strong>
                 <p>坐席提示音、普通语音合成。</p>
@@ -280,7 +340,7 @@
               <el-switch v-model="providerForm.ttsEnabled" />
               <el-checkbox v-model="providerForm.defaultTts" :disabled="!providerForm.ttsEnabled">设为默认</el-checkbox>
             </div>
-            <div class="capability-card">
+            <div v-if="providerForm.providerType !== 'FUNASR'" class="capability-card">
               <div>
                 <strong>实时 TTS</strong>
                 <p>AI 实时对话时按分句流式合成。</p>
@@ -288,7 +348,7 @@
               <el-switch v-model="providerForm.streamingTtsEnabled" />
               <el-checkbox v-model="providerForm.defaultStreamingTts" :disabled="!providerForm.streamingTtsEnabled">设为默认</el-checkbox>
             </div>
-            <div class="capability-card">
+            <div v-if="providerForm.providerType !== 'KOKORO_LOCAL'" class="capability-card">
               <div>
                 <strong>录音 ASR</strong>
                 <p>通话录音、上传文件转文字。</p>
@@ -296,7 +356,7 @@
               <el-switch v-model="providerForm.recordingAsrEnabled" />
               <el-checkbox v-model="providerForm.defaultRecordingAsr" :disabled="!providerForm.recordingAsrEnabled">设为默认</el-checkbox>
             </div>
-            <div class="capability-card">
+            <div v-if="providerForm.providerType !== 'FUNASR' && providerForm.providerType !== 'KOKORO_LOCAL'" class="capability-card">
               <div>
                 <strong>实时 ASR</strong>
                 <p>AI 通话实时识别客户语音。</p>
@@ -307,7 +367,110 @@
           </div>
         </section>
 
-        <el-collapse v-model="advancedSections" class="provider-advanced">
+        <section v-if="providerForm.providerType === 'FUNASR'" class="provider-section">
+          <div class="section-title">
+            <div>
+              <h3>FunASR 识别配置</h3>
+              <p>当前沿用 UniMRCP 断句，一句话收齐后调用本地 FunASR HTTP 接口，不改变现有通话流程。</p>
+            </div>
+          </div>
+          <el-row :gutter="16">
+            <el-col :span="24">
+              <el-form-item label="服务地址" required>
+                <el-input v-model="providerForm.recordingAsrEndpointUrl" placeholder="http://FunASR服务器IP:8000/v1/audio/transcriptions" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="模型名称">
+                <el-input v-model="funAsrOptions.model" placeholder="sensevoice" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="服务采样率">
+                <el-select v-model="providerForm.asrSampleRate" style="width: 100%">
+                  <el-option label="16000 Hz（推荐）" :value="16000" />
+                  <el-option label="8000 Hz" :value="8000" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="超时时间">
+                <el-input-number v-model="providerForm.timeoutSeconds" :min="5" :max="300" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-alert type="info" show-icon :closable="false" title="电话侧通常上传 8kHz PCM，系统会转换为标准 16kHz 单声道 WAV 后提交到 FunASR。" />
+        </section>
+
+        <section v-if="providerForm.providerType === 'KOKORO_LOCAL'" class="provider-section">
+          <div class="section-title">
+            <div>
+              <h3>Kokoro 本地合成配置</h3>
+              <p>服务输出 24kHz PCM，CallNexus 会实时转换为电话侧使用的 8kHz PCM，不需要修改 UniMRCP 或 FreeSWITCH。</p>
+            </div>
+          </div>
+          <el-row :gutter="16">
+            <el-col :span="24">
+              <el-form-item label="服务地址" required>
+                <el-input v-model="providerForm.endpointUrl" placeholder="http://Kokoro服务器IP:8880，可填写基础地址或 /v1/audio/speech 完整地址" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="模型名称">
+                <el-input v-model="kokoroOptions.model" placeholder="kokoro" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="默认音色">
+                <el-select v-model="providerForm.defaultVoice" filterable allow-create default-first-option style="width: 100%" placeholder="如 zf_001">
+                  <el-option v-for="voice in kokoroVoices" :key="voice" :label="voice" :value="voice" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="音色列表">
+                <el-button :loading="kokoroVoicesLoading" :disabled="!providerForm.id" @click="loadKokoroVoices">刷新音色</el-button>
+                <span v-if="!providerForm.id" class="field-hint">保存后可读取</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="语速">
+                <el-input-number v-model="kokoroOptions.speed" :min="0.25" :max="4" :step="0.05" :precision="2" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="语言代码">
+                <el-input v-model="kokoroOptions.langCode" placeholder="中文使用 z" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="输出采样率">
+                <el-select v-model="providerForm.defaultSampleRate" style="width: 100%">
+                  <el-option label="8000 Hz（电话推荐）" :value="8000" />
+                  <el-option label="16000 Hz" :value="16000" />
+                  <el-option label="24000 Hz" :value="24000" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="服务采样率">
+                <el-input-number v-model="kokoroOptions.sourceSampleRate" :min="8000" :max="48000" :step="1000" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="音量倍数">
+                <el-input-number v-model="kokoroOptions.volumeMultiplier" :min="0.1" :max="3" :step="0.1" :precision="1" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="超时时间">
+                <el-input-number v-model="providerForm.timeoutSeconds" :min="5" :max="300" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </section>
+
+        <el-collapse v-if="providerForm.providerType !== 'FUNASR' && providerForm.providerType !== 'KOKORO_LOCAL'" v-model="advancedSections" class="provider-advanced">
           <el-collapse-item title="高级配置（通常无需修改）" name="common">
             <el-row :gutter="16">
               <el-col :span="8">
@@ -455,7 +618,7 @@
                     v-model="providerForm.asrOptionsJson"
                     type="textarea"
                     :rows="3"
-                    placeholder='{"model":"qwen3-asr-flash","enable_itn":false}'
+                    placeholder='{"fileModel":"qwen3-asr-flash","realtimeModel":"qwen3-asr-flash-realtime"}'
                   />
                 </el-form-item>
               </el-col>
@@ -560,6 +723,7 @@ import {
   createSpeechTemplate,
   deleteSpeechProvider,
   deleteSpeechTemplate,
+  listSpeechProviderVoices,
   listSpeechProviders,
   listSpeechTasks,
   listSpeechTemplates,
@@ -611,6 +775,18 @@ const simpleCredential = reactive({
   region: 'cn-shanghai',
   workspaceId: ''
 });
+const funAsrOptions = reactive({
+  model: 'sensevoice'
+});
+const kokoroOptions = reactive({
+  model: 'kokoro',
+  speed: 1,
+  langCode: 'z',
+  sourceSampleRate: 24000,
+  volumeMultiplier: 1
+});
+const kokoroVoices = ref<string[]>([]);
+const kokoroVoicesLoading = ref(false);
 const providerCredentialHint = computed(() => {
   if (providerForm.value.providerType === 'ALIYUN_NLS') {
     return '只需填写智能语音交互项目 AppKey 和 RAM 子用户 AccessKey，服务地址由区域自动生成。';
@@ -620,6 +796,12 @@ const providerCredentialHint = computed(() => {
   }
   if (providerForm.value.providerType === 'OPENAI_COMPATIBLE') {
     return '填写兼容服务的 API Key，标准接口地址已预置，可在高级配置中覆盖。';
+  }
+  if (providerForm.value.providerType === 'FUNASR') {
+    return '填写已部署的 FunASR HTTP 转写地址；内网部署通常不需要认证。';
+  }
+  if (providerForm.value.providerType === 'KOKORO_LOCAL') {
+    return '填写 Kokoro FastAPI 地址；内网部署默认无需密钥，模型、音色和语速在下方直接配置。';
   }
   return '填写自建或第三方服务地址和访问密钥，协议细节可在高级配置中覆盖。';
 });
@@ -679,7 +861,7 @@ function defaultProviderForm(): AiSpeechProviderForm {
     asrEnableIntermediateResult: true,
     asrSilenceTimeoutMs: 800,
     asrMaxSentenceMs: 15000,
-    asrOptionsJson: '{"model":"qwen3-asr-flash","enable_itn":false}',
+    asrOptionsJson: '{"fileModel":"qwen3-asr-flash","realtimeModel":"qwen3-asr-flash-realtime"}',
     enabled: true,
     remark: ''
   };
@@ -736,8 +918,12 @@ const openProviderDrawer = (row?: AiSpeechProviderVO) => {
   editingAuthConfigured.value = Boolean(row?.authConfigured);
   advancedSections.value = [];
   hydrateSimpleCredential(row);
+  hydrateFunAsrOptions(row);
+  hydrateKokoroOptions(row);
   if (!row) {
     handleProviderTypeChange(providerForm.value.providerType);
+  } else if (row.providerType === 'KOKORO_LOCAL') {
+    loadKokoroVoices();
   }
   providerDrawer.visible = true;
 };
@@ -763,6 +949,35 @@ const hydrateSimpleCredential = (row?: AiSpeechProviderVO) => {
   simpleCredential.workspaceId = String(config.workspaceId || config.workspace_id || '');
 };
 
+const hydrateFunAsrOptions = (row?: AiSpeechProviderVO) => {
+  const options = parseRemark(row?.asrOptionsJson);
+  funAsrOptions.model = String(options.model || 'sensevoice');
+};
+
+const hydrateKokoroOptions = (row?: AiSpeechProviderVO) => {
+  const options = parseRemark(row?.remark);
+  kokoroOptions.model = String(options.model || 'kokoro');
+  kokoroOptions.speed = Number(options.speed || 1);
+  kokoroOptions.langCode = String(options.langCode || 'z');
+  kokoroOptions.sourceSampleRate = Number(options.sourceSampleRate || 24000);
+  kokoroOptions.volumeMultiplier = Number(options.volumeMultiplier || 1);
+  kokoroVoices.value = row?.defaultVoice ? [row.defaultVoice] : [];
+};
+
+const loadKokoroVoices = async () => {
+  if (!providerForm.value.id || providerForm.value.providerType !== 'KOKORO_LOCAL') return;
+  kokoroVoicesLoading.value = true;
+  try {
+    const response = await listSpeechProviderVoices(providerForm.value.id);
+    kokoroVoices.value = response.data || [];
+    if (!providerForm.value.defaultVoice && kokoroVoices.value.length > 0) {
+      providerForm.value.defaultVoice = kokoroVoices.value[0];
+    }
+  } finally {
+    kokoroVoicesLoading.value = false;
+  }
+};
+
 const setProductIdentity = (type: string) => {
   if (providerForm.value.id) {
     return;
@@ -770,6 +985,8 @@ const setProductIdentity = (type: string) => {
   const identity: Record<string, { code: string; name: string }> = {
     ALIYUN_DASHSCOPE: { code: 'ALIYUN_DASHSCOPE', name: '阿里云百炼' },
     ALIYUN_NLS: { code: 'ALIYUN_NLS', name: '阿里云 NLS' },
+    FUNASR: { code: 'FUNASR', name: 'FunASR 本地识别' },
+    KOKORO_LOCAL: { code: 'KOKORO_LOCAL', name: 'Kokoro 本地语音' },
     OPENAI_COMPATIBLE: { code: 'OPENAI_COMPATIBLE', name: 'OpenAI 兼容语音' },
     CUSTOM_HTTP: { code: 'CUSTOM_HTTP', name: '自定义语音服务' }
   };
@@ -788,6 +1005,13 @@ const handleProviderTypeChange = (type: string) => {
   simpleCredential.secret = '';
   simpleCredential.region = 'cn-shanghai';
   simpleCredential.workspaceId = '';
+  funAsrOptions.model = 'sensevoice';
+  kokoroOptions.model = 'kokoro';
+  kokoroOptions.speed = 1;
+  kokoroOptions.langCode = 'z';
+  kokoroOptions.sourceSampleRate = 24000;
+  kokoroOptions.volumeMultiplier = 1;
+  kokoroVoices.value = [];
   if (type === 'OPENAI_COMPATIBLE') {
     providerForm.value = {
       ...providerForm.value,
@@ -827,7 +1051,7 @@ const handleProviderTypeChange = (type: string) => {
       streamingTtsOptionsJson: '{"model":"qwen3-tts-flash-realtime","speech_rate":1.0,"volume":50}',
       recordingAsrEndpointUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
       streamingAsrEndpointUrl: '',
-      asrOptionsJson: '{"model":"qwen3-asr-flash","enable_itn":false}'
+      asrOptionsJson: '{"fileModel":"qwen3-asr-flash","realtimeModel":"qwen3-asr-flash-realtime"}'
     };
   }
   if (type === 'ALIYUN_NLS') {
@@ -845,6 +1069,59 @@ const handleProviderTypeChange = (type: string) => {
       recordingAsrEndpointUrl: 'wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1',
       streamingAsrEndpointUrl: 'wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1',
       asrOptionsJson: '{}'
+    };
+  }
+  if (type === 'FUNASR') {
+    providerForm.value = {
+      ...providerForm.value,
+      authType: 'NONE',
+      authHeaderName: '',
+      ttsEnabled: false,
+      streamingTtsEnabled: false,
+      recordingAsrEnabled: true,
+      streamingAsrEnabled: false,
+      defaultTts: false,
+      defaultStreamingTts: false,
+      defaultRecordingAsr: false,
+      defaultStreamingAsr: false,
+      endpointUrl: '',
+      streamingTtsEndpointUrl: '',
+      streamingTtsOptionsJson: '',
+      recordingAsrEndpointUrl: 'http://127.0.0.1:8000/v1/audio/transcriptions',
+      streamingAsrEndpointUrl: '',
+      asrLanguage: 'zh-CN',
+      asrFormat: 'wav',
+      asrSampleRate: 16000,
+      asrEnablePunctuation: true,
+      asrEnableItn: true,
+      asrEnableIntermediateResult: false,
+      asrOptionsJson: '{"model":"sensevoice","audioFs":16000}',
+      timeoutSeconds: 60,
+      remark: ''
+    };
+  }
+  if (type === 'KOKORO_LOCAL') {
+    providerForm.value = {
+      ...providerForm.value,
+      authType: 'NONE',
+      authHeaderName: '',
+      ttsEnabled: true,
+      streamingTtsEnabled: true,
+      recordingAsrEnabled: false,
+      streamingAsrEnabled: false,
+      defaultRecordingAsr: false,
+      defaultStreamingAsr: false,
+      endpointUrl: 'http://127.0.0.1:8880',
+      httpMethod: 'POST',
+      defaultVoice: 'zf_001',
+      defaultFormat: 'wav',
+      defaultSampleRate: 8000,
+      streamingTtsEndpointUrl: '',
+      streamingTtsOptionsJson: '',
+      recordingAsrEndpointUrl: '',
+      streamingAsrEndpointUrl: '',
+      timeoutSeconds: 60,
+      remark: '{"model":"kokoro","speed":1,"langCode":"z","sourceSampleRate":24000,"volumeMultiplier":1}'
     };
   }
   if (type === 'CUSTOM_HTTP') {
@@ -892,6 +1169,42 @@ const applySimpleCredential = () => {
       delete config.workspaceId;
       delete config.workspace_id;
     }
+  } else if (type === 'FUNASR') {
+    const endpoint = providerForm.value.recordingAsrEndpointUrl?.trim() || '';
+    if (!endpoint) {
+      throw new Error('请输入 FunASR HTTP 地址');
+    }
+    if (!/^https?:\/\//i.test(endpoint)) {
+      throw new Error('FunASR 地址必须以 http:// 或 https:// 开头');
+    }
+    if (providerForm.value.authType !== 'NONE' && !editingAuthConfigured.value && !simpleCredential.secret.trim()) {
+      throw new Error('请输入 FunASR 访问密钥');
+    }
+    providerForm.value.recordingAsrEndpointUrl = endpoint;
+    providerForm.value.asrOptionsJson = JSON.stringify({
+      model: funAsrOptions.model.trim() || 'sensevoice',
+      audioFs: providerForm.value.asrSampleRate || 16000
+    });
+  } else if (type === 'KOKORO_LOCAL') {
+    const endpoint = providerForm.value.endpointUrl?.trim() || '';
+    if (!endpoint) {
+      throw new Error('请输入 Kokoro 服务地址');
+    }
+    if (!/^https?:\/\//i.test(endpoint)) {
+      throw new Error('Kokoro 服务地址必须以 http:// 或 https:// 开头');
+    }
+    if (!providerForm.value.defaultVoice?.trim()) {
+      throw new Error('请选择或输入 Kokoro 默认音色');
+    }
+    if (providerForm.value.authType !== 'NONE' && !editingAuthConfigured.value && !simpleCredential.secret.trim()) {
+      throw new Error('请输入 Kokoro 访问密钥');
+    }
+    providerForm.value.endpointUrl = endpoint;
+    config.model = kokoroOptions.model.trim() || 'kokoro';
+    config.speed = kokoroOptions.speed;
+    config.langCode = kokoroOptions.langCode.trim() || 'z';
+    config.sourceSampleRate = kokoroOptions.sourceSampleRate || 24000;
+    config.volumeMultiplier = kokoroOptions.volumeMultiplier;
   } else if (providerForm.value.authType !== 'NONE' && !editingAuthConfigured.value && !simpleCredential.secret.trim()) {
     throw new Error('请输入 API Key');
   }
@@ -1088,6 +1401,11 @@ onMounted(reloadAll);
 .capability-card p {
   min-height: 38px;
   margin: 6px 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.field-hint {
+  margin-left: 8px;
   color: var(--el-text-color-secondary);
   font-size: 12px;
 }

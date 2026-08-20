@@ -21,7 +21,7 @@
       </span>
       <div>
         <strong>{{ incomingCall ? incomingNumber : callActive ? dialNumber : currentAgent.agentName || '坐席电话' }}</strong>
-        <small>{{ incomingCall ? '来电振铃中' : callActive ? `通话中 · ${callDuration}` : agentSummary }}</small>
+        <small>{{ incomingCall ? '来电振铃中' : callActive ? `${callPhaseLabel} · ${callDuration}` : agentSummary }}</small>
       </div>
       <i :class="statusClass"></i>
     </button>
@@ -114,7 +114,7 @@
           <span class="call-pulse"
             ><el-icon><PhoneFilled /></el-icon
           ></span>
-          <small>{{ callHeld ? '通话已保持' : callMuted ? '坐席已静音' : '软电话正在呼叫' }}</small>
+          <small>{{ callMuted ? '坐席已静音' : callPhaseLabel }}</small>
           <strong>{{ dialNumber }}</strong>
           <span v-if="activeNumberLocation" class="number-location">{{ activeNumberLocation }}</span>
           <span>{{ callDuration }}<em v-if="callHeld"> · 已保持</em><em v-if="callMuted"> · 已静音</em></span>
@@ -220,7 +220,7 @@ import {
   signInCurrentAgent,
   signOutCurrentAgent
 } from '@/api/callcenter/agent';
-import { AgentPresenceStatus, CurrentAgentVO } from '@/api/callcenter/agent/types';
+import type { AgentCallOperation, AgentCallPhase, AgentPresenceStatus, CurrentAgentVO } from '@/api/callcenter/agent/types';
 import {
   cancelConsultTransfer,
   completeConsultTransfer,
@@ -245,6 +245,7 @@ import DynamicBusinessFormDialog from './DynamicBusinessFormDialog.vue';
 import { useAgentDialBus, type AgentDialRequest } from '@/composables/useAgentDial';
 import { listIvrFlows } from '@/api/callcenter/ivr-flow';
 import type { IvrFlowVO } from '@/api/callcenter/ivr-flow/types';
+import { idleAgentCallState, reduceAgentCallState, type AgentCallState, type AgentCallTransition } from './agentCallState';
 
 type AgentStatus = 'idle' | 'busy' | 'afterCall';
 type StatusCommand = AgentStatus | 'signIn' | 'signOut';
@@ -300,6 +301,8 @@ const incomingLocation = ref('');
 const activeNumberLocation = ref('');
 const activeCallId = ref('');
 const callConnected = ref(false);
+const callState = ref<AgentCallState>(idleAgentCallState());
+const callPhase = computed(() => callState.value.phase);
 const outboundDestination = ref('');
 const callSeconds = ref(0);
 const customerDialogVisible = ref(false);
@@ -411,6 +414,50 @@ const callDuration = computed(() => {
   return `${minutes}:${seconds}`;
 });
 
+const callPhaseLabels: Record<AgentCallPhase, string> = {
+  IDLE: '空闲',
+  INCOMING_RINGING: '来电振铃中',
+  OUTBOUND_DIALING: '正在呼叫',
+  CONNECTED: '通话中',
+  HELD: '通话已保持',
+  ENDING: '正在结束',
+  ENDED: '已结束'
+};
+const callPhaseLabel = computed(() => callPhaseLabels[callPhase.value]);
+const validCallPhases = new Set<AgentCallPhase>(Object.keys(callPhaseLabels) as AgentCallPhase[]);
+const validCallOperations = new Set<AgentCallOperation>(['NONE', 'TRANSFERRING_IVR', 'CONSULTING', 'CONFERENCE', 'BLIND_TRANSFERRING']);
+
+const normalizeCallPhase = (value: unknown, fallback: AgentCallPhase): AgentCallPhase => {
+  const phase = String(value || '') as AgentCallPhase;
+  return validCallPhases.has(phase) ? phase : fallback;
+};
+
+const normalizeCallOperation = (value: unknown): AgentCallOperation => {
+  const operation = String(value || '') as AgentCallOperation;
+  return validCallOperations.has(operation) ? operation : 'NONE';
+};
+
+const commitCallTransition = (transition: AgentCallTransition) => {
+  const next = reduceAgentCallState(callState.value, transition);
+  if (next === callState.value) return false;
+  callState.value = next;
+  incomingCall.value = next.phase === 'INCOMING_RINGING';
+  callActive.value = next.phase === 'OUTBOUND_DIALING' || next.phase === 'CONNECTED' || next.phase === 'HELD' || next.phase === 'ENDING';
+  callConnected.value = next.phase === 'CONNECTED' || next.phase === 'HELD';
+  callHeld.value = next.phase === 'HELD';
+  return true;
+};
+
+const commitEventCallState = (event: Record<string, unknown>, fallback: AgentCallPhase) => {
+  return commitCallTransition({
+    phase: normalizeCallPhase(event.callPhase, fallback),
+    operation: normalizeCallOperation(event.callOperation),
+    businessCallId: String(event.businessCallId || event.callId || ''),
+    agentLegUuid: String(event.agentLegUuid || event.legUuid || ''),
+    version: Number(event.stateVersion || 0)
+  });
+};
+
 const applyCurrentAgent = (agent: CurrentAgentVO) => {
   const wasActive = callActive.value;
   currentAgent.value = agent;
@@ -431,13 +478,19 @@ const applyCurrentAgent = (agent: CurrentAgentVO) => {
     if (Date.now() < suppressActiveCallUntil || (activeCallEndedAt && Date.now() - activeCallEndedAt < 8000)) {
       return;
     }
+    const accepted = commitCallTransition({
+      phase: normalizeCallPhase(agent.activeCallPhase, 'CONNECTED'),
+      operation: normalizeCallOperation(agent.activeCallOperation),
+      businessCallId: agent.activeCallId,
+      agentLegUuid: agent.activeAgentLegUuid,
+      version: Number(agent.activeCallStateVersion || 0)
+    });
+    if (!accepted && callState.value.businessCallId && callState.value.businessCallId !== agent.activeCallId) return;
     incomingCall.value = false;
     stopRingTone();
     activeCallId.value = agent.activeCallId;
     dialNumber.value = agent.activeCallNumber || dialNumber.value;
     agentStatus.value = 'busy';
-    callActive.value = true;
-    callConnected.value = true;
     if (!wasActive) panelOpen.value = true;
     startCallTimer();
     nextTick(constrainPosition);
@@ -511,23 +564,33 @@ const performWebRtcRegistration = async (remoteAudio: HTMLAudioElement) => {
         panelOpen.value = true;
         startWebRtcFirstLegTimeout();
         if (webRtcOutboundFirstLegPending) {
-          incomingCall.value = false;
+          commitCallTransition({
+            phase: 'OUTBOUND_DIALING',
+            businessCallId: activeCallId.value,
+            agentLegUuid: callState.value.agentLegUuid
+          });
           stopRingTone();
           void answerWebRtcOutboundFirstLeg();
           return;
         }
-        incomingCall.value = true;
+        commitCallTransition({
+          phase: 'INCOMING_RINGING',
+          businessCallId: activeCallId.value,
+          agentLegUuid: callState.value.agentLegUuid
+        });
         startRingTone();
         nextTick(constrainPosition);
       },
       onAnswered: () => {
         webRtcOutboundFirstLegPending = false;
         webRtcIncoming.value = false;
-        incomingCall.value = false;
         stopWebRtcFirstLegWaiting();
         stopRingTone();
-        callActive.value = true;
-        callConnected.value = true;
+        commitCallTransition({
+          phase: 'CONNECTED',
+          businessCallId: activeCallId.value,
+          agentLegUuid: callState.value.agentLegUuid
+        });
         agentStatus.value = 'busy';
         startCallTimer();
       },
@@ -541,6 +604,11 @@ const performWebRtcRegistration = async (remoteAudio: HTMLAudioElement) => {
       },
       onHold: (held) => {
         callHeld.value = held;
+        commitCallTransition({
+          phase: held ? 'HELD' : 'CONNECTED',
+          businessCallId: activeCallId.value,
+          agentLegUuid: callState.value.agentLegUuid
+        });
       },
       onRegistered: () => {
         webRtcRegistered.value = true;
@@ -693,12 +761,16 @@ const makeCall = async () => {
     }
     const response = await originateCall({ destination: dialNumber.value });
     activeCallId.value = response.data.callId;
+    commitCallTransition({
+      phase: 'OUTBOUND_DIALING',
+      businessCallId: response.data.businessCallId || response.data.callId,
+      agentLegUuid: callState.value.agentLegUuid
+    });
     resetCallControls();
     const current = await getCurrentAgent();
     if (webRtcPhoneEnabled.value) {
       ElMessage.success('外呼命令已发送，浏览器软电话正在自动接通');
     } else {
-      callActive.value = true;
       startCallTimer();
       applyCurrentAgent(current.data);
       ElMessage.success('外呼命令已发送，请在软电话接听');
@@ -716,7 +788,11 @@ const answerWebRtcOutboundFirstLeg = async () => {
     await webRtcPhone.answer();
   } catch (error) {
     webRtcOutboundFirstLegPending = false;
-    incomingCall.value = true;
+    commitCallTransition({
+      phase: 'INCOMING_RINGING',
+      businessCallId: activeCallId.value,
+      agentLegUuid: callState.value.agentLegUuid
+    });
     startRingTone();
     nextTick(constrainPosition);
     console.error('[WebRTC] 自动接听外呼第一腿失败', error);
@@ -787,10 +863,22 @@ const toggleHold = async () => {
     if (callHeld.value) {
       await unholdCall(activeCallId.value);
       callHeld.value = false;
+      commitCallTransition({
+        phase: 'CONNECTED',
+        operation: callState.value.operation,
+        businessCallId: activeCallId.value,
+        agentLegUuid: callState.value.agentLegUuid
+      });
       ElMessage.success('通话已恢复');
     } else {
       await holdCall(activeCallId.value);
       callHeld.value = true;
+      commitCallTransition({
+        phase: 'HELD',
+        operation: callState.value.operation,
+        businessCallId: activeCallId.value,
+        agentLegUuid: callState.value.agentLegUuid
+      });
       ElMessage.success('通话已保持');
     }
   } finally {
@@ -917,6 +1005,12 @@ const startConsult = async () => {
     consultCallId.value = response.data.callId;
     consultActive.value = true;
     callHeld.value = true;
+    commitCallTransition({
+      phase: 'HELD',
+      operation: 'CONSULTING',
+      businessCallId: activeCallId.value,
+      agentLegUuid: callState.value.agentLegUuid
+    });
     transferPanelOpen.value = false;
     ElMessage.success('客户通话已保持，正在呼叫咨询目标分机');
   } finally {
@@ -934,6 +1028,12 @@ const cancelConsult = async () => {
     consultPanelOpen.value = false;
     consultTarget.value = '';
     callHeld.value = false;
+    commitCallTransition({
+      phase: 'CONNECTED',
+      operation: 'NONE',
+      businessCallId: activeCallId.value,
+      agentLegUuid: callState.value.agentLegUuid
+    });
     ElMessage.success('咨询已取消，客户通话已恢复');
   } finally {
     callActionLoading.value = false;
@@ -1226,15 +1326,13 @@ const stopRingTone = () => {
 
 const showIncomingCall = (event: Record<string, unknown>) => {
   if (Date.now() < suppressIncomingCallUntil) return;
+  if (!commitEventCallState(event, 'INCOMING_RINGING')) return;
   const eventCallId = String(event.businessCallId || event.callId || '');
   const callerNumber = String(event.callerNumber || '');
   if (eventCallId) activeCallId.value = eventCallId;
   incomingNumber.value = callerNumber || '未知号码';
   incomingLocation.value = buildNumberLocation(event);
   dialNumber.value = incomingNumber.value;
-  incomingCall.value = true;
-  callActive.value = false;
-  callConnected.value = false;
   resetCallControls();
   stopCallTimer();
   panelOpen.value = true;
@@ -1245,7 +1343,7 @@ const showIncomingCall = (event: Record<string, unknown>) => {
 const isSourceConsultLegEvent = (eventCallId: string, callerNumber: string) =>
   consultActive.value && eventCallId === consultCallId.value && isCurrentAgentIdentity(callerNumber);
 
-const showActiveCall = (event: Record<string, unknown>) => {
+const showActiveCall = (event: Record<string, unknown>, fallbackPhase: AgentCallPhase = 'CONNECTED') => {
   if (isWebRtcLocalIdle()) return;
   const eventCallId = String(event.businessCallId || event.callId || '');
   const eventLegUuid = String(event.legUuid || event.callId || '');
@@ -1253,13 +1351,12 @@ const showActiveCall = (event: Record<string, unknown>) => {
   const calledNumber = String(event.calledNumber || '');
   if (eventCallId && recentlyEndedCallIds.has(eventCallId)) return;
   if (isSourceConsultLegEvent(eventLegUuid, callerNumber)) return;
+  if (!commitEventCallState(event, fallbackPhase)) return;
   if (eventCallId) activeCallId.value = eventCallId;
   const peerNumber = isCurrentAgentIdentity(callerNumber) ? outboundDestination.value || calledNumber : callerNumber;
   dialNumber.value = peerNumber;
   activeNumberLocation.value = isCurrentAgentIdentity(callerNumber) ? '' : buildNumberLocation(event);
-  incomingCall.value = false;
   stopRingTone();
-  callActive.value = true;
   panelOpen.value = true;
   startCallTimer();
   nextTick(constrainPosition);
@@ -1293,6 +1390,7 @@ const handleCallEvent = (event: Record<string, unknown>) => {
       ? relatedToCurrentAgent && (eventCallId === activeCallId.value || matchedCurrentLeg)
       : relatedToCurrentAgent;
     if (!relatedToCurrentCall) return;
+    if (!commitEventCallState(event, 'ENDED')) return;
     markCallEnded(eventCallId || activeCallId.value);
     clearActiveCallState();
     void loadCurrentAgent();
@@ -1300,17 +1398,16 @@ const handleCallEvent = (event: Record<string, unknown>) => {
   }
   if (!relatedToCurrentAgent) return;
   if (type === 'CALL_HOLD') {
-    callHeld.value = true;
+    if (commitEventCallState(event, 'HELD')) callHeld.value = true;
     return;
   }
   if (type === 'CALL_UNHOLD') {
-    callHeld.value = false;
+    if (commitEventCallState(event, 'CONNECTED')) callHeld.value = false;
     return;
   }
   if (type === 'CALL_ANSWER' || type === 'CALL_BRIDGE') {
     if (isSourceConsultLegEvent(eventLegUuid, callerNumber)) return;
-    callConnected.value = true;
-    showActiveCall(event);
+    showActiveCall(event, 'CONNECTED');
     return;
   }
   if (type === 'CALL_CREATE' || type === 'CALL_PROGRESS' || type === 'CALL_PROGRESS_MEDIA') {
@@ -1323,12 +1420,13 @@ const handleCallEvent = (event: Record<string, unknown>) => {
     if (isIncomingToCurrentAgent) {
       showIncomingCall(event);
     } else {
-      showActiveCall(event);
+      showActiveCall(event, 'OUTBOUND_DIALING');
     }
   }
 };
 
 const clearActiveCallState = () => {
+  callState.value = idleAgentCallState();
   incomingCall.value = false;
   incomingNumber.value = '';
   incomingLocation.value = '';

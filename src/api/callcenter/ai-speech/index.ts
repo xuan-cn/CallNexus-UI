@@ -28,6 +28,9 @@ export const deleteSpeechProvider = (id: string | number) => request({ url: `/ap
 export const testTtsProvider = (id: string | number, data: TtsTestForm): AxiosPromise<TtsTestVO> =>
   request({ url: `/api/v1/ai/speech-providers/${id}/test`, method: 'post', data });
 
+export const listSpeechProviderVoices = (id: string | number): AxiosPromise<string[]> =>
+  request({ url: `/api/v1/ai/speech-providers/${id}/voices`, method: 'get' });
+
 export const testAsrProvider = (id: string | number, data: FormData): AxiosPromise<AsrTestVO> =>
   request({
     url: `/api/v1/ai/speech-providers/${id}/asr/test`,

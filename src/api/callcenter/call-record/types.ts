@@ -82,6 +82,7 @@ export interface CallEventVO {
   eventType: string;
   fromTarget?: string;
   toTarget?: string;
+  description?: string;
   occurredAt: string;
 }
 
