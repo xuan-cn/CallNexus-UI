@@ -74,6 +74,15 @@
           <span class="soft-tag agent" :title="currentAgent.agentName || currentAgent.agentCode">
             {{ currentAgent.agentCode || currentAgent.agentName || '坐席' }}
           </span>
+          <button
+            v-if="incomingCall || callActive"
+            type="button"
+            class="soft-screen-pop"
+            title="来电弹屏"
+            @click="openScreenPop"
+          >
+            弹屏
+          </button>
           <button type="button" class="soft-more" :class="{ active: panelOpen }" title="更多功能" @click="togglePanel">
             <el-icon><Operation /></el-icon>
           </button>
@@ -116,6 +125,7 @@
           <span>等待接听</span>
         </div>
         <div class="call-actions">
+          <button type="button" @click="openScreenPop">来电弹屏</button>
           <button v-hasPermi="['callcenter:customer:create']" type="button" @click="createCustomer">
             <el-icon><User /></el-icon>新建客户
           </button>
@@ -221,6 +231,7 @@
           </template>
         </div>
         <div class="call-actions">
+          <button type="button" @click="openScreenPop">来电弹屏</button>
           <button v-hasPermi="['callcenter:customer:create']" type="button" @click="createCustomer">
             <el-icon><User /></el-icon>新建客户
           </button>
@@ -237,6 +248,17 @@
     <dynamic-business-form-dialog v-model="customerDialogVisible" business-type="CUSTOMER" :phone-number="dialNumber" :call-id="activeCallId" />
     <dynamic-business-form-dialog v-model="ticketDialogVisible" business-type="TICKET" :phone-number="dialNumber" :call-id="activeCallId" />
     <CallCenterBusinessDetail v-model="matchedCustomerDetailVisible" business-type="CUSTOMER" :business-id="matchedCustomer?.id" />
+    <IncomingCallScreenPop
+      v-model="screenPopVisible"
+      :phone-number="incomingCall ? incomingNumber : dialNumber"
+      :call-id="activeCallId"
+      :number-location="incomingCall ? incomingLocation : activeNumberLocation"
+      :call-status-text="softbarStatusText"
+      :duration-text="softTimerText"
+      :incoming="incomingCall"
+      :active="callActive"
+      @saved="void lookupMatchedCustomer()"
+    />
     <CallConferenceDrawer
       v-model="conferenceDrawerOpen"
       :call-id="activeCallId"
@@ -279,6 +301,7 @@ import { subscribeCallEvents } from '@/utils/websocket';
 import { webRtcPhone } from '@/utils/webrtcPhone';
 import { CustomerVO, getCustomerByPhone } from '@/api/callcenter/customer';
 import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/index.vue';
+import IncomingCallScreenPop from '@/components/IncomingCallScreenPop/index.vue';
 import CallConferenceDrawer from './CallConferenceDrawer.vue';
 import DynamicBusinessFormDialog from './DynamicBusinessFormDialog.vue';
 import { useAgentDialBus, type AgentDialRequest } from '@/composables/useAgentDial';
@@ -343,6 +366,7 @@ const outboundDestination = ref('');
 const callSeconds = ref(0);
 const customerDialogVisible = ref(false);
 const ticketDialogVisible = ref(false);
+const screenPopVisible = ref(false);
 const matchedCustomer = ref<CustomerVO>();
 const matchedCustomerDetailVisible = ref(false);
 const webRtcRegistered = ref(false);
@@ -530,7 +554,7 @@ const applyCurrentAgent = (agent: CurrentAgentVO) => {
     agentStatus.value = 'busy';
     callActive.value = true;
     callConnected.value = true;
-    if (!wasActive) panelOpen.value = true;
+    if (!wasActive && webRtcPhoneEnabled.value) panelOpen.value = true;
     startCallTimer();
     nextTick(constrainPosition);
   } else if (callActive.value && !webRtcPhone.hasActiveCall()) {
@@ -610,6 +634,7 @@ const performWebRtcRegistration = async (remoteAudio: HTMLAudioElement) => {
         }
         incomingCall.value = true;
         startRingTone();
+        openScreenPop();
         nextTick(constrainPosition);
       },
       onAnswered: () => {
@@ -1121,6 +1146,27 @@ const createTicket = () => {
   ticketDialogVisible.value = true;
 };
 
+const openScreenPop = () => {
+  screenPopVisible.value = true;
+};
+
+const simulateIncomingCall = () => {
+  if (callActive.value || incomingCall.value) {
+    openScreenPop();
+    return;
+  }
+  const mockNumber = `138${Math.floor(Math.random() * 100000000)
+    .toString()
+    .padStart(8, '0')}`;
+  showIncomingCall({
+    businessCallId: `sim-${Date.now()}`,
+    callerNumber: mockNumber,
+    callerProvince: '模拟',
+    callerCity: '来电'
+  });
+  ElMessage.info(`模拟来电：${mockNumber}`);
+};
+
 const handleTriggerClick = () => {
   if (suppressTriggerClick) return;
   void unlockRingAudio();
@@ -1291,8 +1337,12 @@ const showIncomingCall = (event: Record<string, unknown>) => {
   callConnected.value = false;
   resetCallControls();
   stopCallTimer();
-  panelOpen.value = true;
+  // 外置软电话：只顶栏状态 + 自动弹屏，不强制展开软电话面板
+  if (webRtcIncoming.value) {
+    panelOpen.value = true;
+  }
   startRingTone();
+  openScreenPop();
   nextTick(constrainPosition);
 };
 
@@ -1314,7 +1364,7 @@ const showActiveCall = (event: Record<string, unknown>) => {
   incomingCall.value = false;
   stopRingTone();
   callActive.value = true;
-  panelOpen.value = true;
+  // 通话中保留顶栏操作即可；面板已开则不动，未开不强制弹出
   startCallTimer();
   nextTick(constrainPosition);
 };
@@ -1482,7 +1532,10 @@ watch(incomingCall, (incoming) => {
     return;
   }
   revealDockedPhone();
-  panelOpen.value = true;
+  // 仅 WebRTC 待接听时自动展开面板；外置软电话靠顶栏 + 弹屏
+  if (webRtcIncoming.value) {
+    panelOpen.value = true;
+  }
   nextTick(constrainPosition);
 });
 
@@ -1507,6 +1560,11 @@ onBeforeUnmount(() => {
   clearDockedPhoneHideTimer();
   document.removeEventListener('pointerdown', handleDocumentPointerDown, true);
   window.removeEventListener('pointermove', handleDrag);
+});
+
+defineExpose({
+  simulateIncomingCall,
+  openScreenPop
 });
 </script>
 
@@ -1816,6 +1874,29 @@ button {
   border-radius: 6px;
   background: #fff;
   transition: all 0.2s ease;
+}
+
+.soft-screen-pop {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  padding: 0 10px;
+  color: #245dcc;
+  cursor: pointer;
+  border: 1px solid #c5d8ff;
+  border-radius: 6px;
+  background: #eef4ff;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.soft-screen-pop:hover {
+  color: #1d4faf;
+  border-color: #9fc0ff;
+  background: #e3edff;
 }
 
 .soft-more:hover,

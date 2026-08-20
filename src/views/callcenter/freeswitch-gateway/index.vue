@@ -33,7 +33,7 @@
 
     <el-card shadow="hover">
       <template #header>
-        <el-button v-hasPermi="['callcenter:freeswitch-gateway:create']" type="primary" plain icon="Plus" @click="handleAdd">新增网关</el-button>
+        <el-button v-hasPermi="['callcenter:freeswitch-gateway:create']" type="primary" plain icon="Plus" @click="handleAdd">新增线路</el-button>
       </template>
       <el-table v-loading="loading" :data="gatewayList">
         <el-table-column label="网关编码" prop="gatewayCode" min-width="130" />
@@ -440,14 +440,14 @@ const reset = () => {
 const handleAdd = () => {
   reset();
   if (!form.value.nodeId && nodeOptions.value.length === 1) form.value.nodeId = nodeOptions.value[0].id;
-  dialog.title = '新增 FreeSWITCH 网关';
+  dialog.title = '新增线路';
   dialog.visible = true;
 };
 const handleUpdate = async (row: FreeSwitchGatewayVO) => {
   reset();
   const res = await getFreeSwitchGateway(row.id);
   Object.assign(form.value, res.data, { password: '' });
-  dialog.title = '修改网关';
+  dialog.title = '修改线路';
   dialog.visible = true;
 };
 const submitForm = () => {
@@ -466,7 +466,7 @@ const submitForm = () => {
   });
 };
 const handleDelete = async (row: FreeSwitchGatewayVO) => {
-  await proxy?.$modal.confirm(`确认删除网关 ${row.gatewayName} 吗？`);
+  await proxy?.$modal.confirm(`确认删除线路 ${row.gatewayName} 吗？`);
   await deleteFreeSwitchGateway(row.id);
   proxy?.$modal.msgSuccess('删除成功');
   await getList();
