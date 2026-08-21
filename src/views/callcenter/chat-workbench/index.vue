@@ -2,21 +2,33 @@
   <div class="chat-workbench">
     <aside class="conversation-panel">
       <div class="panel-heading">
-        <div>
+        <div class="panel-heading-copy">
           <h2>在线会话</h2>
-          <span>{{ total }} 个会话</span>
+          <span class="panel-count">{{ total }} 个会话</span>
         </div>
-        <el-button circle plain :icon="Refresh" :loading="loading" @click="refreshAll()" />
+        <el-button class="refresh-btn" circle plain :icon="Refresh" :loading="loading" @click="refreshAll()" />
       </div>
 
-      <el-segmented
-        v-model="query.status"
-        class="conversation-status-tabs"
-        :options="statusOptions"
-        @change="handleStatusChange"
-      />
+      <div class="status-chips" role="tablist">
+        <button
+          v-for="option in statusOptions"
+          :key="option.value"
+          type="button"
+          class="status-chip"
+          :class="{ active: query.status === option.value }"
+          @click="switchStatus(option.value)"
+        >
+          {{ option.label }}
+        </button>
+      </div>
 
-      <el-input v-model="query.keyword" class="conversation-search" clearable placeholder="搜索访客、电话或会话编号" @keyup.enter="refreshAll">
+      <el-input
+        v-model="query.keyword"
+        class="conversation-search"
+        clearable
+        placeholder="搜索访客、电话或会话编号"
+        @keyup.enter="refreshAll"
+      >
         <template #prefix>
           <el-icon><Search /></el-icon>
         </template>
@@ -31,17 +43,25 @@
           :class="{ active: String(selectedId) === String(item.id) }"
           @click="selectConversation(item)"
         >
-          <span class="visitor-avatar">{{ avatarText(item.visitorName) }}</span>
-          <span class="conversation-summary">
-            <strong>{{ item.visitorName || '访客' }}</strong>
-            <small>{{ item.channelName || item.conversationNo }}</small>
+          <span class="visitor-avatar" :data-tone="avatarTone(item.visitorName)">
+            {{ avatarText(item.visitorName) }}
+            <i v-if="item.unreadAgentCount" class="unread-dot" />
           </span>
-          <span class="conversation-meta">
-            <el-badge v-if="item.unreadAgentCount" :value="item.unreadAgentCount" />
-            <small>{{ timeOnly(item.lastMessageAt || item.queuedAt) }}</small>
+          <span class="conversation-body">
+            <span class="conversation-top">
+              <strong>{{ item.visitorName || '访客' }}</strong>
+              <small>{{ timeOnly(item.lastMessageAt || item.queuedAt) }}</small>
+            </span>
+            <span class="conversation-bottom">
+              <em>{{ item.channelName || '未命名渠道' }}</em>
+              <span class="mini-status" :data-status="item.status">{{ statusLabel(item.status) }}</span>
+            </span>
           </span>
         </button>
-        <el-empty v-if="!loading && !rows.length" description="暂无会话" :image-size="64" />
+        <div v-if="!loading && !rows.length" class="list-empty">
+          <div class="list-empty-icon">◎</div>
+          <p>当前筛选下暂无会话</p>
+        </div>
       </div>
 
       <pagination
@@ -61,12 +81,23 @@
     <main class="dialog-panel">
       <template v-if="detail">
         <header class="dialog-heading">
-          <div class="dialog-heading-copy">
-            <div class="dialog-title-row">
-              <h2>{{ detail.conversation.visitorName || '访客' }}</h2>
-              <el-tag size="small" effect="light" round>{{ statusLabel(detail.conversation.status) }}</el-tag>
+          <div class="dialog-identity">
+            <span class="dialog-avatar" :data-tone="avatarTone(detail.conversation.visitorName)">
+              {{ avatarText(detail.conversation.visitorName) }}
+            </span>
+            <div class="dialog-heading-copy">
+              <div class="dialog-title-row">
+                <h2>{{ detail.conversation.visitorName || '访客' }}</h2>
+                <span class="status-pill" :data-status="detail.conversation.status">
+                  {{ statusLabel(detail.conversation.status) }}
+                </span>
+              </div>
+              <div class="dialog-sub">
+                <span>{{ detail.conversation.channelName || '未命名渠道' }}</span>
+                <span class="dot">·</span>
+                <span class="conversation-no">{{ detail.conversation.conversationNo }}</span>
+              </div>
             </div>
-            <span>{{ detail.conversation.conversationNo }}</span>
           </div>
           <div class="dialog-actions">
             <el-button
@@ -90,7 +121,13 @@
         </header>
 
         <section ref="messageScroller" class="message-list" @click="handleMessageClick">
-          <div v-for="message in detail.messages" :key="message.id" class="message-row" :class="message.senderType.toLowerCase()">
+          <div
+            v-for="(message, index) in detail.messages"
+            :key="message.id"
+            class="message-row"
+            :class="message.senderType.toLowerCase()"
+            :style="{ animationDelay: `${Math.min(index, 8) * 28}ms` }"
+          >
             <div v-if="message.senderType === 'SYSTEM'" class="system-message">{{ message.content }}</div>
             <template v-else>
               <div class="message-author">{{ senderName(message) }}</div>
@@ -112,49 +149,85 @@
             @keydown.ctrl.enter.prevent="send"
           />
           <div class="composer-footer">
-            <span>消息将保存到完整会话记录</span>
+            <span>消息将写入完整会话记录</span>
             <el-button type="primary" :disabled="!draft.trim()" :loading="sending" @click="send">发送</el-button>
           </div>
         </footer>
         <footer v-else class="message-composer readonly-composer">
-          {{ composerHint }}
+          <span class="readonly-hint">{{ composerHint }}</span>
         </footer>
       </template>
 
       <div v-else class="dialog-empty">
-        <el-empty description="从左侧选择一个会话开始处理" :image-size="96" />
+        <div class="dialog-empty-card">
+          <div class="dialog-empty-icon" aria-hidden="true">
+            <el-icon :size="28"><ChatDotRound /></el-icon>
+          </div>
+          <h3>选择左侧会话开始接待</h3>
+          <p>待处理、排队中的访客会出现在左侧列表</p>
+        </div>
       </div>
     </main>
 
     <aside v-if="detail" class="visitor-panel">
-      <div class="visitor-panel-head">
-        <h3>访客信息</h3>
-        <small>接待侧栏</small>
+      <div class="visitor-hero">
+        <span class="visitor-hero-avatar" :data-tone="avatarTone(detail.conversation.visitorName)">
+          {{ avatarText(detail.conversation.visitorName) }}
+        </span>
+        <div>
+          <h3>{{ detail.conversation.visitorName || '访客' }}</h3>
+          <span class="status-pill" :data-status="detail.conversation.status">
+            {{ statusLabel(detail.conversation.status) }}
+          </span>
+        </div>
       </div>
+
       <div class="visitor-card">
+        <div class="visitor-card-title">联系信息</div>
         <dl>
-          <div><dt>访客名称</dt><dd>{{ detail.conversation.visitorName || '-' }}</dd></div>
-          <div><dt>联系电话</dt><dd>{{ detail.conversation.phone || '-' }}</dd></div>
-          <div><dt>邮箱</dt><dd>{{ detail.conversation.email || '-' }}</dd></div>
-          <div><dt>接入渠道</dt><dd>{{ detail.conversation.channelName || '-' }}</dd></div>
-          <div><dt>排队时间</dt><dd>{{ detail.conversation.queuedAt || '-' }}</dd></div>
-          <div><dt>接待客服</dt><dd>{{ detail.conversation.assignedUserName || '尚未领取' }}</dd></div>
+          <div>
+            <dt>联系电话</dt>
+            <dd>{{ detail.conversation.phone || '未提供' }}</dd>
+          </div>
+          <div>
+            <dt>邮箱</dt>
+            <dd>{{ detail.conversation.email || '未提供' }}</dd>
+          </div>
+          <div>
+            <dt>接入渠道</dt>
+            <dd>{{ detail.conversation.channelName || '-' }}</dd>
+          </div>
         </dl>
       </div>
-      <el-alert
-        title="客户、工单联动"
-        description="第一阶段保留关联字段，下一阶段从这里识别或新建客户、创建工单。"
-        type="info"
-        :closable="false"
-        show-icon
-      />
+
+      <div class="visitor-card">
+        <div class="visitor-card-title">接待进度</div>
+        <dl>
+          <div>
+            <dt>排队时间</dt>
+            <dd>{{ formatDateTime(detail.conversation.queuedAt) }}</dd>
+          </div>
+          <div>
+            <dt>接待客服</dt>
+            <dd>{{ detail.conversation.assignedUserName || '尚未领取' }}</dd>
+          </div>
+          <div>
+            <dt>关联客户</dt>
+            <dd>{{ detail.conversation.customerId ? `客户 #${detail.conversation.customerId}` : '未关联' }}</dd>
+          </div>
+          <div>
+            <dt>关联工单</dt>
+            <dd>{{ detail.conversation.ticketId ? `工单 #${detail.conversation.ticketId}` : '未关联' }}</dd>
+          </div>
+        </dl>
+      </div>
     </aside>
   </div>
 </template>
 
 <script setup name="ChatWorkbench" lang="ts">
 import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
-import { Refresh, Search } from '@element-plus/icons-vue';
+import { ChatDotRound, Refresh, Search } from '@element-plus/icons-vue';
 import { useUserStore } from '@/store/modules/user';
 import { copyMiniProgramLinkFromEvent, renderTextWithLinks } from '@/utils/messageLinkify';
 import {
@@ -188,12 +261,14 @@ const statusOptions = [
   { label: '待处理', value: 'OPEN' },
   { label: 'AI接待', value: 'AI_SERVING' },
   { label: '排队', value: 'QUEUING' },
-  { label: '服务', value: 'ACTIVE' },
-  { label: '结束', value: 'CLOSED' }
+  { label: '服务中', value: 'ACTIVE' },
+  { label: '已结束', value: 'CLOSED' }
 ];
 
 const statusLabel = (status: string) =>
-  ({ AI_SERVING: 'AI接待', QUEUING: '排队中', ACTIVE: '服务中', CLOSED: '已结束', ABANDONED: '已离开' })[status] || status;
+  ({ AI_SERVING: 'AI接待', QUEUING: '排队中', ACTIVE: '服务中', CLOSED: '已结束', ABANDONED: '已离开', OPEN: '待处理' })[
+    status
+  ] || status;
 
 const sameId = (left?: string | number, right?: string | number) => left != null && right != null && String(left) === String(right);
 const isAssignedToMe = computed(() => sameId(detail.value?.conversation.assignedUserId, userStore.userId));
@@ -221,6 +296,7 @@ const senderName = (message: { senderType: string; senderName?: string }) => {
   if (message.senderType === 'AI') return message.senderName || 'AI助手';
   return message.senderName || '客服';
 };
+
 const handleMessageClick = async (event: MouseEvent) => {
   const copied = await copyMiniProgramLinkFromEvent(event);
   if (copied) proxy?.$modal.msgSuccess('小程序链接已复制，请在微信中打开');
@@ -228,7 +304,19 @@ const handleMessageClick = async (event: MouseEvent) => {
 
 const avatarText = (name?: string) => (name || '访客').trim().slice(0, 1);
 
+const avatarTone = (name?: string) => {
+  const text = (name || '访客').trim();
+  let hash = 0;
+  for (let i = 0; i < text.length; i += 1) hash = (hash + text.charCodeAt(i) * (i + 1)) % 4;
+  return String(hash);
+};
+
 const timeOnly = (value?: string) => (value ? value.slice(11, 16) : '');
+
+const formatDateTime = (value?: string) => {
+  if (!value) return '-';
+  return value.length >= 16 ? value.slice(0, 16).replace('T', ' ') : value;
+};
 
 const createClientMessageId = () => {
   if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
@@ -289,6 +377,12 @@ const handleStatusChange = () => {
   load();
 };
 
+const switchStatus = (status: string) => {
+  if (query.status === status) return;
+  query.status = status;
+  handleStatusChange();
+};
+
 const claim = async () => {
   if (!selectedId.value) return;
   await claimChatConversation(selectedId.value);
@@ -340,30 +434,44 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss">
 .chat-workbench {
+  --wb-ink: #15233d;
+  --wb-muted: #7b8798;
+  --wb-line: #e2ebf5;
+  --wb-soft: #f4f8fc;
+  --wb-panel: #f7fafd;
+  --wb-accent: #2563eb;
+  --wb-accent-soft: #eff6ff;
+  --wb-success: #0f766e;
+  --wb-warn: #b45309;
+  --wb-danger: #be123c;
+  --wb-ai: #4338ca;
+
   display: grid;
-  grid-template-columns: 300px minmax(460px, 1fr) 270px;
+  grid-template-columns: 312px minmax(460px, 1fr) 286px;
   height: calc(100% - 16px);
   min-height: 0;
   margin: 8px;
   overflow: hidden;
-  border: 1px solid #dce8f6;
-  border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 10px 24px rgba(28, 48, 78, 0.05);
+  border: 1px solid var(--wb-line);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(247, 250, 253, 0.96)),
+    radial-gradient(circle at 0% 0%, rgba(37, 99, 235, 0.08), transparent 42%);
+  box-shadow: 0 14px 32px rgba(21, 35, 61, 0.06);
 }
 
 .conversation-panel,
 .visitor-panel {
   min-width: 0;
   min-height: 0;
-  padding: 14px;
-  background: linear-gradient(180deg, #f8fbff, #f4f7fb);
+  padding: 16px;
+  background: linear-gradient(180deg, #fbfcfe, var(--wb-panel));
 }
 
 .conversation-panel {
   display: flex;
   flex-direction: column;
-  border-right: 1px solid #e4ecf6;
+  border-right: 1px solid var(--wb-line);
 }
 
 .panel-heading,
@@ -375,50 +483,76 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
+.panel-heading-copy {
+  display: grid;
+  gap: 2px;
+}
+
 h2,
 h3 {
   margin: 0;
-  color: #15233d;
+  color: var(--wb-ink);
+  letter-spacing: -0.02em;
 }
 
 .panel-heading h2 {
-  font-size: 16px;
+  font-size: 17px;
+  font-weight: 720;
 }
 
-.panel-heading span,
-.dialog-heading span,
-.composer-footer span {
-  color: #7b8798;
+.panel-count,
+.dialog-sub,
+.composer-footer span,
+.readonly-hint {
+  color: var(--wb-muted);
   font-size: 12px;
 }
 
-.conversation-status-tabs {
-  width: 100%;
-  margin-top: 12px;
-  padding: 3px;
-  border-radius: 10px;
-  background: #eef4fb;
+.refresh-btn {
+  border-color: #d7e4f4;
+  background: #fff;
 }
 
-.conversation-status-tabs :deep(.el-segmented) {
-  background: transparent;
+.status-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  margin-top: 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
-.conversation-status-tabs :deep(.el-segmented__item) {
+.status-chip {
+  flex: 1 1 0;
   min-width: 0;
-  padding: 0 4px;
-}
-
-.conversation-status-tabs :deep(.el-segmented__item-label) {
-  overflow: visible;
+  padding: 6px 4px;
   color: #5b6b82;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 650;
+  line-height: 1.2;
+  text-align: center;
   white-space: nowrap;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: #eef3f9;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
 }
 
-.conversation-status-tabs :deep(.el-segmented__item.is-selected .el-segmented__item-label) {
+.status-chip:hover {
+  transform: translateY(-1px);
+  background: #e5eef8;
+}
+
+.status-chip.active {
   color: #1d4ed8;
+  border-color: #bfdbfe;
+  background: #fff;
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.1);
 }
 
 .conversation-search {
@@ -426,14 +560,16 @@ h3 {
 }
 
 .conversation-search :deep(.el-input__wrapper) {
-  border-radius: 10px;
-  box-shadow: 0 0 0 1px #e4ecf6 inset;
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px #dce7f3 inset;
+  background: #fff;
 }
 
 .conversation-list {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  padding-right: 2px;
 }
 
 .conversation-pagination {
@@ -458,70 +594,185 @@ h3 {
 
 .conversation-item {
   display: grid;
-  grid-template-columns: 40px 1fr auto;
+  grid-template-columns: 42px 1fr;
   gap: 10px;
   width: 100%;
-  margin-bottom: 6px;
-  padding: 10px;
+  margin-bottom: 8px;
+  padding: 11px;
   text-align: left;
   cursor: pointer;
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: 14px;
   background: transparent;
-  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
 }
 
 .conversation-item:hover {
+  transform: translateY(-1px);
   border-color: #d7e6fb;
   background: #fff;
 }
 
 .conversation-item.active {
   border-color: #93c5fd;
-  background: #eff6ff;
-  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.08);
+  background: linear-gradient(180deg, #f5f9ff, #ebf3ff);
+  box-shadow: 0 10px 18px rgba(37, 99, 235, 0.08);
 }
 
-.visitor-avatar {
+.visitor-avatar,
+.dialog-avatar,
+.visitor-hero-avatar {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
   color: #fff;
   font-weight: 700;
   border-radius: 50%;
+  box-shadow: 0 8px 14px rgba(37, 99, 235, 0.18);
+}
+
+.visitor-avatar {
+  width: 42px;
+  height: 42px;
+}
+
+.dialog-avatar,
+.visitor-hero-avatar {
+  width: 44px;
+  height: 44px;
+  font-size: 16px;
+}
+
+.visitor-avatar[data-tone='0'],
+.dialog-avatar[data-tone='0'],
+.visitor-hero-avatar[data-tone='0'] {
   background: linear-gradient(135deg, #38bdf8, #2563eb);
-  box-shadow: 0 6px 12px rgba(37, 99, 235, 0.2);
 }
 
-.conversation-summary,
-.conversation-meta {
-  display: flex;
+.visitor-avatar[data-tone='1'],
+.dialog-avatar[data-tone='1'],
+.visitor-hero-avatar[data-tone='1'] {
+  background: linear-gradient(135deg, #34d399, #0f766e);
+}
+
+.visitor-avatar[data-tone='2'],
+.dialog-avatar[data-tone='2'],
+.visitor-hero-avatar[data-tone='2'] {
+  background: linear-gradient(135deg, #fbbf24, #d97706);
+}
+
+.visitor-avatar[data-tone='3'],
+.dialog-avatar[data-tone='3'],
+.visitor-hero-avatar[data-tone='3'] {
+  background: linear-gradient(135deg, #a78bfa, #4f46e5);
+}
+
+.unread-dot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 9px;
+  height: 9px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #ef4444;
+}
+
+.conversation-body {
+  display: grid;
+  gap: 6px;
   min-width: 0;
-  flex-direction: column;
-  gap: 4px;
 }
 
-.conversation-summary strong {
+.conversation-top,
+.conversation-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.conversation-top strong {
   overflow: hidden;
-  color: #15233d;
+  color: var(--wb-ink);
   font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.conversation-summary small {
+.conversation-top small,
+.conversation-bottom em {
   overflow: hidden;
-  color: #8b97aa;
+  color: var(--wb-muted);
   font-size: 12px;
+  font-style: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.conversation-meta {
-  align-items: flex-end;
-  color: #9aa6b8;
-  font-size: 12px;
+.conversation-top small {
+  flex: none;
+}
+
+.mini-status,
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #475569;
+}
+
+.mini-status[data-status='ACTIVE'],
+.status-pill[data-status='ACTIVE'] {
+  color: #0f766e;
+  background: #ccfbf1;
+}
+
+.mini-status[data-status='QUEUING'],
+.status-pill[data-status='QUEUING'] {
+  color: #b45309;
+  background: #ffedd5;
+}
+
+.mini-status[data-status='AI_SERVING'],
+.status-pill[data-status='AI_SERVING'] {
+  color: #4338ca;
+  background: #e0e7ff;
+}
+
+.mini-status[data-status='CLOSED'],
+.mini-status[data-status='ABANDONED'],
+.status-pill[data-status='CLOSED'],
+.status-pill[data-status='ABANDONED'] {
+  color: #64748b;
+  background: #e2e8f0;
+}
+
+.list-empty,
+.dialog-empty {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+  color: var(--wb-muted);
+  text-align: center;
+}
+
+.list-empty-icon {
+  margin-bottom: 8px;
+  color: #94a3b8;
+  font-size: 28px;
+}
+
+.list-empty p,
+.dialog-empty-card p {
+  margin: 0;
+  font-size: 13px;
 }
 
 .dialog-panel {
@@ -535,10 +786,17 @@ h3 {
 
 .dialog-heading {
   flex: none;
-  min-height: 64px;
-  padding: 12px 18px;
+  min-height: 72px;
+  padding: 14px 18px;
   border-bottom: 1px solid #eef3f8;
   background: linear-gradient(180deg, #ffffff, #f8fbff);
+}
+
+.dialog-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
 
 .dialog-heading-copy {
@@ -556,9 +814,27 @@ h3 {
   h2 {
     overflow: hidden;
     font-size: 16px;
+    font-weight: 720;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+}
+
+.dialog-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.conversation-no {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dot {
+  opacity: 0.55;
 }
 
 .dialog-actions {
@@ -568,12 +844,38 @@ h3 {
 }
 
 .dialog-empty {
-  display: grid;
   flex: 1;
-  place-items: center;
   background:
-    radial-gradient(circle at 50% 30%, rgba(56, 189, 248, 0.1), transparent 42%),
-    linear-gradient(180deg, #f8fbff, #f4f7fb);
+    radial-gradient(circle at 50% 28%, rgba(56, 189, 248, 0.12), transparent 40%),
+    linear-gradient(180deg, #f8fbff, #f3f6fa);
+}
+
+.dialog-empty-card {
+  position: relative;
+  max-width: 320px;
+  padding: 28px 24px;
+  border: 1px solid #e4edf7;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 16px 30px rgba(21, 35, 61, 0.06);
+  backdrop-filter: blur(8px);
+}
+
+.dialog-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 14px;
+  color: #2563eb;
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #eff6ff, #f8fbff);
+}
+
+.dialog-empty-card h3 {
+  margin-bottom: 6px;
+  font-size: 16px;
 }
 
 .message-list {
@@ -593,6 +895,7 @@ h3 {
   margin-bottom: 16px;
   flex-direction: column;
   align-items: flex-start;
+  animation: message-in 0.28s ease both;
 }
 
 .message-row.agent {
@@ -619,9 +922,9 @@ h3 {
   white-space: pre-wrap;
   word-break: break-word;
   border: 1px solid #e8eef6;
-  border-radius: 4px 14px 14px;
+  border-radius: 4px 16px 16px;
   background: #fff;
-  box-shadow: 0 6px 14px rgba(28, 48, 78, 0.05);
+  box-shadow: 0 8px 16px rgba(28, 48, 78, 0.05);
 }
 
 .message-bubble :deep(a) {
@@ -636,9 +939,9 @@ h3 {
 .message-row.agent .message-bubble {
   color: #fff;
   border-color: transparent;
-  border-radius: 14px 4px 14px 14px;
+  border-radius: 16px 4px 16px 16px;
   background: linear-gradient(135deg, #2563eb, #1d4ed8);
-  box-shadow: 0 10px 18px rgba(37, 99, 235, 0.18);
+  box-shadow: 0 12px 20px rgba(37, 99, 235, 0.18);
 }
 
 .message-row.agent .message-bubble :deep(a) {
@@ -653,30 +956,32 @@ h3 {
 
 .system-message {
   align-self: center;
-  padding: 5px 12px;
+  padding: 6px 12px;
   color: #7b8798;
   font-size: 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.88);
   border: 1px solid #e8eef6;
+  box-shadow: 0 4px 10px rgba(21, 35, 61, 0.04);
 }
 
 .message-composer {
   flex-shrink: 0;
   padding: 12px 16px 14px;
   border-top: 1px solid #eef3f8;
-  background: #fff;
+  background: linear-gradient(180deg, #ffffff, #f9fbfe);
 }
 
 .message-composer :deep(.el-textarea__inner) {
-  border-radius: 12px;
+  border-radius: 14px;
   background: #f7faff;
   box-shadow: 0 0 0 1px #e4ecf6 inset;
 }
 
 .readonly-composer {
-  color: #7b8798;
-  font-size: 13px;
+  display: grid;
+  place-items: center;
+  min-height: 64px;
   text-align: center;
   background: #f7faff;
 }
@@ -687,28 +992,38 @@ h3 {
 
 .visitor-panel {
   overflow-y: auto;
-  border-left: 1px solid #e4ecf6;
+  border-left: 1px solid var(--wb-line);
 }
 
-.visitor-panel-head {
-  margin-bottom: 12px;
+.visitor-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid #e4ecf6;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fff, #f5f9ff);
 
   h3 {
+    margin-bottom: 6px;
     font-size: 15px;
-  }
-
-  small {
-    color: #7b8798;
-    font-size: 12px;
   }
 }
 
 .visitor-card {
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   padding: 12px;
   border: 1px solid #e4ecf6;
-  border-radius: 12px;
+  border-radius: 14px;
   background: #fff;
+}
+
+.visitor-card-title {
+  margin-bottom: 10px;
+  color: var(--wb-ink);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .visitor-panel dl {
@@ -725,16 +1040,27 @@ h3 {
 }
 
 .visitor-panel dt {
-  color: #7b8798;
+  color: var(--wb-muted);
   font-size: 12px;
 }
 
 .visitor-panel dd {
   min-width: 0;
   margin: 0;
-  color: #15233d;
+  color: var(--wb-ink);
   font-size: 13px;
   overflow-wrap: anywhere;
+}
+
+@keyframes message-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (max-height: 760px) {
@@ -750,7 +1076,7 @@ h3 {
   }
 
   .dialog-heading {
-    min-height: 58px;
+    min-height: 64px;
   }
 
   .message-composer {
@@ -760,7 +1086,7 @@ h3 {
 
 @media (max-width: 1250px) {
   .chat-workbench {
-    grid-template-columns: 280px minmax(420px, 1fr);
+    grid-template-columns: 292px minmax(420px, 1fr);
   }
 
   .visitor-panel {

@@ -1,7 +1,12 @@
 <template>
   <section class="app-main">
     <router-view v-slot="{ Component, route }">
-      <transition :enter-active-class="animate" mode="out-in">
+      <!-- 关闭动画时 css=false，避免仍走 animate.css 的 1s fadeIn / out-in 空窗 -->
+      <transition
+        name="route-fade"
+        :css="animationEnable"
+        :mode="animationEnable ? 'out-in' : undefined"
+      >
         <keep-alive :include="tagsViewStore.cachedViews">
           <component :is="Component" v-if="!!Component && !route.meta.link" :key="route.path" />
         </keep-alive>
@@ -16,25 +21,10 @@ import { useSettingsStore } from '@/store/modules/settings';
 import { useTagsViewStore } from '@/store/modules/tagsView';
 
 import IframeToggle from './IframeToggle/index.vue';
-const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const route = useRoute();
 const tagsViewStore = useTagsViewStore();
-
-// 随机动画集合
-const animate = ref<string>('');
-const animationEnable = ref(useSettingsStore().animationEnable);
-watch(
-  () => useSettingsStore().animationEnable,
-  (val: boolean) => {
-    animationEnable.value = val;
-    if (val) {
-      animate.value = proxy?.animate.animateList[Math.round(Math.random() * proxy?.animate.animateList.length)] as string;
-    } else {
-      animate.value = proxy?.animate.defaultAnimate as string;
-    }
-  },
-  { immediate: true }
-);
+const settingsStore = useSettingsStore();
+const animationEnable = computed(() => settingsStore.animationEnable);
 
 onMounted(() => {
   addIframe();
@@ -75,6 +65,14 @@ function addIframe() {
   .fixed-header + .app-main {
     padding-top: 84px;
   }
+}
+
+.route-fade-enter-active {
+  transition: opacity 0.18s ease;
+}
+
+.route-fade-enter-from {
+  opacity: 0;
 }
 </style>
 <style lang="scss">
