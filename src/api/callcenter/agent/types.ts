@@ -34,6 +34,8 @@ export interface AgentQuery extends PageQuery {
 }
 
 export type AgentPresenceStatus = 'OFFLINE' | 'IDLE' | 'BUSY' | 'AFTER_CALL';
+export type AgentCallPhase = 'IDLE' | 'INCOMING_RINGING' | 'OUTBOUND_DIALING' | 'CONNECTED' | 'HELD' | 'ENDING' | 'ENDED';
+export type AgentCallOperation = 'NONE' | 'TRANSFERRING_IVR' | 'CONSULTING' | 'CONFERENCE' | 'BLIND_TRANSFERRING';
 
 export interface CurrentAgentVO {
   configured: boolean;
@@ -51,6 +53,10 @@ export interface CurrentAgentVO {
   wssUrl?: string;
   activeCallId?: string;
   activeCallNumber?: string;
+  activeAgentLegUuid?: string;
+  activeCallPhase?: AgentCallPhase;
+  activeCallOperation?: AgentCallOperation;
+  activeCallStateVersion?: number;
   status: AgentPresenceStatus;
   afterCallRemainingSeconds?: number;
   signedInAt?: string;
