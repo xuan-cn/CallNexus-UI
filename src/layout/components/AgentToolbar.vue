@@ -697,7 +697,6 @@ const performWebRtcRegistration = async (remoteAudio: HTMLAudioElement) => {
           agentLegUuid: callState.value.agentLegUuid
         });
         startRingTone();
-        openScreenPop();
         nextTick(constrainPosition);
       },
       onAnswered: () => {
@@ -712,6 +711,7 @@ const performWebRtcRegistration = async (remoteAudio: HTMLAudioElement) => {
         });
         agentStatus.value = 'busy';
         startCallTimer();
+        openScreenPop();
       },
       onHangup: () => {
         webRtcOutboundFirstLegPending = false;
@@ -1437,12 +1437,11 @@ const showIncomingCall = (event: Record<string, unknown>) => {
   dialNumber.value = incomingNumber.value;
   resetCallControls();
   stopCallTimer();
-  // 外置软电话：只顶栏状态 + 自动弹屏，不强制展开软电话面板
+  // 外置软电话：振铃阶段只更新顶栏，接通后再自动弹屏
   if (webRtcIncoming.value) {
     panelOpen.value = true;
   }
   startRingTone();
-  openScreenPop();
   nextTick(constrainPosition);
 };
 
@@ -1466,6 +1465,10 @@ const showActiveCall = (event: Record<string, unknown>, fallbackPhase: AgentCall
   callActive.value = true;
   // 通话中保留顶栏操作即可；面板已开则不动，未开不强制弹出
   startCallTimer();
+  // 仅接通后自动弹屏（振铃/外呼拨号中不弹）
+  if (fallbackPhase === 'CONNECTED') {
+    openScreenPop();
+  }
   nextTick(constrainPosition);
 };
 
@@ -1633,7 +1636,7 @@ watch(incomingCall, (incoming) => {
     return;
   }
   revealDockedPhone();
-  // 仅 WebRTC 待接听时自动展开面板；外置软电话靠顶栏 + 弹屏
+  // 仅 WebRTC 待接听时自动展开面板；外置软电话靠顶栏提示，接通后再弹屏
   if (webRtcIncoming.value) {
     panelOpen.value = true;
   }
