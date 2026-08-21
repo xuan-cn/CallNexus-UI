@@ -1,6 +1,6 @@
 <template>
-  <div class="inbound-did-page p-2">
-    <el-card class="mb-2" shadow="hover">
+  <div class="inbound-did-page" :class="{ 'p-2': !embedded, 'inbound-did-page--embedded': embedded }">
+    <el-card v-if="!embedded" class="mb-2" shadow="hover">
       <el-form ref="queryFormRef" :model="queryParams" :inline="true" class="query-form">
         <el-form-item label="节点" prop="nodeId">
           <el-select v-model="queryParams.nodeId" clearable filterable placeholder="请选择节点" style="width: 190px" @change="handleQueryNodeChange">
@@ -45,8 +45,14 @@
       <template #header>
         <div class="card-header">
           <div>
-            <div class="card-title">呼入路由规则</div>
-            <div class="card-subtitle">按 DID、FXO/USB 端口、账号或 Header 识别呼入来源，并路由到 IVR、队列、分机、留言或工作时间路由。</div>
+            <div class="card-title">{{ embedded ? '入口识别与呼入路由' : '呼入路由规则' }}</div>
+            <div class="card-subtitle">
+              {{
+                embedded
+                  ? '当前规则统一归属于该号码；可按 DID、端口、账号或 Header 识别来电。'
+                  : '按 DID、FXO/USB 端口、账号或 Header 识别呼入来源，并路由到 IVR、队列、分机、留言或工作时间路由。'
+              }}
+            </div>
           </div>
           <div class="header-actions">
             <el-button type="success" plain icon="Operation" @click="openTestDrawer">路由测试</el-button>
@@ -57,10 +63,10 @@
 
       <el-table v-loading="loading" :data="entryList">
         <el-table-column label="入口名称" prop="entryName" min-width="150" />
-        <el-table-column label="节点" prop="nodeName" min-width="150">
+        <el-table-column v-if="!embedded" label="节点" prop="nodeName" min-width="150">
           <template #default="{ row }">{{ row.nodeName || nodeName(row.nodeId) }}</template>
         </el-table-column>
-        <el-table-column label="网关" prop="gatewayName" min-width="150">
+        <el-table-column v-if="!embedded" label="网关" prop="gatewayName" min-width="150">
           <template #default="{ row }">{{ row.gatewayName || gatewayName(row.gatewayId) }}</template>
         </el-table-column>
         <el-table-column label="入口类型" width="105">
@@ -103,12 +109,19 @@
           title="先按入口类型识别来电来源，再把来电送到指定 IVR、队列或分机。优先级数值越小越先匹配。"
         />
         <el-form-item label="节点" prop="nodeId">
-          <el-select v-model="form.nodeId" filterable placeholder="请选择 FreeSWITCH 节点" style="width: 100%" @change="handleFormNodeChange">
+          <el-select
+            v-model="form.nodeId"
+            :disabled="embedded"
+            filterable
+            placeholder="请选择 FreeSWITCH 节点"
+            style="width: 100%"
+            @change="handleFormNodeChange"
+          >
             <el-option v-for="node in nodeOptions" :key="node.id" :label="node.nodeName" :value="node.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="网关" prop="gatewayId">
-          <el-select v-model="form.gatewayId" filterable placeholder="请选择来源网关" style="width: 100%">
+          <el-select v-model="form.gatewayId" :disabled="embedded" filterable placeholder="请选择来源网关" style="width: 100%">
             <el-option v-for="gateway in formGatewayOptions" :key="gateway.id" :label="gateway.gatewayName" :value="gateway.id" />
           </el-select>
         </el-form-item>
@@ -322,6 +335,16 @@ import type { VoiceMailBoxVO } from '@/api/callcenter/voicemail/types';
 import { listPhoneNumbers } from '@/api/callcenter/phone-number';
 import type { PhoneNumberVO } from '@/api/callcenter/phone-number/types';
 
+interface Props {
+  embedded?: boolean;
+  phoneNumber?: PhoneNumberVO;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  embedded: false,
+  phoneNumber: undefined
+});
+const embedded = computed(() => props.embedded);
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const route = useRoute();
 
@@ -372,6 +395,7 @@ const data = reactive<PageData<InboundDidEntryForm, InboundDidEntryQuery>>({
     pageSize: 10,
     nodeId: undefined,
     gatewayId: undefined,
+    phoneNumberId: undefined,
     entryName: '',
     entryType: undefined,
     didNumber: '',
@@ -568,6 +592,7 @@ const handleQuery = () => {
 
 const resetQuery = () => {
   queryFormRef.value?.resetFields();
+  applyEmbeddedScope();
   handleQuery();
 };
 
@@ -578,6 +603,22 @@ const handleQueryNodeChange = () => {
 const reset = () => {
   form.value = { ...initialForm };
   formRef.value?.resetFields();
+};
+
+const applyEmbeddedScope = () => {
+  if (!props.embedded || !props.phoneNumber) return;
+  queryParams.value.phoneNumberId = props.phoneNumber.id;
+  queryParams.value.nodeId = props.phoneNumber.nodeId;
+  queryParams.value.gatewayId = props.phoneNumber.gatewayId;
+};
+
+const applyEmbeddedFormDefaults = () => {
+  if (!props.embedded || !props.phoneNumber) return;
+  form.value.phoneNumberId = props.phoneNumber.id;
+  form.value.nodeId = props.phoneNumber.nodeId;
+  form.value.gatewayId = props.phoneNumber.gatewayId;
+  form.value.entryName = props.phoneNumber.numberName || props.phoneNumber.number;
+  form.value.didNumber = props.phoneNumber.number;
 };
 
 const clearEntryMatchFields = () => {
@@ -598,6 +639,7 @@ const handleFormNodeChange = () => {
 
 const handleAdd = () => {
   reset();
+  applyEmbeddedFormDefaults();
   entryDrawer.title = '新增呼入路由';
   entryDrawer.visible = true;
 };
@@ -699,7 +741,8 @@ const handleRouteTest = async () => {
 
 onMounted(async () => {
   await loadOptions();
-  openCreateFromQuery();
+  applyEmbeddedScope();
+  if (!props.embedded) openCreateFromQuery();
   getList();
 });
 </script>
@@ -707,6 +750,19 @@ onMounted(async () => {
 <style scoped>
 .inbound-did-page {
   min-height: 100%;
+}
+
+.inbound-did-page--embedded :deep(.el-card) {
+  border: 0;
+  box-shadow: none;
+}
+
+.inbound-did-page--embedded :deep(.el-card__header) {
+  padding: 0 0 16px;
+}
+
+.inbound-did-page--embedded :deep(.el-card__body) {
+  padding: 0;
 }
 
 .query-form :deep(.el-form-item) {

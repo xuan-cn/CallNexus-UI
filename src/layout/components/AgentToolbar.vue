@@ -1507,6 +1507,20 @@ const handleCallEvent = (event: Record<string, unknown>) => {
     return;
   }
   if (!relatedToCurrentAgent) return;
+  // WebRTC 入呼以浏览器 SIP 会话为接听权威。FreeSWITCH 的关联腿可能先产生
+  // ANSWER/BRIDGE/HOLD 事件，这些事件只能补充业务通话标识，不能替代用户接听。
+  const pendingWebRtcAnswer = webRtcPhoneEnabled.value && webRtcIncoming.value;
+  if (pendingWebRtcAnswer && (type === 'CALL_ANSWER' || type === 'CALL_BRIDGE' || type === 'CALL_HOLD' || type === 'CALL_UNHOLD')) {
+    if (eventCallId) activeCallId.value = eventCallId;
+    if (import.meta.env.DEV) {
+      console.debug('[CallNexus][AgentToolbar] WebRTC 尚未接听，忽略后台接通状态推进', {
+        type,
+        eventCallId,
+        eventLegUuid
+      });
+    }
+    return;
+  }
   if (type === 'CALL_HOLD') {
     if (commitEventCallState(event, 'HELD')) callHeld.value = true;
     return;
@@ -1546,6 +1560,7 @@ const clearActiveCallState = () => {
   activeCallId.value = '';
   outboundDestination.value = '';
   matchedCustomer.value = undefined;
+  webRtcOutboundFirstLegPending = false;
   webRtcIncoming.value = false;
   stopWebRtcFirstLegWaiting();
   resetCallControls();

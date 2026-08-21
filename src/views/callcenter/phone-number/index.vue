@@ -55,9 +55,7 @@
         </el-table-column>
         <el-table-column label="操作" width="210" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button v-hasPermi="['callcenter:inbound-did:create']" link type="primary" @click="handleConfigureInboundRoute(row)"
-              >配置路由</el-button
-            >
+            <el-button v-hasPermi="['callcenter:inbound-did:list']" link type="primary" @click="handleConfigureInboundRoute(row)">呼入规则</el-button>
             <el-button v-hasPermi="['callcenter:phone-number:update']" link type="primary" icon="Edit" @click="handleUpdate(row)" />
             <el-button v-hasPermi="['callcenter:phone-number:delete']" link type="danger" icon="Delete" @click="handleDelete(row)" />
           </template>
@@ -117,6 +115,24 @@
         <el-button type="primary" @click="submitForm">确定</el-button>
       </template>
     </el-dialog>
+
+    <el-drawer v-model="routeDrawer.visible" :title="routeDrawer.title" size="min(1080px, 92vw)" append-to-body destroy-on-close>
+      <template v-if="routeNumber">
+        <el-descriptions class="route-number-summary" :column="4" border>
+          <el-descriptions-item label="号码">{{ routeNumber.number }}</el-descriptions-item>
+          <el-descriptions-item label="名称">{{ routeNumber.numberName }}</el-descriptions-item>
+          <el-descriptions-item label="节点">{{ routeNumber.nodeName || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="网关">{{ routeNumber.gatewayName || '-' }}</el-descriptions-item>
+        </el-descriptions>
+        <el-alert
+          class="route-number-tip"
+          type="info"
+          :closable="false"
+          title="号码负责标识对外资源；入口规则负责识别网关送来的 DID、端口、账号或 Header，并决定来电去向。"
+        />
+        <InboundDidManager :key="String(routeNumber.id)" embedded :phone-number="routeNumber" />
+      </template>
+    </el-drawer>
   </div>
 </template>
 
@@ -127,9 +143,9 @@ import { listFreeSwitchNodes } from '@/api/callcenter/freeswitch-node';
 import { FreeSwitchNodeVO } from '@/api/callcenter/freeswitch-node/types';
 import { listFreeSwitchGateways } from '@/api/callcenter/freeswitch-gateway';
 import { FreeSwitchGatewayVO } from '@/api/callcenter/freeswitch-gateway/types';
+import InboundDidManager from '@/views/callcenter/inbound-did/index.vue';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
-const router = useRouter();
 const loading = ref(false);
 const total = ref(0);
 const phoneNumberList = ref<PhoneNumberVO[]>([]);
@@ -138,6 +154,8 @@ const gatewayOptions = ref<FreeSwitchGatewayVO[]>([]);
 const queryFormRef = ref<ElFormInstance>();
 const formRef = ref<ElFormInstance>();
 const dialog = reactive<DialogOption>({ visible: false, title: '' });
+const routeDrawer = reactive<DialogOption>({ visible: false, title: '' });
+const routeNumber = ref<PhoneNumberVO>();
 const numberTypeOptions: Array<{ label: string; value: PhoneNumberType }> = [
   { label: 'DID 呼入', value: 'DID' },
   { label: '主叫号码', value: 'CALLER_ID' },
@@ -235,26 +253,13 @@ const handleUpdate = async (row: PhoneNumberVO) => {
   dialog.visible = true;
 };
 const handleConfigureInboundRoute = (row: PhoneNumberVO) => {
-  const targetRoute = router
-    .getRoutes()
-    .find(
-      (item) =>
-        item.name === 'inbound-did' ||
-        String(item.name || '').toLowerCase() === 'inbounddid' ||
-        item.path.includes('/inbound-did') ||
-        String(item.components?.default).includes('InboundDid')
-    );
-  router.push({
-    path: targetRoute?.path || '/callcenter/inbound-did/index',
-    query: {
-      openCreate: 'true',
-      nodeId: row.nodeId ? String(row.nodeId) : '',
-      gatewayId: row.gatewayId ? String(row.gatewayId) : '',
-      entryType: 'DID',
-      didNumber: row.number,
-      entryName: row.numberName || row.number
-    }
-  });
+  if (!row.gatewayId) {
+    proxy?.$modal.msgWarning('请先为号码绑定来源网关，再配置呼入规则');
+    return;
+  }
+  routeNumber.value = row;
+  routeDrawer.title = `呼入规则 · ${row.numberName || row.number}`;
+  routeDrawer.visible = true;
 };
 const submitForm = () =>
   formRef.value?.validate(async (valid) => {
@@ -275,3 +280,13 @@ onMounted(async () => {
   await getList();
 });
 </script>
+
+<style scoped>
+.route-number-summary {
+  margin-bottom: 12px;
+}
+
+.route-number-tip {
+  margin-bottom: 18px;
+}
+</style>

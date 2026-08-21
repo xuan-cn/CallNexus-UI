@@ -7,6 +7,9 @@ export interface InboundDidEntryVO {
   nodeName?: string;
   gatewayId: string | number;
   gatewayName?: string;
+  phoneNumberId?: string | number;
+  phoneNumber?: string;
+  phoneNumberName?: string;
   entryName: string;
   entryType: InboundEntryType;
   didNumber?: string;
@@ -28,6 +31,7 @@ export interface InboundDidEntryForm {
   id?: string | number;
   nodeId?: string | number;
   gatewayId?: string | number;
+  phoneNumberId?: string | number;
   entryName: string;
   entryType: InboundEntryType;
   didNumber?: string;
@@ -46,6 +50,7 @@ export interface InboundDidEntryForm {
 export interface InboundDidEntryQuery extends PageQuery {
   nodeId?: string | number;
   gatewayId?: string | number;
+  phoneNumberId?: string | number;
   entryName?: string;
   entryType?: InboundEntryType;
   didNumber?: string;
