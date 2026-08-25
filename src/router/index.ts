@@ -107,6 +107,19 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: { title: '工单办理', activeMenu: '/callcenter/callcenter-operation/ticket' }
       }
     ]
+  },
+  {
+    path: '/callcenter/agent-workspace',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/callcenter/agent-workspace/index.vue'),
+        name: 'AgentCallWorkspace',
+        meta: { title: '坐席工作台', noCache: true }
+      }
+    ]
   }
 ];
 

@@ -8,8 +8,12 @@
     :class="{ 'customer-detail-drawer': businessType === 'CUSTOMER' }"
     append-to-body
   >
-    <div v-loading="loading" class="detail-container">
-      <div ref="leftPanelRef" class="detail-left">
+    <div
+      v-loading="loading"
+      class="detail-container"
+      :class="{ 'customer-layout': businessType === 'CUSTOMER', 'assist-active': activeTab === 'assist' && businessCallId }"
+    >
+      <div class="detail-left">
         <div v-if="businessType === 'CUSTOMER' && customerDetail" class="customer-hero">
           <div class="customer-avatar">{{ (customerDetail.customerName || '客').slice(0, 1) }}</div>
           <div class="customer-hero-copy">
@@ -42,12 +46,7 @@
             <el-col v-for="field in customFields" :key="field.code" :span="field.layoutSpan">
               <div class="custom-field">
                 <div class="custom-field-label">{{ field.label }}</div>
-                <file-upload
-                  v-if="field.fieldType === 'FILE' && field.rawValue"
-                  :model-value="field.rawValue"
-                  :is-show-tip="false"
-                  disabled
-                />
+                <file-upload v-if="field.fieldType === 'FILE' && field.rawValue" :model-value="field.rawValue" :is-show-tip="false" disabled />
                 <div v-else class="custom-field-value">{{ field.value }}</div>
               </div>
             </el-col>
@@ -56,13 +55,67 @@
       </div>
 
       <div class="detail-right">
-        <div
-          class="side-panel"
-          :class="{ 'is-scrolling': sidePanelScrolling }"
-          :style="{ height: rightPanelHeight }"
-          @scroll.capture="handleSideScroll"
-        >
+        <div class="side-panel" :class="{ 'is-scrolling': sidePanelScrolling }" @scroll.capture="handleSideScroll">
           <el-tabs v-model="activeTab">
+            <el-tab-pane v-if="businessType === 'CUSTOMER' && businessCallId" label="通话辅助" name="assist">
+              <div class="assist-heading">
+                <div>
+                  <strong>实时话术辅助</strong>
+                  <span>{{ assistDetail?.assistAgentName ? `知识助手：${assistDetail.assistAgentName}` : '等待技能组辅助配置' }}</span>
+                </div>
+                <el-tag :type="assistConnected ? 'success' : 'info'" effect="plain" round>
+                  {{ assistConnected ? '实时接收中' : '连接中' }}
+                </el-tag>
+              </div>
+              <div class="assist-workspace">
+                <div ref="assistTranscriptRef" class="assist-transcript">
+                  <div v-if="assistSegments.length" class="assist-dialogue-list">
+                    <button
+                      v-for="segment in assistSegments"
+                      :key="String(segment.id)"
+                      type="button"
+                      class="assist-dialogue-item"
+                      :class="[
+                        `speaker-${String(segment.speaker || 'UNKNOWN').toLowerCase()}`,
+                        { selected: String(segment.id) === String(selectedAssistSegmentId) }
+                      ]"
+                      @click="selectAssistSegment(segment)"
+                    >
+                      <span class="assist-speaker">{{ assistSpeakerLabel(segment.speaker) }}</span>
+                      <span class="assist-text">{{ segment.textContent }}</span>
+                    </button>
+                  </div>
+                  <el-empty v-else description="客户开始说话后，这里会实时显示对话" :image-size="62" />
+                </div>
+                <div class="assist-recommendation">
+                  <template v-if="selectedSuggestion">
+                    <div class="recommendation-title">
+                      <span>建议回复</span>
+                      <el-tag v-if="selectedSuggestion.sourceType" size="small" effect="plain">
+                        {{ assistSourceLabel(selectedSuggestion.sourceType) }}
+                      </el-tag>
+                    </div>
+                    <div v-if="selectedSuggestion.status === 'PROCESSING'" class="assist-thinking">
+                      <i></i><i></i><i></i><span>正在结合知识库生成建议</span>
+                    </div>
+                    <div v-else-if="selectedSuggestion.status === 'FAILED'" class="assist-failed">
+                      <span>{{ selectedSuggestion.failureReason || '建议生成失败' }}</span>
+                      <el-button link type="primary" @click="regenerateSuggestion(selectedSuggestion)">重新生成</el-button>
+                    </div>
+                    <template v-else>
+                      <div class="recommendation-content">{{ selectedSuggestion.suggestedReply }}</div>
+                      <div class="recommendation-actions">
+                        <span v-if="selectedSuggestion.processingMs">耗时 {{ selectedSuggestion.processingMs }}ms</span>
+                        <el-button link type="primary" @click="copySuggestion(selectedSuggestion.suggestedReply)">复制话术</el-button>
+                        <el-button link type="primary" @click="regenerateSuggestion(selectedSuggestion)">换一条</el-button>
+                      </div>
+                    </template>
+                  </template>
+                  <div v-else-if="selectedCustomerSegment" class="assist-thinking"><i></i><i></i><i></i><span>正在等待辅助建议</span></div>
+                  <el-empty v-else description="点击客户话语查看对应建议" :image-size="62" />
+                </div>
+              </div>
+            </el-tab-pane>
             <el-tab-pane v-if="businessType === 'CUSTOMER'" label="电话号码" name="phones">
               <div class="phone-toolbar">
                 <span class="phone-tip">来电可通过任意启用号码识别客户，外呼默认使用主号码。</span>
@@ -71,14 +124,7 @@
               <el-table :data="customerDetail?.phones || []" size="small">
                 <el-table-column label="号码" min-width="138">
                   <template #default="{ row }">
-                    <el-button
-                      v-if="row.enabled"
-                      class="phone-dial-link"
-                      link
-                      type="primary"
-                      title="点击拨打"
-                      @click="requestDialPhone(row)"
-                    >
+                    <el-button v-if="row.enabled" class="phone-dial-link" link type="primary" title="点击拨打" @click="requestDialPhone(row)">
                       {{ row.phoneNumber }}
                     </el-button>
                     <span v-else class="disabled-phone">{{ row.phoneNumber }}</span>
@@ -101,11 +147,7 @@
                   <template #default="{ row }">
                     <div class="phone-actions">
                       <el-button link type="primary" @click="openPhoneDialog(row)">编辑</el-button>
-                      <el-dropdown
-                        v-if="!row.primaryFlag"
-                        trigger="click"
-                        @command="(command: string) => handlePhoneCommand(command, row)"
-                      >
+                      <el-dropdown v-if="!row.primaryFlag" trigger="click" @command="(command: string) => handlePhoneCommand(command, row)">
                         <el-button link type="primary">更多</el-button>
                         <template #dropdown>
                           <el-dropdown-menu>
@@ -219,8 +261,11 @@ import { listCallRecords } from '@/api/callcenter/call-record';
 import { hangupCauseLabel } from '@/api/callcenter/call-record/display';
 import { CallDirection, CallRecordVO } from '@/api/callcenter/call-record/types';
 import { useAgentDialBus } from '@/composables/useAgentDial';
+import { getAgentAssist, regenerateAgentAssistSuggestion, streamAgentAssist } from '@/api/callcenter/agent-assist';
+import type { AgentAssistDetailVO, AgentAssistSuggestionVO } from '@/api/callcenter/agent-assist/types';
+import type { AiCallTranscriptSegmentVO } from '@/api/callcenter/ai-speech/types';
 
-const props = defineProps<{ businessType: FormBusinessType; businessId?: string | number }>();
+const props = defineProps<{ businessType: FormBusinessType; businessId?: string | number; businessCallId?: string }>();
 const visible = defineModel<boolean>({ default: false });
 const loading = ref(false);
 const detail = ref<CustomerVO | TicketVO>();
@@ -230,8 +275,10 @@ const followUpContent = ref('');
 const followUpSubmitting = ref(false);
 const callRecords = ref<CallRecordVO[]>([]);
 const activeTab = ref('followUp');
-const leftPanelRef = ref<HTMLElement>();
-const rightPanelHeight = ref('');
+const assistDetail = ref<AgentAssistDetailVO>();
+const assistConnected = ref(false);
+const selectedAssistSegmentId = ref<string | number>();
+const assistTranscriptRef = ref<HTMLElement>();
 const sidePanelScrolling = ref(false);
 const phoneDialogVisible = ref(false);
 const phoneSubmitting = ref(false);
@@ -244,11 +291,104 @@ const phoneForm = reactive<CustomerPhoneForm>({
   enabled: true,
   sortOrder: 0
 });
-let leftPanelObserver: ResizeObserver | undefined;
 let scrollTimer: ReturnType<typeof setTimeout> | undefined;
+let assistStreamController: AbortController | undefined;
+let assistReconnectTimer: ReturnType<typeof setTimeout> | undefined;
+let assistStreamCallId = '';
 const customerDetail = computed(() => (props.businessType === 'CUSTOMER' ? (detail.value as CustomerVO | undefined) : undefined));
 const ticketDetail = computed(() => (props.businessType === 'TICKET' ? (detail.value as TicketVO | undefined) : undefined));
 const agentDialBus = useAgentDialBus();
+const businessCallId = computed(() => props.businessCallId?.trim() || '');
+const assistSegments = computed(() => assistDetail.value?.transcriptSegments || []);
+const selectedCustomerSegment = computed(() =>
+  assistSegments.value.find((item) => String(item.id) === String(selectedAssistSegmentId.value) && item.speaker === 'CUSTOMER')
+);
+const selectedSuggestion = computed(() =>
+  assistDetail.value?.suggestions.find((item) => String(item.transcriptSegmentId) === String(selectedAssistSegmentId.value))
+);
+
+const assistSpeakerLabel = (speaker?: string) => ({ CUSTOMER: '客户', AGENT: '坐席', AI: 'AI' })[speaker || ''] || '通话方';
+const assistSourceLabel = (source?: string) => {
+  if (!source) return '';
+  if (source.startsWith('FAQ')) return 'FAQ';
+  if (source === 'DOCUMENT') return '知识文档';
+  if (source === 'MODEL') return '模型建议';
+  return source;
+};
+
+const chooseLatestCustomerSegment = () => {
+  const customers = assistSegments.value.filter((item) => item.speaker === 'CUSTOMER');
+  if (!customers.length) return;
+  const selectedStillExists = customers.some((item) => String(item.id) === String(selectedAssistSegmentId.value));
+  if (!selectedStillExists || selectedAssistSegmentId.value === undefined) {
+    selectedAssistSegmentId.value = customers[customers.length - 1].id;
+  }
+};
+
+const loadAssist = async () => {
+  if (!businessCallId.value) {
+    assistDetail.value = undefined;
+    return;
+  }
+  assistDetail.value = (await getAgentAssist(businessCallId.value)).data;
+  chooseLatestCustomerSegment();
+  await nextTick();
+  assistTranscriptRef.value?.scrollTo({ top: assistTranscriptRef.value.scrollHeight, behavior: 'smooth' });
+};
+
+const selectAssistSegment = (segment: AiCallTranscriptSegmentVO) => {
+  if (segment.speaker === 'CUSTOMER') selectedAssistSegmentId.value = segment.id;
+};
+
+const copySuggestion = async (content?: string) => {
+  if (!content) return;
+  await navigator.clipboard.writeText(content);
+  ElMessage.success('建议话术已复制');
+};
+
+const regenerateSuggestion = async (suggestion: AgentAssistSuggestionVO) => {
+  if (!businessCallId.value) return;
+  await regenerateAgentAssistSuggestion(businessCallId.value, suggestion.id);
+  await loadAssist();
+};
+
+const stopAssistStream = () => {
+  if (assistReconnectTimer) clearTimeout(assistReconnectTimer);
+  assistReconnectTimer = undefined;
+  assistStreamController?.abort();
+  assistStreamController = undefined;
+  assistStreamCallId = '';
+  assistConnected.value = false;
+};
+
+const startAssistStream = () => {
+  stopAssistStream();
+  const callId = businessCallId.value;
+  if (!callId || !visible.value) return;
+  assistStreamCallId = callId;
+  const connect = () => {
+    if (assistStreamCallId !== callId || !visible.value) return;
+    const controller = new AbortController();
+    assistStreamController = controller;
+    streamAgentAssist(
+      callId,
+      (event) => {
+        if (event === 'connected') assistConnected.value = true;
+        if (event === 'segment' || event === 'suggestion') void loadAssist();
+      },
+      controller.signal
+    )
+      .catch((error) => {
+        if (error?.name !== 'AbortError') console.warn('Agent assist stream disconnected', error);
+      })
+      .finally(() => {
+        assistConnected.value = false;
+        if (controller.signal.aborted || assistStreamCallId !== callId || !visible.value) return;
+        assistReconnectTimer = setTimeout(connect, 1500);
+      });
+  };
+  connect();
+};
 
 const displayValue = (value: unknown, field?: FormField) => {
   if (value === null || value === undefined || value === '') return '-';
@@ -362,11 +502,10 @@ const loadCallRecords = async () => {
   const numbers = [...new Set(participantNumbers.filter(Boolean))] as string[];
   if (!numbers.length && customerDetail.value?.primaryPhone) numbers.push(customerDetail.value.primaryPhone);
   if (!numbers.length) return;
-  const fallbackRecords = await Promise.all(
-    numbers.map((participantNumber) => listCallRecords({ pageNum: 1, pageSize: 100, participantNumber }))
+  const fallbackRecords = await Promise.all(numbers.map((participantNumber) => listCallRecords({ pageNum: 1, pageSize: 100, participantNumber })));
+  callRecords.value = [...new Map(fallbackRecords.flatMap((response) => response.rows).map((record) => [String(record.id), record])).values()].sort(
+    (left, right) => String(right.startedAt || '').localeCompare(String(left.startedAt || ''))
   );
-  callRecords.value = [...new Map(fallbackRecords.flatMap((response) => response.rows).map((record) => [String(record.id), record])).values()]
-    .sort((left, right) => String(right.startedAt || '').localeCompare(String(left.startedAt || '')));
 };
 const directionLabel = (direction: CallDirection) =>
   ({ INBOUND: '呼入', OUTBOUND: '呼出', INTERNAL: '内部通话', UNKNOWN: '未知' })[direction] || direction;
@@ -374,7 +513,7 @@ const ticketStatusLabel = (status?: string) =>
   ({ OPEN: '待处理', PROCESSING: '处理中', RESOLVED: '已解决', CLOSED: '已关闭' })[status || ''] || status || '-';
 const processStatusLabel = (status?: string) =>
   (
-    {
+    ({
       draft: '未提交',
       waiting: '流转中',
       back: '已退回',
@@ -382,7 +521,7 @@ const processStatusLabel = (status?: string) =>
       finish: '已完成',
       invalid: '已作废',
       termination: '已终止'
-    } as Record<string, string>
+    }) as Record<string, string>
   )[status || ''] || '-';
 const formatDuration = (seconds?: number) => {
   const value = Math.max(0, seconds || 0);
@@ -411,24 +550,28 @@ const loadDetail = async () => {
     const templates = (await listFormTemplates(props.businessType)).data;
     template.value = templates.find((item) => String(item.id) === String(detail.value?.templateId));
     followUpContent.value = '';
-    activeTab.value = 'followUp';
-    await Promise.all([loadFollowUps(), loadCallRecords()]);
-    await nextTick();
-    updateRightPanelHeight();
+    activeTab.value = businessCallId.value ? 'assist' : 'followUp';
+    await Promise.all([loadFollowUps(), loadCallRecords(), loadAssist()]);
   } finally {
     loading.value = false;
   }
 };
 
 watch(visible, async (opened) => {
-  if (!opened) return;
+  if (!opened) {
+    stopAssistStream();
+    return;
+  }
   await loadDetail();
+  startAssistStream();
 });
 
-const updateRightPanelHeight = () => {
-  if (!leftPanelRef.value) return;
-  rightPanelHeight.value = `${leftPanelRef.value.offsetHeight}px`;
-};
+watch(businessCallId, async (callId) => {
+  if (!visible.value) return;
+  if (callId) activeTab.value = 'assist';
+  await loadAssist();
+  startAssistStream();
+});
 
 const handleSideScroll = () => {
   sidePanelScrolling.value = true;
@@ -438,22 +581,9 @@ const handleSideScroll = () => {
   }, 200);
 };
 
-onMounted(() => {
-  leftPanelObserver = new ResizeObserver(updateRightPanelHeight);
-  watch(
-    leftPanelRef,
-    (element) => {
-      leftPanelObserver?.disconnect();
-      if (element) leftPanelObserver?.observe(element);
-      updateRightPanelHeight();
-    },
-    { immediate: true }
-  );
-});
-
 onBeforeUnmount(() => {
-  leftPanelObserver?.disconnect();
   clearTimeout(scrollTimer);
+  stopAssistStream();
 });
 
 defineExpose({ reload: loadDetail });
@@ -465,9 +595,25 @@ defineExpose({ reload: loadDetail });
   gap: 18px;
 }
 
+.detail-container.customer-layout {
+  height: calc(100dvh - 102px);
+  min-height: 0;
+  align-items: stretch;
+}
+
+.detail-container.assist-active {
+  .detail-left {
+    flex: 8;
+  }
+
+  .detail-right {
+    flex: 16;
+  }
+}
+
 :deep(.customer-detail-drawer .el-drawer__body) {
   padding: 16px 20px 20px;
-  overflow-y: auto;
+  overflow: hidden;
   background: linear-gradient(180deg, #f7faff 0%, #ffffff 28%);
 }
 
@@ -476,11 +622,194 @@ defineExpose({ reload: loadDetail });
   min-width: 0;
 }
 
+.customer-layout .detail-left {
+  padding-right: 4px;
+  overflow-y: auto;
+}
+
 .detail-right {
   flex: 10;
   min-width: 0;
   display: flex;
   flex-direction: column;
+}
+
+.assist-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+
+  > div {
+    display: grid;
+    gap: 3px;
+  }
+
+  strong {
+    color: #17345f;
+    font-size: 15px;
+  }
+
+  span {
+    color: #8391a7;
+    font-size: 12px;
+  }
+}
+
+.assist-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+  gap: 12px;
+  min-height: 410px;
+}
+
+.assist-transcript,
+.assist-recommendation {
+  min-width: 0;
+  border: 1px solid #e3eaf4;
+  border-radius: 12px;
+  background: #f7f9fc;
+}
+
+.assist-transcript {
+  max-height: 520px;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.assist-dialogue-list {
+  display: grid;
+  gap: 10px;
+}
+
+.assist-dialogue-item {
+  display: grid;
+  width: min(82%, 560px);
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: #243552;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+  background: #fff;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+
+  &.speaker-customer {
+    cursor: pointer;
+  }
+
+  &.speaker-agent,
+  &.speaker-ai {
+    justify-self: end;
+    background: #edf6ff;
+  }
+
+  &.selected {
+    border-color: #5c9ee8;
+    box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.1);
+  }
+}
+
+.assist-speaker {
+  margin-bottom: 3px;
+  color: #8190a6;
+  font-size: 11px;
+}
+
+.assist-text {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.assist-recommendation {
+  align-self: start;
+  min-height: 210px;
+  padding: 14px;
+  background: linear-gradient(155deg, #f6fbff, #eef6ff);
+}
+
+.recommendation-title,
+.recommendation-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.recommendation-title {
+  color: #17345f;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.recommendation-content {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  color: #1d3557;
+  font-size: 13px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(45, 96, 158, 0.08);
+}
+
+.recommendation-actions {
+  justify-content: flex-end;
+  margin-top: 8px;
+  color: #97a3b6;
+  font-size: 11px;
+}
+
+.assist-thinking,
+.assist-failed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 120px;
+  color: #7d899b;
+  font-size: 12px;
+}
+
+.assist-thinking i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #aeb8c7;
+  animation: assist-dot 1.1s ease-in-out infinite;
+
+  &:nth-child(2) {
+    animation-delay: 0.14s;
+  }
+
+  &:nth-child(3) {
+    animation-delay: 0.28s;
+    margin-right: 4px;
+  }
+}
+
+@keyframes assist-dot {
+  0%,
+  100% {
+    transform: translateY(1px);
+    opacity: 0.45;
+  }
+  50% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 1080px) {
+  .assist-workspace {
+    grid-template-columns: 1fr;
+  }
 }
 
 .customer-hero {
@@ -491,9 +820,7 @@ defineExpose({ reload: loadDetail });
   padding: 14px 16px;
   border: 1px solid #dce8f8;
   border-radius: 14px;
-  background:
-    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.16), transparent 42%),
-    linear-gradient(135deg, #f4f9ff, #eef5ff);
+  background: radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.16), transparent 42%), linear-gradient(135deg, #f4f9ff, #eef5ff);
 }
 
 .customer-avatar {
@@ -561,7 +888,9 @@ defineExpose({ reload: loadDetail });
   border: 1px solid #e4eaf3;
   border-radius: 10px;
   background: #fff;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
 .custom-field:hover {
@@ -590,6 +919,7 @@ defineExpose({ reload: loadDetail });
 }
 
 .side-panel {
+  height: 100%;
   padding: 0 14px 14px;
   border: 1px solid #dce8f8;
   border-radius: 14px;

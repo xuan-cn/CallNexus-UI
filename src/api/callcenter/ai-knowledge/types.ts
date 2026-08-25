@@ -276,6 +276,7 @@ export type AiIntentActionType =
   | 'TRANSFER_EXTENSION'
   | 'TRANSFER_IVR'
   | 'TRANSFER_ONLINE_SERVICE'
+  | 'CREATE_TICKET'
   | 'END_CALL'
   | 'KNOWLEDGE_QUERY';
 export interface AiIntentUtterance {

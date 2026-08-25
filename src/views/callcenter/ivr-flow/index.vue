@@ -49,6 +49,13 @@
           </template>
         </el-table-column>
       </el-table>
+      <pagination
+        v-show="total > 0"
+        v-model:page="queryParams.pageNum"
+        v-model:limit="queryParams.pageSize"
+        :total="total"
+        @pagination="loadFlows"
+      />
     </el-card>
 
     <el-dialog v-model="createDialog" title="新增 IVR 流程" width="620px" append-to-body>
@@ -136,8 +143,8 @@ import {
   deleteIvrFlow,
   getIvrFlow,
   getIvrFlowVersion,
-  listIvrFlows,
   listIvrFlowVersions,
+  pageIvrFlows,
   publishIvrFlow,
   rollbackIvrFlowVersion,
   unpublishIvrFlow,
@@ -171,6 +178,8 @@ const previewVersionNo = ref(0);
 const createFormRef = ref<ElFormInstance>();
 const designerRef = ref<InstanceType<typeof IvrFlowDesigner>>();
 const flows = ref<IvrFlowVO[]>([]);
+const total = ref(0);
+const queryParams = reactive<PageQuery>({ pageNum: 1, pageSize: 10 });
 const groups = ref<NodeGroupVO[]>([]);
 const mediaOptions = ref<MediaAssetVO[]>([]);
 const queueOptions = ref<CallQueueVO[]>([]);
@@ -213,11 +222,24 @@ const defaultGraph = (): IvrGraph => ({
   ],
   edges: [{ id: 'start_hangup', source: 'start', target: 'hangup', condition: '' }]
 });
+const loadFlows = async () => {
+  loading.value = true;
+  try {
+    const response = await pageIvrFlows(queryParams);
+    flows.value = response.rows;
+    total.value = response.total;
+    if (flows.value.length === 0 && queryParams.pageNum > 1) {
+      queryParams.pageNum -= 1;
+      await loadFlows();
+    }
+  } finally {
+    loading.value = false;
+  }
+};
 const load = async () => {
   loading.value = true;
   try {
-    const [flowRes, groupRes, mediaRes, queueRes, businessHoursRes, voicemailRes, aiAgentRes] = await Promise.all([
-      listIvrFlows(),
+    const [groupRes, mediaRes, queueRes, businessHoursRes, voicemailRes, aiAgentRes] = await Promise.all([
       listNodeGroups(),
       listMediaAssets({ pageNum: 1, pageSize: 1000, category: 'IVR_PROMPT', enabled: true }),
       listCallQueues(),
@@ -225,7 +247,6 @@ const load = async () => {
       listVoiceMailBoxes({ pageNum: 1, pageSize: 1000, enabled: true }),
       listAiAgents()
     ]);
-    flows.value = flowRes.data;
     groups.value = groupRes.data.filter((item) => item.enabled);
     mediaOptions.value = mediaRes.rows.filter((item) => item.publishStatus === 'PUBLISHED');
     queueOptions.value = queueRes.data.filter((item) => item.enabled && item.syncStatus === 'SYNCED');
@@ -235,6 +256,7 @@ const load = async () => {
   } finally {
     loading.value = false;
   }
+  await loadFlows();
 };
 const handleAdd = () => {
   Object.assign(createForm, {

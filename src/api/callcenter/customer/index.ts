@@ -71,15 +71,15 @@ export interface CustomerQuery extends PageQuery {
   tags?: string;
   skillGroupId?: string | number;
   agentId?: string | number;
-    importBatchId?: string | number;
-    importTaskId?: string | number;
+  importBatchId?: string | number;
+  importTaskId?: string | number;
   assignmentState?: 'ASSIGNED' | 'UNASSIGNED' | '';
 }
 
 export interface CustomerAssignmentForm {
-    customerIds: Array<string | number>;
-    selectAll?: boolean;
-    selectionQuery?: CustomerQuery;
+  customerIds: Array<string | number>;
+  selectAll?: boolean;
+  selectionQuery?: CustomerQuery;
   customerType?: string;
   sourceChannel?: string;
   tags?: string;
@@ -203,6 +203,9 @@ export const deleteCustomerPhone = (id: string | number, phoneId: string | numbe
 
 export const listCustomerFollowUps = (id: string | number) =>
   request<CustomerFollowUpVO[]>({ url: `/api/v1/customers/${id}/follow-ups`, method: 'get' });
+
+export const pageCustomerFollowUps = (id: string | number, params: { pageNum: number; pageSize: number }) =>
+  request({ url: `/api/v1/customers/${id}/follow-ups/page`, method: 'get', params });
 
 export const addCustomerFollowUp = (id: string | number, content: string) =>
   request<string | number>({ url: `/api/v1/customers/${id}/follow-ups`, method: 'post', data: { content } });

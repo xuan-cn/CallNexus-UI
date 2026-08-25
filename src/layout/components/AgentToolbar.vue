@@ -1,9 +1,5 @@
 <template>
-  <div
-    ref="phoneShellRef"
-    class="agent-phone-shell is-embedded"
-    :class="{ incoming: incomingCall, open: panelOpen, calling: callActive }"
-  >
+  <div ref="phoneShellRef" class="agent-phone-shell is-embedded" :class="{ incoming: incomingCall, open: panelOpen, calling: callActive }">
     <div class="soft-bar">
       <div class="soft-status" :class="softbarTone">
         <i class="soft-status-dot" aria-hidden="true"></i>
@@ -31,23 +27,10 @@
           >
             <el-icon><PhoneFilled /></el-icon>
           </button>
-          <button
-            v-else-if="incomingCall || callActive"
-            type="button"
-            class="soft-call-btn is-hangup"
-            title="挂断"
-            @click="hangup"
-          >
+          <button v-else-if="incomingCall || callActive" type="button" class="soft-call-btn is-hangup" title="挂断" @click="hangup">
             <el-icon><CloseBold /></el-icon>
           </button>
-          <button
-            v-else
-            type="button"
-            class="soft-call-btn"
-            :class="{ 'is-ready': canDial }"
-            :title="dialButtonTitle"
-            @click="makeCall"
-          >
+          <button v-else type="button" class="soft-call-btn" :class="{ 'is-ready': canDial }" :title="dialButtonTitle" @click="makeCall">
             <el-icon><PhoneFilled /></el-icon>
           </button>
         </div>
@@ -74,14 +57,8 @@
           <span class="soft-tag agent" :title="currentAgent.agentName || currentAgent.agentCode">
             {{ currentAgent.agentCode || currentAgent.agentName || '坐席' }}
           </span>
-          <button
-            v-if="incomingCall || callActive"
-            type="button"
-            class="soft-screen-pop"
-            title="来电弹屏"
-            @click="openScreenPop"
-          >
-            弹屏
+          <button v-if="incomingCall || callActive" type="button" class="soft-screen-pop" title="打开坐席工作台" @click="openScreenPop">
+            工作台
           </button>
           <button type="button" class="soft-more" :class="{ active: panelOpen }" title="更多功能" @click="togglePanel">
             <el-icon><Operation /></el-icon>
@@ -125,7 +102,7 @@
           <span>等待接听</span>
         </div>
         <div class="call-actions">
-          <button type="button" @click="openScreenPop">来电弹屏</button>
+          <button type="button" @click="openScreenPop">打开工作台</button>
           <button v-hasPermi="['callcenter:customer:create']" type="button" @click="createCustomer">
             <el-icon><User /></el-icon>新建客户
           </button>
@@ -231,7 +208,7 @@
           </template>
         </div>
         <div class="call-actions">
-          <button type="button" @click="openScreenPop">来电弹屏</button>
+          <button type="button" @click="openScreenPop">打开工作台</button>
           <button v-hasPermi="['callcenter:customer:create']" type="button" @click="createCustomer">
             <el-icon><User /></el-icon>新建客户
           </button>
@@ -247,17 +224,11 @@
 
     <dynamic-business-form-dialog v-model="customerDialogVisible" business-type="CUSTOMER" :phone-number="dialNumber" :call-id="activeCallId" />
     <dynamic-business-form-dialog v-model="ticketDialogVisible" business-type="TICKET" :phone-number="dialNumber" :call-id="activeCallId" />
-    <CallCenterBusinessDetail v-model="matchedCustomerDetailVisible" business-type="CUSTOMER" :business-id="matchedCustomer?.id" />
-    <IncomingCallScreenPop
-      v-model="screenPopVisible"
-      :phone-number="incomingCall ? incomingNumber : dialNumber"
-      :call-id="activeCallId"
-      :number-location="incomingCall ? incomingLocation : activeNumberLocation"
-      :call-status-text="softbarStatusText"
-      :duration-text="softTimerText"
-      :incoming="incomingCall"
-      :active="callActive"
-      @saved="void lookupMatchedCustomer()"
+    <CallCenterBusinessDetail
+      v-model="matchedCustomerDetailVisible"
+      business-type="CUSTOMER"
+      :business-id="matchedCustomer?.id"
+      :business-call-id="activeCallId"
     />
     <CallConferenceDrawer
       v-model="conferenceDrawerOpen"
@@ -301,7 +272,6 @@ import { subscribeCallEvents } from '@/utils/websocket';
 import { webRtcPhone } from '@/utils/webrtcPhone';
 import { CustomerVO, getCustomerByPhone } from '@/api/callcenter/customer';
 import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/index.vue';
-import IncomingCallScreenPop from '@/components/IncomingCallScreenPop/index.vue';
 import CallConferenceDrawer from './CallConferenceDrawer.vue';
 import DynamicBusinessFormDialog from './DynamicBusinessFormDialog.vue';
 import { useAgentDialBus, type AgentDialRequest } from '@/composables/useAgentDial';
@@ -319,6 +289,7 @@ const WEBRTC_MODE_ENABLED =
     .trim()
     .toLowerCase() === 'true';
 const WEBRTC_MODE_DISABLED = !WEBRTC_MODE_ENABLED;
+const router = useRouter();
 const savedPhoneMode = localStorage.getItem(PHONE_MODE_STORAGE_KEY);
 if (WEBRTC_MODE_DISABLED && savedPhoneMode === 'WEBRTC') {
   localStorage.setItem(PHONE_MODE_STORAGE_KEY, 'EXTERNAL_SOFTPHONE');
@@ -362,6 +333,9 @@ const incomingNumber = ref('');
 const incomingLocation = ref('');
 const activeNumberLocation = ref('');
 const activeCallId = ref('');
+// Agent leg UUID and business call ID are different identifiers. Agent assist
+// subscriptions must always use the explicit business call ID from backend events.
+const authoritativeBusinessCallId = ref('');
 const callConnected = ref(false);
 const callState = ref<AgentCallState>(idleAgentCallState());
 const callPhase = computed(() => callState.value.phase);
@@ -369,7 +343,6 @@ const outboundDestination = ref('');
 const callSeconds = ref(0);
 const customerDialogVisible = ref(false);
 const ticketDialogVisible = ref(false);
-const screenPopVisible = ref(false);
 const matchedCustomer = ref<CustomerVO>();
 const matchedCustomerDetailVisible = ref(false);
 const webRtcRegistered = ref(false);
@@ -565,6 +538,10 @@ const commitCallTransition = (transition: AgentCallTransition) => {
 };
 
 const commitEventCallState = (event: Record<string, unknown>, fallback: AgentCallPhase) => {
+  const explicitBusinessCallId = String(event.businessCallId || '').trim();
+  if (explicitBusinessCallId) {
+    authoritativeBusinessCallId.value = explicitBusinessCallId;
+  }
   return commitCallTransition({
     phase: normalizeCallPhase(event.callPhase, fallback),
     operation: normalizeCallOperation(event.callOperation),
@@ -1249,7 +1226,18 @@ const createTicket = () => {
 };
 
 const openScreenPop = () => {
-  screenPopVisible.value = true;
+  void router.push({
+    name: 'AgentCallWorkspace',
+    query: {
+      callId: workspaceBusinessCallId.value,
+      phone: incomingCall.value ? incomingNumber.value : dialNumber.value,
+      location: incomingCall.value ? incomingLocation.value : activeNumberLocation.value,
+      status: softbarStatusText.value,
+      duration: softTimerText.value,
+      incoming: String(incomingCall.value),
+      active: String(callActive.value)
+    }
+  });
 };
 
 const simulateIncomingCall = () => {
@@ -1437,7 +1425,7 @@ const showIncomingCall = (event: Record<string, unknown>) => {
   dialNumber.value = incomingNumber.value;
   resetCallControls();
   stopCallTimer();
-  // 外置软电话：振铃阶段只更新顶栏，接通后再自动弹屏
+  // 外置软电话：振铃阶段只更新顶栏，接通后再打开工作台
   if (webRtcIncoming.value) {
     panelOpen.value = true;
   }
@@ -1465,7 +1453,7 @@ const showActiveCall = (event: Record<string, unknown>, fallbackPhase: AgentCall
   callActive.value = true;
   // 通话中保留顶栏操作即可；面板已开则不动，未开不强制弹出
   startCallTimer();
-  // 仅接通后自动弹屏（振铃/外呼拨号中不弹）
+  // 仅接通后自动打开工作台（振铃/外呼拨号中不跳转）
   if (fallbackPhase === 'CONNECTED') {
     openScreenPop();
   }
@@ -1551,6 +1539,7 @@ const handleCallEvent = (event: Record<string, unknown>) => {
 
 const clearActiveCallState = () => {
   callState.value = idleAgentCallState();
+  authoritativeBusinessCallId.value = '';
   incomingCall.value = false;
   incomingNumber.value = '';
   incomingLocation.value = '';
@@ -1651,7 +1640,7 @@ watch(incomingCall, (incoming) => {
     return;
   }
   revealDockedPhone();
-  // 仅 WebRTC 待接听时自动展开面板；外置软电话靠顶栏提示，接通后再弹屏
+  // 仅 WebRTC 待接听时自动展开面板；外置软电话靠顶栏提示，接通后再打开工作台
   if (webRtcIncoming.value) {
     panelOpen.value = true;
   }
@@ -1681,9 +1670,22 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointermove', handleDrag);
 });
 
+const workspaceBusinessCallId = computed(() => authoritativeBusinessCallId.value || callState.value.businessCallId || activeCallId.value);
+
+const workspaceContext = computed(() => ({
+  businessCallId: workspaceBusinessCallId.value,
+  phoneNumber: incomingCall.value ? incomingNumber.value : dialNumber.value,
+  numberLocation: incomingCall.value ? incomingLocation.value : activeNumberLocation.value,
+  callStatusText: softbarStatusText.value,
+  durationText: softTimerText.value,
+  incoming: incomingCall.value,
+  active: callActive.value
+}));
+
 defineExpose({
   simulateIncomingCall,
-  openScreenPop
+  openScreenPop,
+  workspaceContext
 });
 </script>
 
@@ -1845,7 +1847,9 @@ button {
   border-radius: 8px;
   background: #fff;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .soft-dial:focus-within {
@@ -1886,7 +1890,9 @@ button {
   border: 0;
   background: linear-gradient(135deg, #3b82f6 0%, #2f6bff 52%, #2459cf 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
-  transition: filter 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    filter 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .soft-call-btn:hover {
@@ -2066,7 +2072,10 @@ button {
   box-shadow:
     0 10px 24px rgba(28, 73, 158, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 
   div {
     display: grid;
@@ -2336,7 +2345,9 @@ button {
   border-radius: 12px;
   background: #f8fbff;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 
   &:focus-within {
     border-color: #7dd3fc;
@@ -2377,7 +2388,10 @@ button {
     border-radius: 12px;
     background: linear-gradient(180deg, #ffffff, #f5f8fc);
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
-    transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+    transition:
+      transform 0.12s ease,
+      border-color 0.12s ease,
+      background 0.12s ease;
   }
 
   button:hover:not(:disabled) {
@@ -2413,7 +2427,10 @@ button {
   border-radius: 12px;
   background: linear-gradient(90deg, #34d399 0%, #10b981 48%, #059669 100%);
   box-shadow: 0 10px 18px rgba(16, 185, 129, 0.28);
-  transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    filter 0.16s ease;
 }
 
 .call-button:hover:not(:disabled) {
@@ -2453,8 +2470,7 @@ button {
   border-radius: 16px;
   background:
     radial-gradient(circle at 50% 18%, rgba(45, 212, 191, 0.2), transparent 42%),
-    radial-gradient(circle at 80% 100%, rgba(59, 130, 246, 0.12), transparent 46%),
-    linear-gradient(180deg, #f8fcff 0%, #eef5ff 100%);
+    radial-gradient(circle at 80% 100%, rgba(59, 130, 246, 0.12), transparent 46%), linear-gradient(180deg, #f8fcff 0%, #eef5ff 100%);
 
   small {
     color: #2563eb;
@@ -2496,9 +2512,7 @@ button {
 
 .active-call.incoming-call {
   border: 1px solid #86efac;
-  background:
-    radial-gradient(circle at 50% 18%, rgba(74, 222, 128, 0.22), transparent 44%),
-    linear-gradient(180deg, #f0fdf4, #dcffe8);
+  background: radial-gradient(circle at 50% 18%, rgba(74, 222, 128, 0.22), transparent 44%), linear-gradient(180deg, #f0fdf4, #dcffe8);
   animation: incoming-pulse 1s ease-in-out infinite;
 
   small {
@@ -2553,7 +2567,9 @@ button {
   border: 1px solid #c9d9ef;
   border-radius: 12px;
   background: linear-gradient(180deg, #ffffff, #f4f9ff);
-  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
 
   span {
     color: #7b8798;
@@ -2595,7 +2611,11 @@ button {
     border-radius: 11px;
     background: linear-gradient(180deg, #ffffff, #f6f9fd);
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
-    transition: transform 0.14s ease, border-color 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
+    transition:
+      transform 0.14s ease,
+      border-color 0.14s ease,
+      color 0.14s ease,
+      box-shadow 0.14s ease;
   }
 
   button:hover:not(:disabled) {

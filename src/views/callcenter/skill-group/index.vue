@@ -17,6 +17,12 @@
             <el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="坐席辅助" min-width="170">
+          <template #default="{ row }">
+            <el-tag v-if="row.assistEnabled" type="success" effect="plain">{{ aiAgentName(row.assistAgentId) }}</el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="备注" prop="remark" min-width="200" show-overflow-tooltip />
         <el-table-column label="操作" width="230" align="center" fixed="right">
           <template #default="{ row }">
@@ -44,6 +50,16 @@
         </el-form-item>
         <el-form-item label="状态">
           <el-switch v-model="form.enabled" active-text="启用" inactive-text="停用" />
+        </el-form-item>
+        <el-divider content-position="left">通话坐席辅助</el-divider>
+        <el-form-item label="启用辅助">
+          <el-switch v-model="form.assistEnabled" active-text="启用" inactive-text="关闭" />
+        </el-form-item>
+        <el-form-item v-if="form.assistEnabled" label="辅助助手" prop="assistAgentId">
+          <el-select v-model="form.assistAgentId" filterable clearable style="width: 100%" placeholder="选择已绑定对应知识库的 AI 助手">
+            <el-option v-for="item in aiAgents" :key="item.id" :label="`${item.agentName}（${item.agentCode}）`" :value="item.id" />
+          </el-select>
+          <div class="form-tip">客户最终分句会使用该助手绑定的知识库生成坐席建议；未配置时不会自动使用系统助手。</div>
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.remark" type="textarea" :rows="3" maxlength="500" show-word-limit />
@@ -128,6 +144,8 @@ import { createSkillGroup, deleteSkillGroup, getSkillGroup, listSkillGroups, upd
 import type { SkillGroupForm, SkillGroupVO } from '@/api/callcenter/skill-group/types';
 import { listAgents } from '@/api/callcenter/agent';
 import type { AgentVO } from '@/api/callcenter/agent/types';
+import { listAiAgents } from '@/api/callcenter/ai-knowledge';
+import type { AiAgentVO } from '@/api/callcenter/ai-knowledge/types';
 import { listFreeSwitchNodes } from '@/api/callcenter/freeswitch-node';
 import type { FreeSwitchNodeVO } from '@/api/callcenter/freeswitch-node/types';
 import {
@@ -148,6 +166,7 @@ const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const loading = ref(false);
 const groups = ref<SkillGroupVO[]>([]);
 const agents = ref<AgentVO[]>([]);
+const aiAgents = ref<AiAgentVO[]>([]);
 const nodes = ref<FreeSwitchNodeVO[]>([]);
 const formRef = ref<ElFormInstance>();
 const policyFormRef = ref<ElFormInstance>();
@@ -160,7 +179,15 @@ const policyDialog = reactive({
   group: undefined as SkillGroupVO | undefined
 });
 
-const form = reactive<SkillGroupForm>({ groupCode: '', groupName: '', agentIds: [], enabled: true, remark: '' });
+const form = reactive<SkillGroupForm>({
+  groupCode: '',
+  groupName: '',
+  agentIds: [],
+  enabled: true,
+  assistEnabled: false,
+  assistAgentId: undefined,
+  remark: ''
+});
 const policyForm = reactive<SkillGroupOutboundPolicyForm>({ enabled: true });
 const policyBindings = ref<SkillGroupOutboundPolicyVO[]>([]);
 const policyOptions = ref<OutboundLinePolicyVO[]>([]);
@@ -168,7 +195,16 @@ const policyOptions = ref<OutboundLinePolicyVO[]>([]);
 const rules = {
   groupCode: [{ required: true, pattern: /^[A-Za-z0-9_-]{2,32}$/, message: '请输入合法技能组编码', trigger: 'blur' }],
   groupName: [{ required: true, message: '请输入技能组名称', trigger: 'blur' }],
-  agentIds: [{ required: true, type: 'array', min: 1, message: '至少选择一名坐席', trigger: 'change' }]
+  agentIds: [{ required: true, type: 'array', min: 1, message: '至少选择一名坐席', trigger: 'change' }],
+  assistAgentId: [
+    {
+      validator: (_rule: unknown, value: unknown, callback: (error?: Error) => void) => {
+        if (form.assistEnabled && !value) callback(new Error('请选择坐席辅助 AI 助手'));
+        else callback();
+      },
+      trigger: 'change'
+    }
+  ]
 };
 
 const policyRules = {
@@ -179,6 +215,7 @@ const policyRules = {
 const normalizeRows = <T,>(res: any): T[] => res?.rows || res?.data || [];
 const policyTypeLabel = (value: OutboundLinePolicyType) => ({ FIXED: '固定', ROUND_ROBIN: '轮询', WEIGHT: '权重' })[value] || value;
 const agentLabel = (agent: AgentVO) => `${agent.agentName || agent.agentCode}（${agent.agentCode}）`;
+const aiAgentName = (id?: string | number) => aiAgents.value.find((item) => String(item.id) === String(id))?.agentName || '已启用';
 const policyLabel = (policy: OutboundLinePolicyVO) => `${policy.policyName}（${policy.policyCode}，${policyTypeLabel(policy.policyType)}）`;
 
 const loadNodes = async () => {
@@ -189,9 +226,14 @@ const loadNodes = async () => {
 const load = async () => {
   loading.value = true;
   try {
-    const [groupRes, agentRes] = await Promise.all([listSkillGroups(), listAgents({ pageNum: 1, pageSize: 1000, enabled: true })]);
+    const [groupRes, agentRes, aiAgentRes] = await Promise.all([
+      listSkillGroups(),
+      listAgents({ pageNum: 1, pageSize: 1000, enabled: true }),
+      listAiAgents()
+    ]);
     groups.value = groupRes.data || [];
     agents.value = agentRes.rows || [];
+    aiAgents.value = (aiAgentRes.data || []).filter((item) => item.enabled);
     if (!nodes.value.length) {
       await loadNodes();
     }
@@ -200,7 +242,18 @@ const load = async () => {
   }
 };
 
-const reset = () => Object.assign(form, { id: undefined, groupCode: '', groupName: '', agentIds: [], enabled: true, remark: '', version: undefined });
+const reset = () =>
+  Object.assign(form, {
+    id: undefined,
+    groupCode: '',
+    groupName: '',
+    agentIds: [],
+    enabled: true,
+    assistEnabled: false,
+    assistAgentId: undefined,
+    remark: '',
+    version: undefined
+  });
 
 const handleAdd = () => {
   reset();

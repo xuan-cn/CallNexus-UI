@@ -368,8 +368,13 @@ const data = reactive<PageData<FreeSwitchGatewayForm, FreeSwitchGatewayQuery>>({
     ],
     registeredIdentity: [
       {
-        validator: (_rule: unknown, value: string, callback: (error?: Error) => void) =>
-          form.value.accessMode !== 'DEVICE_REGISTER' || value ? callback() : callback(new Error('请输入对端注册账号')),
+        validator: (_rule: unknown, value: string, callback: (error?: Error) => void) => {
+          if (form.value.accessMode !== 'DEVICE_REGISTER') return callback();
+          if (!value) return callback(new Error('请输入对端注册账号'));
+          return /^[A-Za-z0-9_.-]{1,64}$/.test(value)
+            ? callback()
+            : callback(new Error('注册账号只能包含字母、数字、下划线、点和横线，长度不能超过 64 位'));
+        },
         trigger: 'blur'
       }
     ],

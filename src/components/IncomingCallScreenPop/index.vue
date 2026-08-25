@@ -1,50 +1,20 @@
 <template>
-  <el-dialog
-    v-model="visible"
-    class="incoming-screen-pop"
-    width="min(1280px, 96vw)"
-    top="3vh"
-    append-to-body
-    destroy-on-close
-    :close-on-click-modal="false"
-    @closed="handleClosed"
-  >
-    <template #header>
+  <div class="incoming-screen-pop incoming-call-workspace">
+    <header class="workspace-header">
       <div class="pop-header">
         <div class="pop-header-main">
           <span class="pop-badge" :class="callTone">{{ callStatusText }}</span>
-          <strong>来电弹屏</strong>
           <span class="pop-phone">{{ phone || '未知号码' }}</span>
           <span v-if="numberLocation" class="pop-location">{{ numberLocation }}</span>
           <span v-if="durationText" class="pop-duration">{{ durationText }}</span>
         </div>
-        <div class="pop-header-sub">
-          <el-tag v-if="customer?.id" type="success" effect="plain" round>已识别客户</el-tag>
-          <el-tag v-else type="warning" effect="plain" round>未知客户 · 可新建</el-tag>
-          <el-tag v-if="callId" effect="plain" round>通话ID {{ callId }}</el-tag>
-        </div>
       </div>
-    </template>
+      <el-button plain @click="handleClosed">返回</el-button>
+    </header>
 
     <div v-loading="booting" class="pop-body">
       <aside class="pop-side">
-        <div class="side-card">
-          <div class="side-title">本次来电</div>
-          <div class="side-row"><span class="side-label">主叫</span><strong>{{ phone || '-' }}</strong></div>
-          <div class="side-row"><span class="side-label">归属地</span><strong>{{ numberLocation || '未知' }}</strong></div>
-          <div class="side-row"><span class="side-label">状态</span><strong>{{ sideStatusText }}</strong></div>
-          <div class="side-row"><span class="side-label">时长</span><strong>{{ durationText || '00:00' }}</strong></div>
-        </div>
-        <div class="side-card tip-card">
-          <div class="side-title">坐席提示</div>
-          <p>先核对客户信息，再补工单要点。挂断后仍可保存客户与提交工单。</p>
-          <ul>
-            <li>已匹配客户会自动带入模板字段</li>
-            <li>「保存信息」只更新客户资料</li>
-            <li>「提交工单」创建草稿并提交流程</li>
-            <li>「直接办理」创建后立即提交办理</li>
-          </ul>
-        </div>
+        <AgentAssistPanel v-if="props.callId" class="screen-assist-panel" :business-call-id="props.callId" />
       </aside>
 
       <section class="pop-main">
@@ -89,11 +59,7 @@
               </el-col>
               <el-col v-for="field in selectedCustomerTemplate?.fields || []" :key="`c-${field.fieldCode}`" :span="field.layoutSpan || 12">
                 <el-form-item :label="field.fieldName" :required="field.required">
-                  <el-input
-                    v-if="field.fieldType === 'INPUT'"
-                    v-model="customerFormData[field.fieldCode]"
-                    :placeholder="field.placeholder"
-                  />
+                  <el-input v-if="field.fieldType === 'INPUT'" v-model="customerFormData[field.fieldCode]" :placeholder="field.placeholder" />
                   <el-input
                     v-else-if="field.fieldType === 'TEXTAREA'"
                     v-model="customerFormData[field.fieldCode]"
@@ -152,16 +118,15 @@
               </el-col>
               <el-col :span="12">
                 <el-form-item label="关联客户">
-                  <el-input :model-value="customer?.customerName || customerName || (customer?.id ? `客户#${customer.id}` : '保存后自动关联')" disabled />
+                  <el-input
+                    :model-value="customer?.customerName || customerName || (customer?.id ? `客户#${customer.id}` : '保存后自动关联')"
+                    disabled
+                  />
                 </el-form-item>
               </el-col>
               <el-col v-for="field in selectedTicketTemplate?.fields || []" :key="`t-${field.fieldCode}`" :span="field.layoutSpan || 12">
                 <el-form-item :label="field.fieldName" :required="field.required">
-                  <el-input
-                    v-if="field.fieldType === 'INPUT'"
-                    v-model="ticketFormData[field.fieldCode]"
-                    :placeholder="field.placeholder"
-                  />
+                  <el-input v-if="field.fieldType === 'INPUT'" v-model="ticketFormData[field.fieldCode]" :placeholder="field.placeholder" />
                   <el-input
                     v-else-if="field.fieldType === 'TEXTAREA'"
                     v-model="ticketFormData[field.fieldCode]"
@@ -207,31 +172,58 @@
         <div class="history-block">
           <el-tabs v-model="historyTab">
             <el-tab-pane label="通话记录" name="calls">
-              <div v-if="callRecords.length" class="history-list">
-                <div v-for="item in callRecords" :key="String(item.id)" class="history-item">
-                  <div class="history-item-head">
-                    <el-tag size="small" :type="item.direction === 'INBOUND' ? 'success' : 'primary'">
-                      {{ item.direction === 'INBOUND' ? '呼入' : item.direction === 'OUTBOUND' ? '呼出' : item.direction }}
+              <el-table v-loading="callHistoryLoading" :data="callRecords" class="compact-history-table" size="small" empty-text="暂无通话记录">
+                <el-table-column label="方向" width="72">
+                  <template #default="{ row }">
+                    <el-tag size="small" :type="row.direction === 'INBOUND' ? 'success' : 'primary'">
+                      {{ row.direction === 'INBOUND' ? '呼入' : row.direction === 'OUTBOUND' ? '呼出' : row.direction }}
                     </el-tag>
-                    <span>{{ item.startedAt || '-' }}</span>
-                  </div>
-                  <div>{{ item.callerNumber || '-' }} → {{ item.calledNumber || '-' }}</div>
-                  <div class="history-meta">时长 {{ formatDuration(item.billableSeconds) }} · {{ item.hangupCause || '-' }}</div>
-                </div>
-              </div>
-              <el-empty v-else description="暂无通话记录" :image-size="64" />
+                  </template>
+                </el-table-column>
+                <el-table-column prop="callerNumber" label="主叫" min-width="110" show-overflow-tooltip />
+                <el-table-column prop="calledNumber" label="被叫" min-width="110" show-overflow-tooltip />
+                <el-table-column label="通话时长" width="90">
+                  <template #default="{ row }">{{ formatDuration(row.billableSeconds) }}</template>
+                </el-table-column>
+                <el-table-column prop="hangupCause" label="挂断原因" min-width="120" show-overflow-tooltip />
+                <el-table-column prop="startedAt" label="开始时间" width="150" />
+              </el-table>
+              <el-pagination
+                v-if="callTotal > 0"
+                v-model:current-page="callPageNum"
+                v-model:page-size="callPageSize"
+                class="history-pagination"
+                small
+                background
+                layout="total, sizes, prev, pager, next"
+                :page-sizes="[5, 10, 20]"
+                :total="callTotal"
+                @current-change="loadCallHistory"
+                @size-change="handleCallPageSizeChange"
+              />
             </el-tab-pane>
             <el-tab-pane label="历史工单" name="tickets">
-              <div v-if="tickets.length" class="history-list">
-                <div v-for="item in tickets" :key="String(item.id)" class="history-item">
-                  <div class="history-item-head">
-                    <strong>{{ item.ticketNo }}</strong>
-                    <el-tag size="small">{{ item.ticketStatus }}</el-tag>
-                  </div>
-                  <div class="history-meta">{{ item.createTime }} · {{ item.currentNodeName || item.processStatus || '-' }}</div>
-                </div>
-              </div>
-              <el-empty v-else description="暂无历史工单" :image-size="64" />
+              <el-table v-loading="ticketHistoryLoading" :data="tickets" class="compact-history-table" size="small" empty-text="暂无历史工单">
+                <el-table-column prop="ticketNo" label="工单编号" min-width="150" show-overflow-tooltip />
+                <el-table-column prop="ticketStatus" label="状态" width="90" />
+                <el-table-column label="当前节点" min-width="130" show-overflow-tooltip>
+                  <template #default="{ row }">{{ row.currentNodeName || row.processStatus || '-' }}</template>
+                </el-table-column>
+                <el-table-column prop="createTime" label="创建时间" width="150" />
+              </el-table>
+              <el-pagination
+                v-if="ticketTotal > 0"
+                v-model:current-page="ticketPageNum"
+                v-model:page-size="ticketPageSize"
+                class="history-pagination"
+                small
+                background
+                layout="total, sizes, prev, pager, next"
+                :page-sizes="[5, 10, 20]"
+                :total="ticketTotal"
+                @current-change="loadTicketHistory"
+                @size-change="handleTicketPageSizeChange"
+              />
             </el-tab-pane>
             <el-tab-pane label="跟进记录" name="followUps">
               <div v-if="customer?.id" class="follow-editor">
@@ -240,34 +232,45 @@
                   添加跟进
                 </el-button>
               </div>
-              <div v-if="followUps.length" class="history-list">
-                <div v-for="item in followUps" :key="String(item.id)" class="history-item">
-                  <div class="history-item-head">
-                    <strong>{{ item.followUpByName || item.followUpBy || '跟进人' }}</strong>
-                    <span>{{ item.followUpTime }}</span>
-                  </div>
-                  <div>{{ item.content }}</div>
-                </div>
-              </div>
-              <el-empty v-else description="暂无跟进记录" :image-size="64" />
+              <el-table v-loading="followUpHistoryLoading" :data="followUps" class="compact-history-table" size="small" empty-text="暂无跟进记录">
+                <el-table-column label="跟进人" width="110">
+                  <template #default="{ row }">{{ row.followUpByName || row.followUpBy || '跟进人' }}</template>
+                </el-table-column>
+                <el-table-column prop="content" label="跟进内容" min-width="240" show-overflow-tooltip />
+                <el-table-column prop="followUpTime" label="跟进时间" width="150" />
+              </el-table>
+              <el-pagination
+                v-if="followUpTotal > 0"
+                v-model:current-page="followUpPageNum"
+                v-model:page-size="followUpPageSize"
+                class="history-pagination"
+                small
+                background
+                layout="total, sizes, prev, pager, next"
+                :page-sizes="[5, 10, 20]"
+                :total="followUpTotal"
+                @current-change="loadFollowUpHistory"
+                @size-change="handleFollowUpPageSizeChange"
+              />
             </el-tab-pane>
           </el-tabs>
         </div>
       </section>
     </div>
-  </el-dialog>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { Phone } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
+import AgentAssistPanel from '@/components/AgentAssistPanel/index.vue';
 import {
   addCustomerFollowUp,
   createCustomer,
   CustomerFollowUpVO,
   CustomerVO,
   getCustomerByPhone,
-  listCustomerFollowUps,
+  pageCustomerFollowUps,
   updateCustomer
 } from '@/api/callcenter/customer';
 import { listCallRecords } from '@/api/callcenter/call-record';
@@ -298,7 +301,6 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{ saved: []; closed: [] }>();
-const visible = defineModel<boolean>({ default: false });
 
 const booting = ref(false);
 const phone = ref('');
@@ -318,31 +320,29 @@ const historyTab = ref('calls');
 const callRecords = ref<CallRecordVO[]>([]);
 const tickets = ref<TicketVO[]>([]);
 const followUps = ref<CustomerFollowUpVO[]>([]);
+const callHistoryLoading = ref(false);
+const ticketHistoryLoading = ref(false);
+const followUpHistoryLoading = ref(false);
+const callPageNum = ref(1);
+const callPageSize = ref(5);
+const callTotal = ref(0);
+const ticketPageNum = ref(1);
+const ticketPageSize = ref(5);
+const ticketTotal = ref(0);
+const followUpPageNum = ref(1);
+const followUpPageSize = ref(5);
+const followUpTotal = ref(0);
 
-const selectedCustomerTemplate = computed(() =>
-  customerTemplates.value.find((item) => String(item.id) === String(customerTemplateId.value))
-);
+const selectedCustomerTemplate = computed(() => customerTemplates.value.find((item) => String(item.id) === String(customerTemplateId.value)));
 const selectedTicketTemplate = computed(() => ticketTemplates.value.find((item) => String(item.id) === String(ticketTemplateId.value)));
 const avatarText = computed(() => (customerName.value || customer.value?.customerName || phone.value || '客').slice(0, 1));
 const callTone = computed(() => (props.incoming ? 'incoming' : props.active ? 'active' : 'idle'));
-/** 侧栏状态不重复号码，避免窄列把左侧标签挤折行 */
-const sideStatusText = computed(() => {
-  if (props.incoming) return '来电振铃中';
-  if (props.active) {
-    const text = props.callStatusText || '';
-    if (text.includes('保持')) return '通话已保持';
-    if (text.includes('静音')) return '坐席已静音';
-    return '通话中';
-  }
-  return props.callStatusText || '-';
-});
 
 const populateFormData = (target: Record<string, any>, template?: FormTemplate, source?: Record<string, unknown>) => {
   Object.keys(target).forEach((key) => delete target[key]);
   template?.fields.forEach((field) => {
     const existingValue = source?.[field.fieldCode];
-    target[field.fieldCode] =
-      existingValue ?? (field.fieldType === 'CHECKBOX' || field.fieldType === 'MULTI_SELECT' ? [] : field.defaultValue || '');
+    target[field.fieldCode] = existingValue ?? (field.fieldType === 'CHECKBOX' || field.fieldType === 'MULTI_SELECT' ? [] : field.defaultValue || '');
   });
 };
 
@@ -355,21 +355,76 @@ const formatDuration = (seconds?: number) => {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 };
 
-const loadHistory = async () => {
+const loadCallHistory = async () => {
   const number = phone.value.trim();
-  const [callRes, ticketRes] = await Promise.all([
-    number
-      ? listCallRecords({ pageNum: 1, pageSize: 20, participantNumber: number })
-      : Promise.resolve({ rows: [] as CallRecordVO[] }),
-    number ? listTickets({ pageNum: 1, pageSize: 20, callerNumber: number }) : Promise.resolve({ rows: [] as TicketVO[] })
-  ]);
-  callRecords.value = callRes.rows || [];
-  tickets.value = ticketRes.rows || [];
-  if (customer.value?.id) {
-    followUps.value = (await listCustomerFollowUps(customer.value.id)).data || [];
-  } else {
-    followUps.value = [];
+  if (!number) {
+    callRecords.value = [];
+    callTotal.value = 0;
+    return;
   }
+  callHistoryLoading.value = true;
+  try {
+    const response = await listCallRecords({ pageNum: callPageNum.value, pageSize: callPageSize.value, participantNumber: number });
+    callRecords.value = response.rows || [];
+    callTotal.value = Number(response.total || 0);
+  } finally {
+    callHistoryLoading.value = false;
+  }
+};
+
+const loadTicketHistory = async () => {
+  const number = phone.value.trim();
+  if (!number) {
+    tickets.value = [];
+    ticketTotal.value = 0;
+    return;
+  }
+  ticketHistoryLoading.value = true;
+  try {
+    const response = await listTickets({ pageNum: ticketPageNum.value, pageSize: ticketPageSize.value, callerNumber: number });
+    tickets.value = response.rows || [];
+    ticketTotal.value = Number(response.total || 0);
+  } finally {
+    ticketHistoryLoading.value = false;
+  }
+};
+
+const loadFollowUpHistory = async () => {
+  if (!customer.value?.id) {
+    followUps.value = [];
+    followUpTotal.value = 0;
+    return;
+  }
+  followUpHistoryLoading.value = true;
+  try {
+    const response = await pageCustomerFollowUps(customer.value.id, {
+      pageNum: followUpPageNum.value,
+      pageSize: followUpPageSize.value
+    });
+    followUps.value = response.rows || [];
+    followUpTotal.value = Number(response.total || 0);
+  } finally {
+    followUpHistoryLoading.value = false;
+  }
+};
+
+const loadHistory = async () => {
+  await Promise.all([loadCallHistory(), loadTicketHistory(), loadFollowUpHistory()]);
+};
+
+const handleCallPageSizeChange = () => {
+  callPageNum.value = 1;
+  void loadCallHistory();
+};
+
+const handleTicketPageSizeChange = () => {
+  ticketPageNum.value = 1;
+  void loadTicketHistory();
+};
+
+const handleFollowUpPageSizeChange = () => {
+  followUpPageNum.value = 1;
+  void loadFollowUpHistory();
 };
 
 const bootstrap = async () => {
@@ -380,6 +435,9 @@ const bootstrap = async () => {
     customer.value = undefined;
     followUpContent.value = '';
     historyTab.value = 'calls';
+    callPageNum.value = 1;
+    ticketPageNum.value = 1;
+    followUpPageNum.value = 1;
     const [customerTplRes, ticketTplRes] = await Promise.all([listFormTemplates('CUSTOMER'), listFormTemplates('TICKET')]);
     customerTemplates.value = customerTplRes.data || [];
     ticketTemplates.value = ticketTplRes.data || [];
@@ -404,10 +462,6 @@ const bootstrap = async () => {
   }
 };
 
-watch(visible, async (opened) => {
-  if (opened) await bootstrap();
-});
-
 watch(selectedCustomerTemplate, (template) => {
   populateFormData(customerFormData, template, customer.value?.formData);
 });
@@ -419,12 +473,13 @@ watch(selectedTicketTemplate, (template) => {
 watch(
   () => props.phoneNumber,
   async (value) => {
-    if (!visible.value) return;
     if (value.trim() === phone.value.trim()) return;
     phone.value = value.trim();
     await bootstrap();
   }
 );
+
+onMounted(() => void bootstrap());
 
 const ensureCustomerSaved = async () => {
   if (!phone.value.trim()) {
@@ -502,7 +557,8 @@ const addFollowUp = async () => {
   try {
     await addCustomerFollowUp(customer.value.id, followUpContent.value.trim());
     followUpContent.value = '';
-    followUps.value = (await listCustomerFollowUps(customer.value.id)).data || [];
+    followUpPageNum.value = 1;
+    await loadFollowUpHistory();
     ElMessage.success('跟进已添加');
   } finally {
     savingFollowUp.value = false;
@@ -513,10 +569,27 @@ const handleClosed = () => emit('closed');
 </script>
 
 <style scoped lang="scss">
+.incoming-call-workspace {
+  box-sizing: border-box;
+  min-height: calc(100vh - 104px);
+  padding: 18px 20px 24px;
+  background: #f4f7fb;
+}
+
+.workspace-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 16px;
+  padding: 16px 18px;
+  border: 1px solid #e4ecf6;
+  border-radius: 14px;
+  background: #fff;
+}
+
 .pop-header {
-  display: grid;
-  gap: 6px;
-  padding-right: 28px;
+  min-width: 0;
 }
 
 .pop-header-main {
@@ -525,11 +598,6 @@ const handleClosed = () => emit('closed');
   align-items: center;
   gap: 10px;
   min-width: 0;
-}
-
-.pop-header-main strong {
-  font-size: 16px;
-  color: #15233d;
 }
 
 .pop-badge {
@@ -568,80 +636,20 @@ const handleClosed = () => emit('closed');
   font-size: 13px;
 }
 
-.pop-header-sub {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
 .pop-body {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: minmax(460px, 40%) minmax(0, 1fr);
   gap: 16px;
-  min-height: 70vh;
-  max-height: calc(92vh - 96px);
+  min-height: calc(100vh - 206px);
 }
 
 .pop-side {
-  display: grid;
-  gap: 12px;
-  align-content: start;
-}
-
-.side-card {
-  padding: 14px;
-  border: 1px solid #e4ecf6;
-  border-radius: 12px;
-  background: #f8fbff;
-}
-
-.side-title {
-  margin-bottom: 10px;
-  font-weight: 700;
-  color: #1f3354;
-}
-
-.side-row {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 6px 0;
-  color: #64748b;
-  font-size: 13px;
-}
-
-.side-label {
-  flex: 0 0 auto;
-  white-space: nowrap;
-  line-height: 1.5;
-}
-
-.side-row strong {
-  flex: 1;
   min-width: 0;
-  color: #1f3354;
-  text-align: right;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.tip-card p,
-.tip-card li {
-  color: #5b6b82;
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.tip-card ul {
-  margin: 8px 0 0;
-  padding-left: 18px;
 }
 
 .pop-main {
   min-width: 0;
-  overflow: auto;
   padding-right: 4px;
 }
 
@@ -654,6 +662,20 @@ const handleClosed = () => emit('closed');
   border: 1px solid #e4ecf6;
   border-radius: 14px;
   background: linear-gradient(135deg, #f7faff 0%, #eef5ff 100%);
+}
+
+.screen-assist-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: calc(100vh - 206px);
+}
+
+.screen-assist-panel :deep(.assist-transcript) {
+  flex: 1;
+  min-height: calc(100vh - 286px);
+  max-height: none;
 }
 
 .avatar {
@@ -684,7 +706,7 @@ const handleClosed = () => emit('closed');
 .name-input :deep(.el-input__wrapper) {
   box-shadow: none;
   background: transparent;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 700;
 }
 
@@ -693,6 +715,7 @@ const handleClosed = () => emit('closed');
   align-items: center;
   gap: 6px;
   color: #2459cf;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -735,29 +758,22 @@ const handleClosed = () => emit('closed');
   background: #fff;
 }
 
-.history-list {
-  display: grid;
-  gap: 10px;
+.compact-history-table {
+  font-size: 12px;
 }
 
-.history-item {
-  padding: 10px 12px;
-  border: 1px solid #edf2f8;
-  border-radius: 10px;
-  background: #fafcff;
+.compact-history-table :deep(.el-table__cell) {
+  padding: 6px 0;
 }
 
-.history-item-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 6px;
-  color: #334155;
+.compact-history-table :deep(.cell) {
+  font-size: 12px;
+  line-height: 1.45;
 }
 
-.history-meta {
-  margin-top: 4px;
-  color: #94a3b8;
+.history-pagination {
+  justify-content: flex-end;
+  margin-top: 10px;
   font-size: 12px;
 }
 
@@ -767,27 +783,13 @@ const handleClosed = () => emit('closed');
   margin-bottom: 12px;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1180px) {
+  .incoming-call-workspace {
+    padding: 12px;
+  }
+
   .pop-body {
     grid-template-columns: 1fr;
-    max-height: none;
   }
-}
-</style>
-
-<style>
-.incoming-screen-pop.el-dialog {
-  border-radius: 14px;
-  overflow: hidden;
-}
-
-.incoming-screen-pop .el-dialog__header {
-  margin-right: 0;
-  padding: 16px 20px 10px;
-  border-bottom: 1px solid #e8eef6;
-}
-
-.incoming-screen-pop .el-dialog__body {
-  padding: 14px 18px 18px;
 }
 </style>

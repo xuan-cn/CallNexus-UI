@@ -142,26 +142,27 @@
         </el-form-item>
         <el-form-item v-else-if="form.actionType === 'TRANSFER_IVR'" label="目标 IVR">
           <el-select v-model="actionIvrFlowId" filterable style="width: 100%" placeholder="请选择已发布的 IVR 流程">
-            <el-option
-              v-for="flow in ivrFlows"
-              :key="flow.id"
-              :label="`${flow.flowName}（${flow.flowCode}）`"
-              :value="String(flow.id)"
-            />
+            <el-option v-for="flow in ivrFlows" :key="flow.id" :label="`${flow.flowName}（${flow.flowCode}）`" :value="String(flow.id)" />
           </el-select>
         </el-form-item>
         <el-form-item v-else-if="form.actionType === 'TRANSFER_ONLINE_SERVICE'" label="在线客服组">
           <el-select v-model="actionOnlineSkillGroupId" filterable style="width: 100%" placeholder="请选择在线客服技能组">
-            <el-option
-              v-for="group in skillGroups"
-              :key="group.id"
-              :label="`${group.groupName}（${group.groupCode}）`"
-              :value="String(group.id)"
-            />
+            <el-option v-for="group in skillGroups" :key="group.id" :label="`${group.groupName}（${group.groupCode}）`" :value="String(group.id)" />
           </el-select>
         </el-form-item>
+        <template v-else-if="form.actionType === 'CREATE_TICKET'">
+          <el-form-item label="工单模板">
+            <el-select v-model="actionTicketTemplateId" filterable style="width: 100%" placeholder="请选择启用的工单模板">
+              <el-option v-for="template in ticketTemplates" :key="template.id" :label="template.templateName" :value="String(template.id)" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="自动提交">
+            <el-switch v-model="actionTicketAutoSubmit" />
+            <span class="action-tip">开启后创建工单并立即提交绑定的工作流</span>
+          </el-form-item>
+        </template>
         <el-alert
-          v-if="['TRANSFER_QUEUE', 'TRANSFER_EXTENSION', 'TRANSFER_IVR', 'TRANSFER_ONLINE_SERVICE'].includes(form.actionType)"
+          v-if="['TRANSFER_QUEUE', 'TRANSFER_EXTENSION', 'TRANSFER_IVR', 'TRANSFER_ONLINE_SERVICE', 'CREATE_TICKET'].includes(form.actionType)"
           title="动作参数由系统根据所选目标自动生成，无需手工填写。"
           type="info"
           :closable="false"
@@ -221,6 +222,8 @@ import { listSipAccounts } from '@/api/callcenter/sip-account';
 import type { SipAccountVO } from '@/api/callcenter/sip-account/types';
 import { listSkillGroups } from '@/api/callcenter/skill-group';
 import type { SkillGroupVO } from '@/api/callcenter/skill-group/types';
+import { listFormTemplates } from '@/api/callcenter/form-template';
+import type { FormTemplate } from '@/api/callcenter/form-template/types';
 import type {
   AiAgentVO,
   AiIntentActionType,
@@ -246,6 +249,7 @@ const actionMeta: Record<AiIntentActionType, string> = {
   TRANSFER_EXTENSION: '转分机',
   TRANSFER_IVR: '转 IVR',
   TRANSFER_ONLINE_SERVICE: '转在线客服',
+  CREATE_TICKET: '创建工单',
   END_CALL: '结束通话',
   KNOWLEDGE_QUERY: '发起知识查询'
 };
@@ -256,10 +260,13 @@ const queues = ref<CallQueueVO[]>([]);
 const sipAccounts = ref<SipAccountVO[]>([]);
 const ivrFlows = ref<IvrFlowVO[]>([]);
 const skillGroups = ref<SkillGroupVO[]>([]);
+const ticketTemplates = ref<FormTemplate[]>([]);
 const actionQueueCode = ref('');
 const actionExtension = ref('');
 const actionIvrFlowId = ref('');
 const actionOnlineSkillGroupId = ref('');
+const actionTicketTemplateId = ref('');
+const actionTicketAutoSubmit = ref(false);
 const editorVisible = ref(false);
 const testVisible = ref(false);
 const saving = ref(false);
@@ -295,20 +302,24 @@ const rules = {
 };
 
 const load = async () => {
-  const [intentResponse, agentResponse, queueResponse, sipAccountResponse, ivrFlowResponse, skillGroupResponse] = await Promise.all([
-    listAiIntents(),
-    listAiAgents(),
-    listCallQueues(),
-    listSipAccounts({ pageNum: 1, pageSize: 1000 }),
-    listIvrFlows(),
-    listSkillGroups()
-  ]);
+  const [intentResponse, agentResponse, queueResponse, sipAccountResponse, ivrFlowResponse, skillGroupResponse, templateResponse] = await Promise.all(
+    [
+      listAiIntents(),
+      listAiAgents(),
+      listCallQueues(),
+      listSipAccounts({ pageNum: 1, pageSize: 1000 }),
+      listIvrFlows(),
+      listSkillGroups(),
+      listFormTemplates('TICKET')
+    ]
+  );
   intents.value = intentResponse.data || [];
   agents.value = (agentResponse.data || []).filter((item) => item.enabled);
   queues.value = queueResponse.data || [];
   sipAccounts.value = (sipAccountResponse.rows || []).filter((item) => item.enabled);
   ivrFlows.value = (ivrFlowResponse.data || []).filter((item) => item.enabled && item.publishStatus === 'PUBLISHED');
   skillGroups.value = (skillGroupResponse.data || []).filter((item) => item.enabled);
+  ticketTemplates.value = (templateResponse.data || []).filter((item) => item.enabled);
 };
 const positiveCount = (row: AiIntentVO) => row.utterances.filter((item) => item.utteranceType === 'POSITIVE').length;
 const negativeCount = (row: AiIntentVO) => row.utterances.filter((item) => item.utteranceType === 'NEGATIVE').length;
@@ -320,6 +331,8 @@ const openEditor = (row?: AiIntentVO) => {
   actionExtension.value = '';
   actionIvrFlowId.value = '';
   actionOnlineSkillGroupId.value = '';
+  actionTicketTemplateId.value = '';
+  actionTicketAutoSubmit.value = false;
   if (row?.actionConfigJson) {
     try {
       const config = JSON.parse(row.actionConfigJson) as {
@@ -327,11 +340,15 @@ const openEditor = (row?: AiIntentVO) => {
         extension?: string;
         ivrFlowId?: string | number;
         skillGroupId?: string | number;
+        templateId?: string | number;
+        submitAfterCreate?: boolean;
       };
       actionQueueCode.value = config.queueCode || '';
       actionExtension.value = config.extension || '';
       actionIvrFlowId.value = config.ivrFlowId == null ? '' : String(config.ivrFlowId);
       actionOnlineSkillGroupId.value = config.skillGroupId == null ? '' : String(config.skillGroupId);
+      actionTicketTemplateId.value = config.templateId == null ? '' : String(config.templateId);
+      actionTicketAutoSubmit.value = Boolean(config.submitAfterCreate);
     } catch {
       // 历史异常配置由后端校验，编辑页不再向用户暴露原始 JSON。
     }
@@ -360,6 +377,10 @@ const save = async () => {
     proxy?.$modal.msgError('请选择目标在线客服技能组');
     return;
   }
+  if (form.value.actionType === 'CREATE_TICKET' && !actionTicketTemplateId.value) {
+    proxy?.$modal.msgError('请选择工单模板');
+    return;
+  }
   const actionConfigJson =
     form.value.actionType === 'TRANSFER_QUEUE'
       ? JSON.stringify({ queueCode: actionQueueCode.value })
@@ -369,7 +390,9 @@ const save = async () => {
           ? JSON.stringify({ ivrFlowId: actionIvrFlowId.value })
           : form.value.actionType === 'TRANSFER_ONLINE_SERVICE'
             ? JSON.stringify({ skillGroupId: actionOnlineSkillGroupId.value })
-          : '';
+            : form.value.actionType === 'CREATE_TICKET'
+              ? JSON.stringify({ templateId: actionTicketTemplateId.value, submitAfterCreate: actionTicketAutoSubmit.value })
+              : '';
   saving.value = true;
   try {
     const payload: AiIntentForm = {
@@ -420,6 +443,10 @@ watch(
     if (actionType !== 'TRANSFER_EXTENSION') actionExtension.value = '';
     if (actionType !== 'TRANSFER_IVR') actionIvrFlowId.value = '';
     if (actionType !== 'TRANSFER_ONLINE_SERVICE') actionOnlineSkillGroupId.value = '';
+    if (actionType !== 'CREATE_TICKET') {
+      actionTicketTemplateId.value = '';
+      actionTicketAutoSubmit.value = false;
+    }
   }
 );
 onMounted(load);
