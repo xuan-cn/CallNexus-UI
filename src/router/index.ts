@@ -120,6 +120,19 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: { title: '坐席工作台', noCache: true }
       }
     ]
+  },
+  {
+    path: '/callcenter/customer-detail',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: ':customerId',
+        component: () => import('@/views/callcenter/agent-workspace/index.vue'),
+        name: 'CustomerDetailWorkspace',
+        meta: { title: '客户详情', noCache: true, activeMenu: '/customer/customer' }
+      }
+    ]
   }
 ];
 

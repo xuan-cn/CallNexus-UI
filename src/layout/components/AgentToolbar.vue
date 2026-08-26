@@ -145,7 +145,7 @@
           <span v-if="activeNumberLocation" class="number-location">{{ activeNumberLocation }}</span>
           <span>{{ callDuration }}<em v-if="callHeld"> · 已保持</em><em v-if="callMuted"> · 已静音</em></span>
         </div>
-        <button v-if="matchedCustomer" type="button" class="matched-customer-card" @click="matchedCustomerDetailVisible = true">
+        <button v-if="matchedCustomer" type="button" class="matched-customer-card" @click="openMatchedCustomerDetail">
           <span>已匹配客户</span>
           <strong>{{ matchedCustomer.customerName || matchedCustomer.primaryPhone }}</strong>
         </button>
@@ -224,12 +224,6 @@
 
     <dynamic-business-form-dialog v-model="customerDialogVisible" business-type="CUSTOMER" :phone-number="dialNumber" :call-id="activeCallId" />
     <dynamic-business-form-dialog v-model="ticketDialogVisible" business-type="TICKET" :phone-number="dialNumber" :call-id="activeCallId" />
-    <CallCenterBusinessDetail
-      v-model="matchedCustomerDetailVisible"
-      business-type="CUSTOMER"
-      :business-id="matchedCustomer?.id"
-      :business-call-id="activeCallId"
-    />
     <CallConferenceDrawer
       v-model="conferenceDrawerOpen"
       :call-id="activeCallId"
@@ -271,7 +265,6 @@ import {
 import { subscribeCallEvents } from '@/utils/websocket';
 import { webRtcPhone } from '@/utils/webrtcPhone';
 import { CustomerVO, getCustomerByPhone } from '@/api/callcenter/customer';
-import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/index.vue';
 import CallConferenceDrawer from './CallConferenceDrawer.vue';
 import DynamicBusinessFormDialog from './DynamicBusinessFormDialog.vue';
 import { useAgentDialBus, type AgentDialRequest } from '@/composables/useAgentDial';
@@ -344,7 +337,6 @@ const callSeconds = ref(0);
 const customerDialogVisible = ref(false);
 const ticketDialogVisible = ref(false);
 const matchedCustomer = ref<CustomerVO>();
-const matchedCustomerDetailVisible = ref(false);
 const webRtcRegistered = ref(false);
 const webRtcConnecting = ref(false);
 const webRtcRegistrationError = ref('');
@@ -1219,6 +1211,14 @@ const resetCallControls = () => {
 
 const createCustomer = () => {
   customerDialogVisible.value = true;
+};
+
+const openMatchedCustomerDetail = () => {
+  if (!matchedCustomer.value?.id) return;
+  void router.push({
+    name: 'CustomerDetailWorkspace',
+    params: { customerId: String(matchedCustomer.value.id) }
+  });
 };
 
 const createTicket = () => {

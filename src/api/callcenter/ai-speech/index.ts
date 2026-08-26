@@ -12,12 +12,18 @@ import {
   AiCallTranscriptStreamEvent,
   AiSpeechProviderForm,
   AiSpeechProviderVO,
+  SpeechProviderDefinitionVO,
   AsrTestVO,
   TtsTestForm,
-  TtsTestVO
+  TtsTestVO,
+  SpeechProviderTestVO,
+  SpeechProviderCatalogVO
 } from './types';
 
 export const listSpeechProviders = (): AxiosPromise<AiSpeechProviderVO[]> => request({ url: '/api/v1/ai/speech-providers', method: 'get' });
+
+export const listSpeechProviderDefinitions = (): AxiosPromise<SpeechProviderDefinitionVO[]> =>
+  request({ url: '/api/v1/ai/speech-provider-definitions', method: 'get' });
 
 export const createSpeechProvider = (data: AiSpeechProviderForm) => request({ url: '/api/v1/ai/speech-providers', method: 'post', data });
 
@@ -25,11 +31,29 @@ export const updateSpeechProvider = (data: AiSpeechProviderForm) => request({ ur
 
 export const deleteSpeechProvider = (id: string | number) => request({ url: `/api/v1/ai/speech-providers/${id}`, method: 'delete' });
 
+export const validateSpeechProvider = (data: AiSpeechProviderForm): AxiosPromise<SpeechProviderTestVO> =>
+  request({ url: '/api/v1/ai/speech-providers/preview/validate', method: 'post', data });
+
+export const testSpeechProviderPreviewConnection = (data: AiSpeechProviderForm): AxiosPromise<SpeechProviderTestVO> =>
+  request({ url: '/api/v1/ai/speech-providers/preview/connection-test', method: 'post', data });
+
+export const testSpeechProviderConnection = (id: string | number): AxiosPromise<SpeechProviderTestVO> =>
+  request({ url: `/api/v1/ai/speech-providers/${id}/connection-test`, method: 'post' });
+
+export const testStreamingSpeechProvider = (
+  id: string | number,
+  capability: 'STREAMING_TTS' | 'STREAMING_ASR'
+): AxiosPromise<SpeechProviderTestVO> =>
+  request({ url: `/api/v1/ai/speech-providers/${id}/streaming-test`, method: 'post', params: { capability } });
+
 export const testTtsProvider = (id: string | number, data: TtsTestForm): AxiosPromise<TtsTestVO> =>
   request({ url: `/api/v1/ai/speech-providers/${id}/test`, method: 'post', data });
 
 export const listSpeechProviderVoices = (id: string | number): AxiosPromise<string[]> =>
   request({ url: `/api/v1/ai/speech-providers/${id}/voices`, method: 'get' });
+
+export const getSpeechProviderCatalog = (id: string | number, refresh = false): AxiosPromise<SpeechProviderCatalogVO> =>
+  request({ url: `/api/v1/ai/speech-providers/${id}/catalog`, method: 'get', params: { refresh } });
 
 export const testAsrProvider = (id: string | number, data: FormData): AxiosPromise<AsrTestVO> =>
   request({

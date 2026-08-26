@@ -237,10 +237,25 @@ onBeforeUnmount(() => {
   min-height: 280px;
   max-height: 560px;
   overflow-y: auto;
+  scrollbar-color: #b9c5d6 transparent;
+  scrollbar-width: thin;
   padding: 10px;
   border: 1px solid #e3eaf4;
   border-radius: 10px;
   background: #f7f9fc;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    border-radius: 6px;
+    background: #b9c5d6;
+  }
 }
 
 .dialogue-list {

@@ -152,7 +152,7 @@
       />
     </el-dialog>
 
-    <el-dialog v-model="previewDialog.visible" title="FreeSWITCH ACL XML 预览" width="850px" append-to-body>
+    <el-dialog v-model="previewDialog.visible" title="白名单配置文件预览" width="850px" append-to-body>
       <el-input v-model="previewDialog.xml" type="textarea" :rows="22" readonly />
     </el-dialog>
   </div>

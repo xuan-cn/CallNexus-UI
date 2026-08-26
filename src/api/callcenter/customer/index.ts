@@ -85,6 +85,7 @@ export interface CustomerAssignmentForm {
   tags?: string;
   skillGroupId?: string | number;
   agentId?: string | number;
+  allocationMode?: 'SPECIFIED_AGENT' | 'EVEN';
   remark?: string;
 }
 
@@ -186,6 +187,9 @@ export const createCustomer = (data: CreateCustomerForm) => request({ url: '/api
 export const assignCustomers = (data: CustomerAssignmentForm) => request<void>({ url: '/api/v1/customers/assignments', method: 'post', data });
 
 export const updateCustomer = (id: string | number, data: UpdateCustomerForm) => request({ url: `/api/v1/customers/${id}`, method: 'put', data });
+
+export const claimCustomerForCurrentAgent = (id: string | number, businessCallId: string) =>
+  request<void>({ url: `/api/v1/customers/${id}/claim-current-agent`, method: 'post', data: { businessCallId } });
 
 export const listCustomerPhones = (id: string | number) => request<CustomerPhoneVO[]>({ url: `/api/v1/customers/${id}/phones`, method: 'get' });
 

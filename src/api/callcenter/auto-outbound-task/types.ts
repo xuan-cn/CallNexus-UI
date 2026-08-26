@@ -25,7 +25,9 @@ export interface AutoOutboundTaskForm {
   taskCode: string;
   taskName: string;
   description?: string;
+  nodeId?: string | number;
   callerNumberId?: string | number;
+  outboundLinePolicyId?: string | number;
   dialMode: AutoOutboundDialMode;
   targetType: AutoOutboundTargetType;
   targetId?: string | number;

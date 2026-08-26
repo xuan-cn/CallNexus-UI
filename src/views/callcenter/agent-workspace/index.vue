@@ -7,6 +7,8 @@
     :duration-text="workspace.durationText"
     :incoming="workspace.incoming"
     :active="workspace.active"
+    :customer-id="workspace.customerId"
+    :customer-view="workspace.customerView"
     @closed="goBack"
   />
 </template>
@@ -27,6 +29,8 @@ interface WorkspaceContext {
   durationText: string;
   incoming: boolean;
   active: boolean;
+  customerId: string;
+  customerView: boolean;
 }
 
 interface AgentToolbarExpose {
@@ -44,18 +48,24 @@ const queryBoolean = (name: string) => queryText(name) === 'true';
 
 const workspace = computed<WorkspaceContext>(() => {
   const live = agentToolbarRef?.value?.workspaceContext;
+  const routeCustomerId = Array.isArray(route.params.customerId) ? String(route.params.customerId[0] || '') : String(route.params.customerId || '');
+  const customerView = route.name === 'CustomerDetailWorkspace' || Boolean(routeCustomerId);
   const queryCallId = queryText('callId');
   // The URL can contain an agent-leg UUID captured before the authoritative
   // business call event arrives. Always prefer the live toolbar context.
-  if (live?.businessCallId) return live;
+  if (!customerView && live?.businessCallId) {
+    return { ...live, customerId: '', customerView: false };
+  }
   return {
-    businessCallId: queryCallId,
+    businessCallId: customerView ? '' : queryCallId,
     phoneNumber: queryText('phone'),
     numberLocation: queryText('location'),
-    callStatusText: queryText('status') || '通话中',
+    callStatusText: customerView ? '' : queryText('status') || '通话中',
     durationText: queryText('duration'),
-    incoming: queryBoolean('incoming'),
-    active: queryBoolean('active')
+    incoming: customerView ? false : queryBoolean('incoming'),
+    active: customerView ? false : queryBoolean('active'),
+    customerId: routeCustomerId,
+    customerView
   };
 });
 

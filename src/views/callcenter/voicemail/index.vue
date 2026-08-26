@@ -257,6 +257,10 @@ const numberConfigValue = (value: string | undefined, fallback: number) => {
 };
 const openBusinessDetail = (type: FormBusinessType, id?: string | number) => {
   if (!id) return;
+  if (type === 'CUSTOMER') {
+    void router.push({ name: 'CustomerDetailWorkspace', params: { customerId: String(id) } });
+    return;
+  }
   businessDetail.type = type;
   businessDetail.id = id;
   businessDetail.visible = true;

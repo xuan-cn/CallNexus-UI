@@ -314,7 +314,6 @@
         </el-tab-pane>
       </el-tabs>
     </el-drawer>
-    <CallCenterBusinessDetail v-model="customerDetail.visible" business-type="CUSTOMER" :business-id="customerDetail.id" />
   </div>
 </template>
 
@@ -330,7 +329,6 @@ import { listAgents } from '@/api/callcenter/agent';
 import type { AgentVO } from '@/api/callcenter/agent/types';
 import { listPhoneNumbers } from '@/api/callcenter/phone-number';
 import type { PhoneNumberVO } from '@/api/callcenter/phone-number/types';
-import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/index.vue';
 import type { UploadFile } from 'element-plus';
 import * as echarts from 'echarts';
 
@@ -377,7 +375,7 @@ const customerQuery = reactive<CustomerQuery>({ pageNum: 1, pageSize: 100, prima
 const customers = ref<CustomerVO[]>([]);
 const selectedCustomers = ref<CustomerVO[]>([]);
 const workbench = reactive({ visible: false, task: undefined as OutboundTaskVO | undefined, member: undefined as OutboundMemberVO | undefined, dialing: false, suggestedResultLabel: '' });
-const customerDetail = reactive({ visible: false, id: undefined as string | number | undefined });
+const router = useRouter();
 const statisticsDialog = reactive({ visible: false, loading: false, task: undefined as OutboundTaskVO | undefined, data: undefined as OutboundTaskStatisticsVO | undefined });
 const attemptDrawer = reactive({ visible: false, loading: false, member: undefined as OutboundMemberVO | undefined });
 const attempts = ref<OutboundAttemptVO[]>([]);
@@ -665,7 +663,9 @@ const dialCurrent = async () => {
   resultTouched.value = false;
   try { workbench.member = (await dialOutboundMember(workbench.member.id)).data; proxy?.$modal.msgSuccess('已发起外呼'); } finally { workbench.dialing = false; }
 };
-const showCustomerDetail = (customerId: string | number) => { customerDetail.id = customerId; customerDetail.visible = true; };
+const showCustomerDetail = (customerId: string | number) => {
+  void router.push({ name: 'CustomerDetailWorkspace', params: { customerId: String(customerId) } });
+};
 const handleResultChange = (resultCode: CompleteOutboundMemberForm['resultCode']) => {
   resultTouched.value = true;
   if (resultCode === 'FOLLOW_UP') resultForm.retry = true;

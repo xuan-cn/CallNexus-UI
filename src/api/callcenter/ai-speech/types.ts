@@ -3,6 +3,18 @@ export interface AiSpeechProviderVO {
   providerCode: string;
   providerName: string;
   providerType: string;
+  ttsModel?: string;
+  streamingTtsModel?: string;
+  recordingAsrModel?: string;
+  streamingAsrModel?: string;
+  ttsVoice?: string;
+  streamingTtsVoice?: string;
+  ttsEndpointMode?: 'AUTO' | 'CUSTOM';
+  streamingTtsEndpointMode?: 'AUTO' | 'CUSTOM';
+  recordingAsrEndpointMode?: 'AUTO' | 'CUSTOM';
+  streamingAsrEndpointMode?: 'AUTO' | 'CUSTOM';
+  credentialValues?: Record<string, unknown>;
+  configuredSecretFields?: string[];
   ttsEnabled: boolean;
   streamingTtsEnabled: boolean;
   recordingAsrEnabled: boolean;
@@ -34,14 +46,28 @@ export interface AiSpeechProviderVO {
   asrMaxSentenceMs: number;
   asrOptionsJson?: string;
   enabled: boolean;
+  lastTestStatus?: 'SUCCESS' | 'FAILED';
+  lastTestMessage?: string;
+  lastTestTime?: string;
   remark?: string;
 }
 
 export interface AiSpeechProviderForm {
   id?: string | number;
-  providerCode: string;
+  providerCode?: string;
   providerName: string;
   providerType: string;
+  ttsModel?: string;
+  streamingTtsModel?: string;
+  recordingAsrModel?: string;
+  streamingAsrModel?: string;
+  ttsVoice?: string;
+  streamingTtsVoice?: string;
+  ttsEndpointMode?: 'AUTO' | 'CUSTOM';
+  streamingTtsEndpointMode?: 'AUTO' | 'CUSTOM';
+  recordingAsrEndpointMode?: 'AUTO' | 'CUSTOM';
+  streamingAsrEndpointMode?: 'AUTO' | 'CUSTOM';
+  credentials?: Record<string, unknown>;
   ttsEnabled: boolean;
   streamingTtsEnabled: boolean;
   recordingAsrEnabled: boolean;
@@ -74,6 +100,75 @@ export interface AiSpeechProviderForm {
   asrOptionsJson?: string;
   enabled: boolean;
   remark?: string;
+}
+
+export type SpeechCapability = 'TTS' | 'STREAMING_TTS' | 'RECORDING_ASR' | 'STREAMING_ASR';
+
+export interface SpeechOptionDefinitionVO {
+  value: string;
+  label: string;
+}
+
+export interface SpeechFieldDefinitionVO {
+  key: string;
+  label: string;
+  type: 'TEXT' | 'PASSWORD' | 'SELECT' | 'NUMBER' | 'SWITCH';
+  required: boolean;
+  secret: boolean;
+  placeholder?: string;
+  defaultValue?: unknown;
+  options: SpeechOptionDefinitionVO[];
+  advanced: boolean;
+}
+
+export interface SpeechModelDefinitionVO {
+  id: string;
+  label: string;
+  recommended: boolean;
+  formats: string[];
+  sampleRates: number[];
+  voices: SpeechVoiceDefinitionVO[];
+  parameterSchema: Record<string, unknown>;
+}
+
+export interface SpeechVoiceDefinitionVO {
+  id: string;
+  label: string;
+  recommended: boolean;
+}
+
+export interface SpeechCapabilityDefinitionVO {
+  capability: SpeechCapability;
+  label: string;
+  supported: boolean;
+  defaultModel?: string;
+  models: SpeechModelDefinitionVO[];
+  supportsVoiceList: boolean;
+  supportsVoicePreview: boolean;
+  fields: SpeechFieldDefinitionVO[];
+}
+
+export interface SpeechProviderDefinitionVO {
+  providerType: string;
+  label: string;
+  description: string;
+  credentialFields: SpeechFieldDefinitionVO[];
+  capabilities: Partial<Record<SpeechCapability, SpeechCapabilityDefinitionVO>>;
+}
+
+export interface SpeechCapabilityCatalogVO {
+  models: SpeechModelDefinitionVO[];
+  voices: SpeechVoiceDefinitionVO[];
+}
+
+export interface SpeechProviderCatalogVO {
+  providerId: string | number;
+  providerType: string;
+  catalogVersion: string;
+  source: 'DYNAMIC' | 'BUILT_IN';
+  refreshedAt: string;
+  capabilities: Partial<Record<SpeechCapability, SpeechCapabilityCatalogVO>>;
+  message: string;
 }
 
 export interface AiSpeechTemplateVO {
@@ -147,6 +242,13 @@ export interface AsrTestSegmentVO {
 export interface AsrTestVO {
   fullText: string;
   segments: AsrTestSegmentVO[];
+}
+
+export interface SpeechProviderTestVO {
+  testType: string;
+  status: 'SUCCESS' | 'FAILED';
+  message: string;
+  durationMs: number;
 }
 
 export interface AiGeneratedMediaVO {

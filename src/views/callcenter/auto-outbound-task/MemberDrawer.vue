@@ -39,7 +39,7 @@
       <el-table-column label="客户" min-width="140"
         ><template #default="{ row }"
           ><div>{{ row.customerName || '未命名客户' }}</div>
-          <small>ID {{ row.customerId }}</small></template
+         </template
         ></el-table-column
       >
       <el-table-column label="拨打号码" min-width="145"

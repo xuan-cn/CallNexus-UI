@@ -1,20 +1,20 @@
 <template>
-  <div class="incoming-screen-pop incoming-call-workspace">
+  <div class="incoming-screen-pop incoming-call-workspace" :class="{ 'customer-view-mode': props.customerView }">
     <header class="workspace-header">
       <div class="pop-header">
         <div class="pop-header-main">
-          <span class="pop-badge" :class="callTone">{{ callStatusText }}</span>
+          <span class="pop-badge" :class="callTone">{{ props.customerView ? '客户资料' : callStatusText }}</span>
           <span class="pop-phone">{{ phone || '未知号码' }}</span>
-          <span v-if="numberLocation" class="pop-location">{{ numberLocation }}</span>
-          <span v-if="durationText" class="pop-duration">{{ durationText }}</span>
+          <span v-if="!props.customerView && numberLocation" class="pop-location">{{ numberLocation }}</span>
+          <span v-if="!props.customerView && durationText" class="pop-duration">{{ durationText }}</span>
         </div>
       </div>
       <el-button plain @click="handleClosed">返回</el-button>
     </header>
 
-    <div v-loading="booting" class="pop-body">
-      <aside class="pop-side">
-        <AgentAssistPanel v-if="props.callId" class="screen-assist-panel" :business-call-id="props.callId" />
+    <div v-loading="booting" class="pop-body" :class="{ 'without-assist': !showAssist }">
+      <aside v-if="showAssist" class="pop-side">
+        <AgentAssistPanel class="screen-assist-panel" :business-call-id="props.callId" />
       </aside>
 
       <section class="pop-main">
@@ -68,6 +68,7 @@
                     :placeholder="field.placeholder"
                   />
                   <el-input-number v-else-if="field.fieldType === 'NUMBER'" v-model="customerFormData[field.fieldCode]" style="width: 100%" />
+                  <file-upload v-else-if="field.fieldType === 'FILE'" v-model="customerFormData[field.fieldCode]" :limit="5" :file-size="20" />
                   <el-date-picker
                     v-else-if="field.fieldType === 'DATE' || field.fieldType === 'DATETIME'"
                     v-model="customerFormData[field.fieldCode]"
@@ -135,6 +136,7 @@
                     :placeholder="field.placeholder"
                   />
                   <el-input-number v-else-if="field.fieldType === 'NUMBER'" v-model="ticketFormData[field.fieldCode]" style="width: 100%" />
+                  <file-upload v-else-if="field.fieldType === 'FILE'" v-model="ticketFormData[field.fieldCode]" :limit="5" :file-size="20" />
                   <el-date-picker
                     v-else-if="field.fieldType === 'DATE' || field.fieldType === 'DATETIME'"
                     v-model="ticketFormData[field.fieldCode]"
@@ -166,7 +168,7 @@
         <div class="action-bar">
           <el-button type="primary" :loading="savingCustomer" @click="saveCustomerInfo">保存信息</el-button>
           <el-button type="success" :loading="savingTicket" @click="submitWorkOrder(false)">提交工单</el-button>
-          <el-button type="warning" :loading="savingTicket" @click="submitWorkOrder(true)">直接办理</el-button>
+          <el-button type="warning" :loading="savingTicket" @click="submitWorkOrder(true)">直接办结</el-button>
         </div>
 
         <div class="history-block">
@@ -266,9 +268,11 @@ import { ElMessage } from 'element-plus';
 import AgentAssistPanel from '@/components/AgentAssistPanel/index.vue';
 import {
   addCustomerFollowUp,
+  claimCustomerForCurrentAgent,
   createCustomer,
   CustomerFollowUpVO,
   CustomerVO,
+  getCustomer,
   getCustomerByPhone,
   pageCustomerFollowUps,
   updateCustomer
@@ -277,7 +281,7 @@ import { listCallRecords } from '@/api/callcenter/call-record';
 import type { CallRecordVO } from '@/api/callcenter/call-record/types';
 import { listFormTemplates } from '@/api/callcenter/form-template';
 import type { FormTemplate } from '@/api/callcenter/form-template/types';
-import { createTicket, listTickets, submitTicket, TicketVO } from '@/api/callcenter/ticket';
+import { createTicket, listTickets, resolveTicketDirectly, TicketVO } from '@/api/callcenter/ticket';
 
 const props = withDefaults(
   defineProps<{
@@ -288,6 +292,8 @@ const props = withDefaults(
     durationText?: string;
     incoming?: boolean;
     active?: boolean;
+    customerId?: string | number;
+    customerView?: boolean;
   }>(),
   {
     phoneNumber: '',
@@ -296,7 +302,9 @@ const props = withDefaults(
     callStatusText: '来电中',
     durationText: '',
     incoming: false,
-    active: false
+    active: false,
+    customerId: '',
+    customerView: false
   }
 );
 
@@ -337,6 +345,7 @@ const selectedCustomerTemplate = computed(() => customerTemplates.value.find((it
 const selectedTicketTemplate = computed(() => ticketTemplates.value.find((item) => String(item.id) === String(ticketTemplateId.value)));
 const avatarText = computed(() => (customerName.value || customer.value?.customerName || phone.value || '客').slice(0, 1));
 const callTone = computed(() => (props.incoming ? 'incoming' : props.active ? 'active' : 'idle'));
+const showAssist = computed(() => Boolean(props.callId) && !props.customerView);
 
 const populateFormData = (target: Record<string, any>, template?: FormTemplate, source?: Record<string, unknown>) => {
   Object.keys(target).forEach((key) => delete target[key]);
@@ -446,7 +455,15 @@ const bootstrap = async () => {
     customerTemplateId.value = enabledCustomer.length === 1 ? enabledCustomer[0].id : undefined;
     ticketTemplateId.value = enabledTicket.length === 1 ? enabledTicket[0].id : undefined;
 
-    if (phone.value) {
+    if (props.customerId) {
+      const matched = (await getCustomer(props.customerId)).data || undefined;
+      customer.value = matched;
+      if (matched) {
+        phone.value = matched.primaryPhone || phone.value;
+        customerName.value = matched.customerName || '';
+        customerTemplateId.value = matched.templateId || customerTemplateId.value;
+      }
+    } else if (phone.value) {
       const matched = (await getCustomerByPhone(phone.value)).data || undefined;
       customer.value = matched;
       if (matched) {
@@ -470,14 +487,7 @@ watch(selectedTicketTemplate, (template) => {
   populateFormData(ticketFormData, template);
 });
 
-watch(
-  () => props.phoneNumber,
-  async (value) => {
-    if (value.trim() === phone.value.trim()) return;
-    phone.value = value.trim();
-    await bootstrap();
-  }
-);
+watch([() => props.customerId, () => props.phoneNumber], () => void bootstrap());
 
 onMounted(() => void bootstrap());
 
@@ -513,10 +523,17 @@ const ensureCustomerSaved = async () => {
   return customer.value;
 };
 
+const claimSavedCustomer = async (savedCustomer?: CustomerVO) => {
+  if (!props.active || !props.callId || !savedCustomer?.id) return;
+  await claimCustomerForCurrentAgent(savedCustomer.id, props.callId);
+  customer.value = (await getCustomer(savedCustomer.id)).data;
+};
+
 const saveCustomerInfo = async () => {
   savingCustomer.value = true;
   try {
-    await ensureCustomerSaved();
+    const savedCustomer = await ensureCustomerSaved();
+    await claimSavedCustomer(savedCustomer);
     ElMessage.success(customer.value?.id ? '客户信息已保存' : '客户已创建');
     await loadHistory();
     emit('saved');
@@ -538,8 +555,8 @@ const submitWorkOrder = async (directHandle: boolean) => {
     });
     const ticketId = created.data;
     if (directHandle && ticketId) {
-      await submitTicket(ticketId);
-      ElMessage.success('工单已创建并提交办理');
+      await resolveTicketDirectly(ticketId);
+      ElMessage.success('工单已创建并直接办结');
     } else {
       ElMessage.success('工单已创建');
     }
@@ -643,6 +660,10 @@ const handleClosed = () => emit('closed');
   min-height: calc(100vh - 206px);
 }
 
+.pop-body.without-assist {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .pop-side {
   display: flex;
   min-width: 0;
@@ -673,9 +694,9 @@ const handleClosed = () => emit('closed');
 }
 
 .screen-assist-panel :deep(.assist-transcript) {
-  flex: 1;
-  min-height: calc(100vh - 286px);
-  max-height: none;
+  flex: 0 1 auto;
+  min-height: 280px;
+  max-height: min(560px, calc(100vh - 286px));
 }
 
 .avatar {

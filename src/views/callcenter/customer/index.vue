@@ -213,7 +213,6 @@
       />
     </el-card>
 
-    <CallCenterBusinessDetail v-model="detailVisible" business-type="CUSTOMER" :business-id="detailId" />
     <DynamicBusinessFormDialog v-model="createVisible" business-type="CUSTOMER" :phone-number="customerDialogPhone" @saved="handleCreated" />
 
     <el-drawer v-model="assignmentDialog.visible" title="资料分配" size="520px" append-to-body @closed="resetAssign">
@@ -578,7 +577,6 @@ import { listSkillGroups } from '@/api/callcenter/skill-group';
 import { SkillGroupVO } from '@/api/callcenter/skill-group/types';
 import { listFormTemplates } from '@/api/callcenter/form-template';
 import { FormTemplate } from '@/api/callcenter/form-template/types';
-import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/index.vue';
 import DynamicBusinessFormDialog from '@/layout/components/DynamicBusinessFormDialog.vue';
 import { useAgentDialBus } from '@/composables/useAgentDial';
 import { Phone, Plus, Refresh, Search, Setting } from '@element-plus/icons-vue';
@@ -591,8 +589,7 @@ const rows = ref<CustomerVO[]>([]);
 const total = ref(0);
 const createVisible = ref(false);
 const customerDialogPhone = ref('');
-const detailVisible = ref(false);
-const detailId = ref<string | number>();
+const router = useRouter();
 const query = reactive<CustomerQuery>({ pageNum: 1, pageSize: 10, assignmentState: '' });
 const selectedCustomers = ref<CustomerVO[]>([]);
 const assignmentStateOptions = [
@@ -809,8 +806,7 @@ const loadCustomerFormTemplates = async () => {
 };
 
 const showDetail = (row: CustomerVO) => {
-  detailId.value = row.id;
-  detailVisible.value = true;
+  void router.push({ name: 'CustomerDetailWorkspace', params: { customerId: String(row.id) } });
 };
 
 const openCreateCustomer = () => {

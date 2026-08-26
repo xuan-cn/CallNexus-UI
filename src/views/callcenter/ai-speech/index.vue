@@ -44,16 +44,37 @@
                 <el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="300" align="center" fixed="right">
+            <el-table-column label="最近测试" width="150">
               <template #default="{ row }">
-                <el-button v-if="row.ttsEnabled" v-hasPermi="['callcenter:ai-speech:test']" link type="primary" @click="openTtsTest(row)">
-                  TTS测试
-                </el-button>
-                <el-button v-if="row.recordingAsrEnabled" v-hasPermi="['callcenter:ai-speech:test']" link type="primary" @click="openAsrTest(row)">
-                  ASR测试
-                </el-button>
-                <el-button v-hasPermi="['callcenter:ai-speech:update']" link type="primary" @click="openProviderDrawer(row)">修改</el-button>
-                <el-button v-hasPermi="['callcenter:ai-speech:delete']" link type="danger" @click="removeProvider(row)">删除</el-button>
+                <el-tooltip v-if="row.lastTestStatus" :content="row.lastTestMessage || ''" placement="top">
+                  <div class="last-test">
+                    <el-tag size="small" :type="row.lastTestStatus === 'SUCCESS' ? 'success' : 'danger'">
+                      {{ row.lastTestStatus === 'SUCCESS' ? '通过' : '失败' }}
+                    </el-tag>
+                    <small>{{ row.lastTestTime || '-' }}</small>
+                  </div>
+                </el-tooltip>
+                <span v-else>-</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="220" align="center" fixed="right">
+              <template #default="{ row }">
+                <div class="provider-actions">
+                  <el-dropdown v-hasPermi="['callcenter:ai-speech:test']" trigger="click" @command="(command) => handleProviderTest(command, row)">
+                    <el-button link type="primary" :loading="providerTestRunning === row.id">测试<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="connection">连接检查</el-dropdown-item>
+                        <el-dropdown-item v-if="row.ttsEnabled" command="tts">普通 TTS</el-dropdown-item>
+                        <el-dropdown-item v-if="row.recordingAsrEnabled" command="asr">录音 ASR</el-dropdown-item>
+                        <el-dropdown-item v-if="row.streamingTtsEnabled" command="streamingTts">实时 TTS 握手</el-dropdown-item>
+                        <el-dropdown-item v-if="row.streamingAsrEnabled" command="streamingAsr">实时 ASR 握手</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                  <el-button v-hasPermi="['callcenter:ai-speech:update']" link type="primary" @click="openProviderDrawer(row)">修改</el-button>
+                  <el-button v-hasPermi="['callcenter:ai-speech:delete']" link type="danger" @click="removeProvider(row)">删除</el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -132,516 +153,8 @@
       </el-tabs>
     </el-card>
 
-    <el-drawer v-model="providerDrawer.visible" :title="providerForm.id ? '修改语音服务商' : '新增语音服务商'" size="1040px">
-      <el-form ref="providerFormRef" class="speech-provider-form" :model="providerForm" :rules="providerRules" label-width="112px">
-        <el-alert class="mb-3" type="info" show-icon :closable="false" title="选择产品后只填写对应凭证即可，接口地址和协议参数已使用系统模板。" />
+    <ProviderEditorDrawer v-model="providerDrawer.visible" :provider="editingProvider" :definitions="providerDefinitions" @saved="loadProviders" />
 
-        <section class="provider-section provider-summary">
-          <div class="section-title">
-            <div>
-              <h3>选择语音产品</h3>
-              <p>千问语音属于阿里云百炼；不同厂商使用独立适配器，业务侧仍使用统一的 TTS / ASR 能力。</p>
-            </div>
-            <el-switch v-model="providerForm.enabled" active-text="启用" inactive-text="停用" />
-          </div>
-          <el-form-item label="语音产品" prop="providerType">
-            <el-radio-group
-              v-model="providerForm.providerType"
-              class="provider-product-grid"
-              :disabled="!!providerForm.id"
-              @change="handleProviderTypeChange"
-            >
-              <el-radio-button value="ALIYUN_DASHSCOPE">
-                <strong>阿里云百炼</strong>
-                <small>千问 TTS / ASR / 实时语音</small>
-              </el-radio-button>
-              <el-radio-button value="ALIYUN_NLS">
-                <strong>阿里云 NLS</strong>
-                <small>智能语音交互 TTS / ASR</small>
-              </el-radio-button>
-              <el-radio-button value="FUNASR">
-                <strong>FunASR</strong>
-                <small>本地部署 · 句级 ASR</small>
-              </el-radio-button>
-              <el-radio-button value="KOKORO_LOCAL">
-                <strong>Kokoro 本地 TTS</strong>
-                <small>本地部署 · 流式语音合成</small>
-              </el-radio-button>
-              <el-radio-button value="OPENAI_COMPATIBLE">
-                <strong>OpenAI 兼容</strong>
-                <small>标准 Audio API</small>
-              </el-radio-button>
-              <el-radio-button value="CUSTOM_HTTP">
-                <strong>自定义服务</strong>
-                <small>本地或第三方 HTTP</small>
-              </el-radio-button>
-            </el-radio-group>
-          </el-form-item>
-          <div class="planned-provider-row">
-            <span>待接入：</span>
-            <el-tag type="info">火山引擎</el-tag>
-            <el-tag type="info">科大讯飞</el-tag>
-            <span>接入适配器后会自动出现对应的简易凭证表单。</span>
-          </div>
-          <el-row :gutter="16">
-            <el-col :span="12">
-              <el-form-item label="服务商名称" prop="providerName">
-                <el-input v-model="providerForm.providerName" placeholder="如 阿里云百炼" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="服务商编码" prop="providerCode">
-                <el-input v-model="providerForm.providerCode" :disabled="!!providerForm.id" placeholder="系统自动生成，也可修改" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-        </section>
-
-        <section class="provider-section credential-section">
-          <div class="section-title">
-            <div>
-              <h3>账号凭证</h3>
-              <p>{{ providerCredentialHint }}</p>
-            </div>
-            <el-tag v-if="editingAuthConfigured" type="success">密钥已配置</el-tag>
-          </div>
-          <el-row v-if="providerForm.providerType === 'ALIYUN_NLS'" :gutter="16">
-            <el-col :span="12">
-              <el-form-item label="AppKey" required>
-                <el-input v-model="simpleCredential.appKey" placeholder="智能语音交互项目 AppKey" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="区域">
-                <el-select v-model="simpleCredential.region" style="width: 100%">
-                  <el-option label="上海 cn-shanghai" value="cn-shanghai" />
-                  <el-option label="北京 cn-beijing" value="cn-beijing" />
-                  <el-option label="深圳 cn-shenzhen" value="cn-shenzhen" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="AccessKeyId" required>
-                <el-input v-model="simpleCredential.accessKeyId" placeholder="RAM 子用户 AccessKey ID" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="AccessKeySecret" :required="!editingAuthConfigured">
-                <el-input
-                  v-model="simpleCredential.secret"
-                  type="password"
-                  show-password
-                  :placeholder="editingAuthConfigured ? '已配置，留空表示不修改' : 'RAM 子用户 AccessKey Secret'"
-                />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row v-else-if="providerForm.providerType === 'ALIYUN_DASHSCOPE'" :gutter="16">
-            <el-col :span="12">
-              <el-form-item label="API Key" :required="!editingAuthConfigured">
-                <el-input
-                  v-model="simpleCredential.secret"
-                  type="password"
-                  show-password
-                  :placeholder="editingAuthConfigured ? '已配置，留空表示不修改' : '百炼 DASHSCOPE_API_KEY'"
-                />
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="WorkspaceId">
-                <el-input v-model="simpleCredential.workspaceId" placeholder="业务空间调用时填写，公共模式可留空" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row v-else-if="providerForm.providerType === 'FUNASR'" :gutter="16">
-            <el-col :span="12">
-              <el-form-item label="认证方式">
-                <el-select v-model="providerForm.authType" style="width: 100%">
-                  <el-option label="无认证（内网部署）" value="NONE" />
-                  <el-option label="Bearer Token" value="BEARER" />
-                  <el-option label="Header Token" value="HEADER" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col v-if="providerForm.authType === 'HEADER'" :span="12">
-              <el-form-item label="Header名称">
-                <el-input v-model="providerForm.authHeaderName" placeholder="例如 X-API-Key" />
-              </el-form-item>
-            </el-col>
-            <el-col v-if="providerForm.authType !== 'NONE'" :span="12">
-              <el-form-item label="访问密钥" :required="!editingAuthConfigured">
-                <el-input
-                  v-model="simpleCredential.secret"
-                  type="password"
-                  show-password
-                  :placeholder="editingAuthConfigured ? '已配置，留空表示不修改' : '反向代理启用认证时填写'"
-                />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row v-else-if="providerForm.providerType === 'KOKORO_LOCAL'" :gutter="16">
-            <el-col :span="12">
-              <el-form-item label="认证方式">
-                <el-select v-model="providerForm.authType" style="width: 100%">
-                  <el-option label="无认证（内网部署）" value="NONE" />
-                  <el-option label="Bearer Token" value="BEARER" />
-                  <el-option label="Header Token" value="HEADER" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col v-if="providerForm.authType === 'HEADER'" :span="12">
-              <el-form-item label="Header名称">
-                <el-input v-model="providerForm.authHeaderName" placeholder="例如 X-API-Key" />
-              </el-form-item>
-            </el-col>
-            <el-col v-if="providerForm.authType !== 'NONE'" :span="12">
-              <el-form-item label="访问密钥" :required="!editingAuthConfigured">
-                <el-input
-                  v-model="simpleCredential.secret"
-                  type="password"
-                  show-password
-                  :placeholder="editingAuthConfigured ? '已配置，留空表示不修改' : '反向代理启用认证时填写'"
-                />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row v-else :gutter="16">
-            <el-col :span="12">
-              <el-form-item label="API Key" :required="providerForm.authType !== 'NONE' && !editingAuthConfigured">
-                <el-input
-                  v-model="simpleCredential.secret"
-                  type="password"
-                  show-password
-                  :placeholder="editingAuthConfigured ? '已配置，留空表示不修改' : '服务访问密钥'"
-                />
-              </el-form-item>
-            </el-col>
-            <el-col v-if="providerForm.providerType === 'CUSTOM_HTTP'" :span="12">
-              <el-form-item label="服务地址">
-                <el-input v-model="providerForm.endpointUrl" placeholder="https:// 或 http:// 服务地址" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-        </section>
-
-        <section class="provider-section">
-          <div class="section-title">
-            <div>
-              <h3>能力与默认用途</h3>
-              <p>打开能力代表这个服务商可用于对应场景；默认用途决定业务自动选择哪一条服务商。</p>
-            </div>
-          </div>
-          <div class="capability-grid">
-            <div v-if="providerForm.providerType !== 'FUNASR'" class="capability-card">
-              <div>
-                <strong>TTS 语音合成</strong>
-                <p>坐席提示音、普通语音合成。</p>
-              </div>
-              <el-switch v-model="providerForm.ttsEnabled" />
-              <el-checkbox v-model="providerForm.defaultTts" :disabled="!providerForm.ttsEnabled">设为默认</el-checkbox>
-            </div>
-            <div v-if="providerForm.providerType !== 'FUNASR'" class="capability-card">
-              <div>
-                <strong>实时 TTS</strong>
-                <p>AI 实时对话时按分句流式合成。</p>
-              </div>
-              <el-switch v-model="providerForm.streamingTtsEnabled" />
-              <el-checkbox v-model="providerForm.defaultStreamingTts" :disabled="!providerForm.streamingTtsEnabled">设为默认</el-checkbox>
-            </div>
-            <div v-if="providerForm.providerType !== 'KOKORO_LOCAL'" class="capability-card">
-              <div>
-                <strong>录音 ASR</strong>
-                <p>通话录音、上传文件转文字。</p>
-              </div>
-              <el-switch v-model="providerForm.recordingAsrEnabled" />
-              <el-checkbox v-model="providerForm.defaultRecordingAsr" :disabled="!providerForm.recordingAsrEnabled">设为默认</el-checkbox>
-            </div>
-            <div v-if="providerForm.providerType !== 'FUNASR' && providerForm.providerType !== 'KOKORO_LOCAL'" class="capability-card">
-              <div>
-                <strong>实时 ASR</strong>
-                <p>AI 通话实时识别客户语音。</p>
-              </div>
-              <el-switch v-model="providerForm.streamingAsrEnabled" />
-              <el-checkbox v-model="providerForm.defaultStreamingAsr" :disabled="!providerForm.streamingAsrEnabled">设为默认</el-checkbox>
-            </div>
-          </div>
-        </section>
-
-        <section v-if="providerForm.providerType === 'FUNASR'" class="provider-section">
-          <div class="section-title">
-            <div>
-              <h3>FunASR 识别配置</h3>
-              <p>当前沿用 UniMRCP 断句，一句话收齐后调用本地 FunASR HTTP 接口，不改变现有通话流程。</p>
-            </div>
-          </div>
-          <el-row :gutter="16">
-            <el-col :span="24">
-              <el-form-item label="服务地址" required>
-                <el-input v-model="providerForm.recordingAsrEndpointUrl" placeholder="http://FunASR服务器IP:8000/v1/audio/transcriptions" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="模型名称">
-                <el-input v-model="funAsrOptions.model" placeholder="sensevoice" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="服务采样率">
-                <el-select v-model="providerForm.asrSampleRate" style="width: 100%">
-                  <el-option label="16000 Hz（推荐）" :value="16000" />
-                  <el-option label="8000 Hz" :value="8000" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="超时时间">
-                <el-input-number v-model="providerForm.timeoutSeconds" :min="5" :max="300" style="width: 100%" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-alert type="info" show-icon :closable="false" title="电话侧通常上传 8kHz PCM，系统会转换为标准 16kHz 单声道 WAV 后提交到 FunASR。" />
-        </section>
-
-        <section v-if="providerForm.providerType === 'KOKORO_LOCAL'" class="provider-section">
-          <div class="section-title">
-            <div>
-              <h3>Kokoro 本地合成配置</h3>
-              <p>服务输出 24kHz PCM，CallNexus 会实时转换为电话侧使用的 8kHz PCM，不需要修改 UniMRCP 或 FreeSWITCH。</p>
-            </div>
-          </div>
-          <el-row :gutter="16">
-            <el-col :span="24">
-              <el-form-item label="服务地址" required>
-                <el-input v-model="providerForm.endpointUrl" placeholder="http://Kokoro服务器IP:8880，可填写基础地址或 /v1/audio/speech 完整地址" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="模型名称">
-                <el-input v-model="kokoroOptions.model" placeholder="kokoro" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="默认音色">
-                <el-select v-model="providerForm.defaultVoice" filterable allow-create default-first-option style="width: 100%" placeholder="如 zf_001">
-                  <el-option v-for="voice in kokoroVoices" :key="voice" :label="voice" :value="voice" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="音色列表">
-                <el-button :loading="kokoroVoicesLoading" :disabled="!providerForm.id" @click="loadKokoroVoices">刷新音色</el-button>
-                <span v-if="!providerForm.id" class="field-hint">保存后可读取</span>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="语速">
-                <el-input-number v-model="kokoroOptions.speed" :min="0.25" :max="4" :step="0.05" :precision="2" style="width: 100%" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="语言代码">
-                <el-input v-model="kokoroOptions.langCode" placeholder="中文使用 z" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="输出采样率">
-                <el-select v-model="providerForm.defaultSampleRate" style="width: 100%">
-                  <el-option label="8000 Hz（电话推荐）" :value="8000" />
-                  <el-option label="16000 Hz" :value="16000" />
-                  <el-option label="24000 Hz" :value="24000" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="服务采样率">
-                <el-input-number v-model="kokoroOptions.sourceSampleRate" :min="8000" :max="48000" :step="1000" style="width: 100%" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="音量倍数">
-                <el-input-number v-model="kokoroOptions.volumeMultiplier" :min="0.1" :max="3" :step="0.1" :precision="1" style="width: 100%" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="超时时间">
-                <el-input-number v-model="providerForm.timeoutSeconds" :min="5" :max="300" style="width: 100%" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-        </section>
-
-        <el-collapse v-if="providerForm.providerType !== 'FUNASR' && providerForm.providerType !== 'KOKORO_LOCAL'" v-model="advancedSections" class="provider-advanced">
-          <el-collapse-item title="高级配置（通常无需修改）" name="common">
-            <el-row :gutter="16">
-              <el-col :span="8">
-                <el-form-item label="默认音色">
-                  <el-input v-model="providerForm.defaultVoice" placeholder="如 Cherry、xiaoyun、alloy" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="TTS格式">
-                  <el-select v-model="providerForm.defaultFormat" style="width: 100%">
-                    <el-option label="wav" value="wav" />
-                    <el-option label="mp3" value="mp3" />
-                    <el-option label="pcm" value="pcm" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="TTS采样率">
-                  <el-input-number v-model="providerForm.defaultSampleRate" :min="8000" :max="48000" :step="1000" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="ASR语言">
-                  <el-input v-model="providerForm.asrLanguage" placeholder="zh-CN" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="ASR格式">
-                  <el-select v-model="providerForm.asrFormat" style="width: 100%">
-                    <el-option label="wav" value="wav" />
-                    <el-option label="pcm" value="pcm" />
-                    <el-option label="opus" value="opus" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="ASR采样率">
-                  <el-input-number v-model="providerForm.asrSampleRate" :min="8000" :max="48000" :step="1000" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-          </el-collapse-item>
-          <el-collapse-item title="认证配置" name="auth">
-            <el-row :gutter="16">
-              <el-col :span="8">
-                <el-form-item label="认证方式" prop="authType">
-                  <el-select v-model="providerForm.authType" style="width: 100%">
-                    <el-option label="无" value="NONE" />
-                    <el-option label="Bearer Token" value="BEARER" />
-                    <el-option label="Header Token" value="HEADER" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col v-if="providerForm.authType === 'HEADER'" :span="8">
-                <el-form-item label="Header名称">
-                  <el-input v-model="providerForm.authHeaderName" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="Token/API Key">
-                  <el-input v-model="simpleCredential.secret" type="password" show-password placeholder="请在上方账号凭证中填写" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="超时时间">
-                  <el-input-number v-model="providerForm.timeoutSeconds" :min="5" :max="300" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-          </el-collapse-item>
-
-          <el-collapse-item title="TTS 地址与实时参数" name="tts">
-            <el-row :gutter="16">
-              <el-col :span="6">
-                <el-form-item label="请求方法">
-                  <el-select v-model="providerForm.httpMethod" style="width: 100%">
-                    <el-option label="POST" value="POST" />
-                    <el-option label="GET" value="GET" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="18">
-                <el-form-item label="TTS地址">
-                  <el-input v-model="providerForm.endpointUrl" placeholder="HTTP TTS 接口地址" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="24">
-                <el-form-item label="实时TTS地址">
-                  <el-input v-model="providerForm.streamingTtsEndpointUrl" placeholder="wss://dashscope.aliyuncs.com/api-ws/v1/realtime" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="24">
-                <el-form-item label="实时TTS参数">
-                  <el-input
-                    v-model="providerForm.streamingTtsOptionsJson"
-                    type="textarea"
-                    :rows="3"
-                    placeholder='{"model":"qwen3-tts-flash-realtime","speech_rate":1.0,"volume":50}'
-                  />
-                </el-form-item>
-              </el-col>
-            </el-row>
-          </el-collapse-item>
-
-          <el-collapse-item title="ASR 地址与识别参数" name="asr">
-            <el-row :gutter="16">
-              <el-col :span="24">
-                <el-form-item label="录音ASR地址">
-                  <el-input v-model="providerForm.recordingAsrEndpointUrl" placeholder="录音文件识别地址，可留空使用服务商默认值" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="24">
-                <el-form-item label="流式ASR地址">
-                  <el-input v-model="providerForm.streamingAsrEndpointUrl" placeholder="wss://dashscope.aliyuncs.com/api-ws/v1/realtime" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="6">
-                <el-form-item label="静音断句">
-                  <el-input-number v-model="providerForm.asrSilenceTimeoutMs" :min="200" :max="10000" :step="100" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="6">
-                <el-form-item label="最长单句">
-                  <el-input-number v-model="providerForm.asrMaxSentenceMs" :min="1000" :max="60000" :step="1000" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="4">
-                <el-form-item label="标点">
-                  <el-switch v-model="providerForm.asrEnablePunctuation" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="4">
-                <el-form-item label="ITN">
-                  <el-switch v-model="providerForm.asrEnableItn" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="4">
-                <el-form-item label="中间结果">
-                  <el-switch v-model="providerForm.asrEnableIntermediateResult" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="24">
-                <el-form-item label="ASR扩展参数">
-                  <el-input
-                    v-model="providerForm.asrOptionsJson"
-                    type="textarea"
-                    :rows="3"
-                    placeholder='{"fileModel":"qwen3-asr-flash","realtimeModel":"qwen3-asr-flash-realtime"}'
-                  />
-                </el-form-item>
-              </el-col>
-            </el-row>
-          </el-collapse-item>
-
-          <el-collapse-item title="备注与厂商扩展JSON" name="remark">
-            <el-form-item label="扩展JSON">
-              <el-input
-                v-model="providerForm.remark"
-                type="textarea"
-                :rows="4"
-                placeholder='百炼可填 {"workspaceId":"xxx"}；其他厂商按适配器要求填写。'
-              />
-            </el-form-item>
-          </el-collapse-item>
-        </el-collapse>
-      </el-form>
-      <template #footer>
-        <el-button @click="providerDrawer.visible = false">取消</el-button>
-        <el-button type="primary" :loading="providerSubmitting" @click="submitProvider">保存</el-button>
-      </template>
-    </el-drawer>
     <el-dialog v-model="templateDialog.visible" :title="templateForm.id ? '修改语音模板' : '新增语音模板'" width="720px">
       <el-form ref="templateFormRef" :model="templateForm" :rules="templateRules" label-width="110px">
         <el-form-item label="模板编码" prop="templateCode"><el-input v-model="templateForm.templateCode" /></el-form-item>
@@ -716,25 +229,25 @@
 </template>
 
 <script setup lang="ts">
-import { UploadFilled } from '@element-plus/icons-vue';
+import { ArrowDown, UploadFilled } from '@element-plus/icons-vue';
 import type { FormInstance, FormRules } from 'element-plus';
 import {
-  createSpeechProvider,
   createSpeechTemplate,
   deleteSpeechProvider,
   deleteSpeechTemplate,
-  listSpeechProviderVoices,
+  listSpeechProviderDefinitions,
   listSpeechProviders,
   listSpeechTasks,
   listSpeechTemplates,
   testAsrProvider,
+  testSpeechProviderConnection,
+  testStreamingSpeechProvider,
   testTtsProvider,
-  updateSpeechProvider,
   updateSpeechTemplate
 } from '@/api/callcenter/ai-speech';
 import type {
-  AiSpeechProviderForm,
   AiSpeechProviderVO,
+  SpeechProviderDefinitionVO,
   AiSpeechTaskQuery,
   AiSpeechTaskVO,
   AiSpeechTemplateForm,
@@ -743,6 +256,7 @@ import type {
   TtsTestForm,
   TtsTestVO
 } from '@/api/callcenter/ai-speech/types';
+import ProviderEditorDrawer from './components/ProviderEditorDrawer.vue';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 
@@ -750,14 +264,14 @@ const activeTab = ref('provider');
 const providerLoading = ref(false);
 const templateLoading = ref(false);
 const taskLoading = ref(false);
-const providerSubmitting = ref(false);
 const templateSubmitting = ref(false);
 const providers = ref<AiSpeechProviderVO[]>([]);
+const providerDefinitions = ref<SpeechProviderDefinitionVO[]>([]);
+const editingProvider = ref<AiSpeechProviderVO>();
 const templates = ref<AiSpeechTemplateVO[]>([]);
 const tasks = ref<AiSpeechTaskVO[]>([]);
 const taskTotal = ref(0);
 
-const providerFormRef = ref<FormInstance>();
 const templateFormRef = ref<FormInstance>();
 const providerDrawer = reactive({ visible: false });
 const templateDialog = reactive({ visible: false });
@@ -765,46 +279,6 @@ const ttsTestDialog = reactive({ visible: false });
 const asrTestDialog = reactive({ visible: false });
 const taskQuery = ref<AiSpeechTaskQuery>({ pageNum: 1, pageSize: 10 });
 
-const providerForm = ref<AiSpeechProviderForm>(defaultProviderForm());
-const advancedSections = ref<string[]>([]);
-const editingAuthConfigured = ref(false);
-const simpleCredential = reactive({
-  appKey: '',
-  accessKeyId: '',
-  secret: '',
-  region: 'cn-shanghai',
-  workspaceId: ''
-});
-const funAsrOptions = reactive({
-  model: 'sensevoice'
-});
-const kokoroOptions = reactive({
-  model: 'kokoro',
-  speed: 1,
-  langCode: 'z',
-  sourceSampleRate: 24000,
-  volumeMultiplier: 1
-});
-const kokoroVoices = ref<string[]>([]);
-const kokoroVoicesLoading = ref(false);
-const providerCredentialHint = computed(() => {
-  if (providerForm.value.providerType === 'ALIYUN_NLS') {
-    return '只需填写智能语音交互项目 AppKey 和 RAM 子用户 AccessKey，服务地址由区域自动生成。';
-  }
-  if (providerForm.value.providerType === 'ALIYUN_DASHSCOPE') {
-    return '千问语音使用百炼 API Key；仅使用业务空间专属地址时才需要 WorkspaceId。';
-  }
-  if (providerForm.value.providerType === 'OPENAI_COMPATIBLE') {
-    return '填写兼容服务的 API Key，标准接口地址已预置，可在高级配置中覆盖。';
-  }
-  if (providerForm.value.providerType === 'FUNASR') {
-    return '填写已部署的 FunASR HTTP 转写地址；内网部署通常不需要认证。';
-  }
-  if (providerForm.value.providerType === 'KOKORO_LOCAL') {
-    return '填写 Kokoro FastAPI 地址；内网部署默认无需密钥，模型、音色和语速在下方直接配置。';
-  }
-  return '填写自建或第三方服务地址和访问密钥，协议细节可在高级配置中覆盖。';
-});
 const templateForm = ref<AiSpeechTemplateForm>(defaultTemplateForm());
 const ttsTestForm = ref<TtsTestForm>({ text: '工号1001为您服务', format: 'wav', sampleRate: 8000 });
 const ttsTestResult = ref<TtsTestVO>();
@@ -814,58 +288,14 @@ const asrTestFile = ref<File>();
 const asrTestResult = ref<AsrTestVO>();
 const asrTesting = ref(false);
 const testingProviderId = ref<string | number>();
+const providerTestRunning = ref<string | number>();
 
-const providerRules: FormRules = {
-  providerCode: [{ required: true, message: '请输入服务商编码', trigger: 'blur' }],
-  providerName: [{ required: true, message: '请输入服务商名称', trigger: 'blur' }],
-  providerType: [{ required: true, message: '请选择服务商类型', trigger: 'change' }]
-};
 const templateRules: FormRules = {
   templateCode: [{ required: true, message: '请输入模板编码', trigger: 'blur' }],
   templateName: [{ required: true, message: '请输入模板名称', trigger: 'blur' }],
   businessType: [{ required: true, message: '请输入业务类型', trigger: 'blur' }],
   templateText: [{ required: true, message: '请输入模板内容', trigger: 'blur' }]
 };
-
-function defaultProviderForm(): AiSpeechProviderForm {
-  return {
-    providerCode: '',
-    providerName: '',
-    providerType: 'ALIYUN_DASHSCOPE',
-    ttsEnabled: true,
-    streamingTtsEnabled: true,
-    recordingAsrEnabled: true,
-    streamingAsrEnabled: false,
-    defaultTts: false,
-    defaultStreamingTts: false,
-    defaultRecordingAsr: false,
-    defaultStreamingAsr: false,
-    endpointUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/audio/speech',
-    httpMethod: 'POST',
-    authType: 'BEARER',
-    authHeaderName: '',
-    authToken: '',
-    defaultVoice: 'Cherry',
-    defaultFormat: 'wav',
-    defaultSampleRate: 8000,
-    timeoutSeconds: 60,
-    streamingTtsEndpointUrl: 'wss://dashscope.aliyuncs.com/api-ws/v1/realtime',
-    streamingTtsOptionsJson: '{"model":"qwen3-tts-flash-realtime","speech_rate":1.0,"volume":50}',
-    recordingAsrEndpointUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
-    streamingAsrEndpointUrl: '',
-    asrLanguage: 'zh-CN',
-    asrFormat: 'wav',
-    asrSampleRate: 16000,
-    asrEnablePunctuation: true,
-    asrEnableItn: true,
-    asrEnableIntermediateResult: true,
-    asrSilenceTimeoutMs: 800,
-    asrMaxSentenceMs: 15000,
-    asrOptionsJson: '{"fileModel":"qwen3-asr-flash","realtimeModel":"qwen3-asr-flash-realtime"}',
-    enabled: true,
-    remark: ''
-  };
-}
 
 function defaultTemplateForm(): AiSpeechTemplateForm {
   return {
@@ -880,9 +310,14 @@ function defaultTemplateForm(): AiSpeechTemplateForm {
 }
 
 const reloadAll = () => {
+  loadProviderDefinitions();
   loadProviders();
   loadTemplates();
   loadTasks();
+};
+const loadProviderDefinitions = async () => {
+  const res = await listSpeechProviderDefinitions();
+  providerDefinitions.value = res.data || [];
 };
 const loadProviders = async () => {
   providerLoading.value = true;
@@ -914,333 +349,30 @@ const loadTasks = async () => {
 };
 
 const openProviderDrawer = (row?: AiSpeechProviderVO) => {
-  providerForm.value = row ? { ...defaultProviderForm(), ...row, authToken: '' } : defaultProviderForm();
-  editingAuthConfigured.value = Boolean(row?.authConfigured);
-  advancedSections.value = [];
-  hydrateSimpleCredential(row);
-  hydrateFunAsrOptions(row);
-  hydrateKokoroOptions(row);
-  if (!row) {
-    handleProviderTypeChange(providerForm.value.providerType);
-  } else if (row.providerType === 'KOKORO_LOCAL') {
-    loadKokoroVoices();
-  }
+  editingProvider.value = row ? { ...row } : undefined;
   providerDrawer.visible = true;
 };
 
-const parseRemark = (remark?: string): Record<string, unknown> => {
-  if (!remark?.trim()) {
-    return {};
-  }
-  try {
-    const value = JSON.parse(remark);
-    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-  } catch {
-    return {};
-  }
-};
-
-const hydrateSimpleCredential = (row?: AiSpeechProviderVO) => {
-  const config = parseRemark(row?.remark);
-  simpleCredential.appKey = String(config.appKey || config.app_key || '');
-  simpleCredential.accessKeyId = row?.authHeaderName || '';
-  simpleCredential.secret = '';
-  simpleCredential.region = String(config.region || 'cn-shanghai');
-  simpleCredential.workspaceId = String(config.workspaceId || config.workspace_id || '');
-};
-
-const hydrateFunAsrOptions = (row?: AiSpeechProviderVO) => {
-  const options = parseRemark(row?.asrOptionsJson);
-  funAsrOptions.model = String(options.model || 'sensevoice');
-};
-
-const hydrateKokoroOptions = (row?: AiSpeechProviderVO) => {
-  const options = parseRemark(row?.remark);
-  kokoroOptions.model = String(options.model || 'kokoro');
-  kokoroOptions.speed = Number(options.speed || 1);
-  kokoroOptions.langCode = String(options.langCode || 'z');
-  kokoroOptions.sourceSampleRate = Number(options.sourceSampleRate || 24000);
-  kokoroOptions.volumeMultiplier = Number(options.volumeMultiplier || 1);
-  kokoroVoices.value = row?.defaultVoice ? [row.defaultVoice] : [];
-};
-
-const loadKokoroVoices = async () => {
-  if (!providerForm.value.id || providerForm.value.providerType !== 'KOKORO_LOCAL') return;
-  kokoroVoicesLoading.value = true;
-  try {
-    const response = await listSpeechProviderVoices(providerForm.value.id);
-    kokoroVoices.value = response.data || [];
-    if (!providerForm.value.defaultVoice && kokoroVoices.value.length > 0) {
-      providerForm.value.defaultVoice = kokoroVoices.value[0];
-    }
-  } finally {
-    kokoroVoicesLoading.value = false;
-  }
-};
-
-const setProductIdentity = (type: string) => {
-  if (providerForm.value.id) {
-    return;
-  }
-  const identity: Record<string, { code: string; name: string }> = {
-    ALIYUN_DASHSCOPE: { code: 'ALIYUN_DASHSCOPE', name: '阿里云百炼' },
-    ALIYUN_NLS: { code: 'ALIYUN_NLS', name: '阿里云 NLS' },
-    FUNASR: { code: 'FUNASR', name: 'FunASR 本地识别' },
-    KOKORO_LOCAL: { code: 'KOKORO_LOCAL', name: 'Kokoro 本地语音' },
-    OPENAI_COMPATIBLE: { code: 'OPENAI_COMPATIBLE', name: 'OpenAI 兼容语音' },
-    CUSTOM_HTTP: { code: 'CUSTOM_HTTP', name: '自定义语音服务' }
-  };
-  const selected = identity[type];
-  if (selected) {
-    providerForm.value.providerCode = selected.code;
-    providerForm.value.providerName = selected.name;
-  }
-};
-
-const handleProviderTypeChange = (type: string) => {
-  setProductIdentity(type);
-  editingAuthConfigured.value = false;
-  simpleCredential.appKey = '';
-  simpleCredential.accessKeyId = '';
-  simpleCredential.secret = '';
-  simpleCredential.region = 'cn-shanghai';
-  simpleCredential.workspaceId = '';
-  funAsrOptions.model = 'sensevoice';
-  kokoroOptions.model = 'kokoro';
-  kokoroOptions.speed = 1;
-  kokoroOptions.langCode = 'z';
-  kokoroOptions.sourceSampleRate = 24000;
-  kokoroOptions.volumeMultiplier = 1;
-  kokoroVoices.value = [];
-  if (type === 'OPENAI_COMPATIBLE') {
-    providerForm.value = {
-      ...providerForm.value,
-      authType: 'BEARER',
-      ttsEnabled: true,
-      streamingTtsEnabled: false,
-      recordingAsrEnabled: true,
-      streamingAsrEnabled: false,
-      endpointUrl: 'https://api.openai.com/v1/audio/speech',
-      httpMethod: 'POST',
-      defaultVoice: providerForm.value.defaultVoice || 'alloy',
-      defaultFormat: 'wav',
-      defaultSampleRate: 24000,
-      streamingTtsEndpointUrl: '',
-      streamingTtsOptionsJson: '',
-      recordingAsrEndpointUrl: 'https://api.openai.com/v1/audio/transcriptions',
-      streamingAsrEndpointUrl: '',
-      asrFormat: 'wav',
-      asrSampleRate: 16000,
-      asrOptionsJson: '{}',
-      remark: providerForm.value.remark || '{"ttsModel":"gpt-4o-mini-tts","asrModel":"whisper-1"}'
-    };
-  }
-  if (type === 'ALIYUN_DASHSCOPE') {
-    providerForm.value = {
-      ...providerForm.value,
-      authType: 'BEARER',
-      endpointUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/audio/speech',
-      ttsEnabled: true,
-      streamingTtsEnabled: true,
-      recordingAsrEnabled: true,
-      streamingAsrEnabled: false,
-      defaultVoice: providerForm.value.defaultVoice || 'Cherry',
-      defaultFormat: 'wav',
-      defaultSampleRate: 8000,
-      streamingTtsEndpointUrl: 'wss://dashscope.aliyuncs.com/api-ws/v1/realtime',
-      streamingTtsOptionsJson: '{"model":"qwen3-tts-flash-realtime","speech_rate":1.0,"volume":50}',
-      recordingAsrEndpointUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
-      streamingAsrEndpointUrl: '',
-      asrOptionsJson: '{"fileModel":"qwen3-asr-flash","realtimeModel":"qwen3-asr-flash-realtime"}'
-    };
-  }
-  if (type === 'ALIYUN_NLS') {
-    providerForm.value = {
-      ...providerForm.value,
-      authType: 'NONE',
-      ttsEnabled: true,
-      streamingTtsEnabled: false,
-      recordingAsrEnabled: true,
-      streamingAsrEnabled: true,
-      endpointUrl: '',
-      defaultVoice: 'xiaoyun',
-      defaultFormat: 'wav',
-      defaultSampleRate: 8000,
-      recordingAsrEndpointUrl: 'wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1',
-      streamingAsrEndpointUrl: 'wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1',
-      asrOptionsJson: '{}'
-    };
-  }
-  if (type === 'FUNASR') {
-    providerForm.value = {
-      ...providerForm.value,
-      authType: 'NONE',
-      authHeaderName: '',
-      ttsEnabled: false,
-      streamingTtsEnabled: false,
-      recordingAsrEnabled: true,
-      streamingAsrEnabled: false,
-      defaultTts: false,
-      defaultStreamingTts: false,
-      defaultRecordingAsr: false,
-      defaultStreamingAsr: false,
-      endpointUrl: '',
-      streamingTtsEndpointUrl: '',
-      streamingTtsOptionsJson: '',
-      recordingAsrEndpointUrl: 'http://127.0.0.1:8000/v1/audio/transcriptions',
-      streamingAsrEndpointUrl: '',
-      asrLanguage: 'zh-CN',
-      asrFormat: 'wav',
-      asrSampleRate: 16000,
-      asrEnablePunctuation: true,
-      asrEnableItn: true,
-      asrEnableIntermediateResult: false,
-      asrOptionsJson: '{"model":"sensevoice","audioFs":16000}',
-      timeoutSeconds: 60,
-      remark: ''
-    };
-  }
-  if (type === 'KOKORO_LOCAL') {
-    providerForm.value = {
-      ...providerForm.value,
-      authType: 'NONE',
-      authHeaderName: '',
-      ttsEnabled: true,
-      streamingTtsEnabled: true,
-      recordingAsrEnabled: false,
-      streamingAsrEnabled: false,
-      defaultRecordingAsr: false,
-      defaultStreamingAsr: false,
-      endpointUrl: 'http://127.0.0.1:8880',
-      httpMethod: 'POST',
-      defaultVoice: 'zf_001',
-      defaultFormat: 'wav',
-      defaultSampleRate: 8000,
-      streamingTtsEndpointUrl: '',
-      streamingTtsOptionsJson: '',
-      recordingAsrEndpointUrl: '',
-      streamingAsrEndpointUrl: '',
-      timeoutSeconds: 60,
-      remark: '{"model":"kokoro","speed":1,"langCode":"z","sourceSampleRate":24000,"volumeMultiplier":1}'
-    };
-  }
-  if (type === 'CUSTOM_HTTP') {
-    providerForm.value = {
-      ...providerForm.value,
-      authType: 'BEARER',
-      ttsEnabled: true,
-      streamingTtsEnabled: false,
-      recordingAsrEnabled: false,
-      streamingAsrEnabled: false,
-      endpointUrl: '',
-      streamingTtsEndpointUrl: '',
-      recordingAsrEndpointUrl: '',
-      streamingAsrEndpointUrl: ''
-    };
-  }
-};
-
-const applySimpleCredential = () => {
-  const type = providerForm.value.providerType;
-  const config = parseRemark(providerForm.value.remark);
-  if (type === 'ALIYUN_NLS') {
-    if (!simpleCredential.appKey.trim()) {
-      throw new Error('请输入阿里云 NLS AppKey');
-    }
-    if (!simpleCredential.accessKeyId.trim()) {
-      throw new Error('请输入阿里云 NLS AccessKeyId');
-    }
-    if (!editingAuthConfigured.value && !simpleCredential.secret.trim()) {
-      throw new Error('请输入阿里云 NLS AccessKeySecret');
-    }
-    config.appKey = simpleCredential.appKey.trim();
-    config.region = simpleCredential.region;
-    delete config.app_key;
-    providerForm.value.authHeaderName = simpleCredential.accessKeyId.trim();
-    providerForm.value.recordingAsrEndpointUrl = `wss://nls-gateway-${simpleCredential.region}.aliyuncs.com/ws/v1`;
-    providerForm.value.streamingAsrEndpointUrl = providerForm.value.recordingAsrEndpointUrl;
-  } else if (type === 'ALIYUN_DASHSCOPE') {
-    if (!editingAuthConfigured.value && !simpleCredential.secret.trim()) {
-      throw new Error('请输入阿里云百炼 API Key');
-    }
-    if (simpleCredential.workspaceId.trim()) {
-      config.workspaceId = simpleCredential.workspaceId.trim();
-    } else {
-      delete config.workspaceId;
-      delete config.workspace_id;
-    }
-  } else if (type === 'FUNASR') {
-    const endpoint = providerForm.value.recordingAsrEndpointUrl?.trim() || '';
-    if (!endpoint) {
-      throw new Error('请输入 FunASR HTTP 地址');
-    }
-    if (!/^https?:\/\//i.test(endpoint)) {
-      throw new Error('FunASR 地址必须以 http:// 或 https:// 开头');
-    }
-    if (providerForm.value.authType !== 'NONE' && !editingAuthConfigured.value && !simpleCredential.secret.trim()) {
-      throw new Error('请输入 FunASR 访问密钥');
-    }
-    providerForm.value.recordingAsrEndpointUrl = endpoint;
-    providerForm.value.asrOptionsJson = JSON.stringify({
-      model: funAsrOptions.model.trim() || 'sensevoice',
-      audioFs: providerForm.value.asrSampleRate || 16000
-    });
-  } else if (type === 'KOKORO_LOCAL') {
-    const endpoint = providerForm.value.endpointUrl?.trim() || '';
-    if (!endpoint) {
-      throw new Error('请输入 Kokoro 服务地址');
-    }
-    if (!/^https?:\/\//i.test(endpoint)) {
-      throw new Error('Kokoro 服务地址必须以 http:// 或 https:// 开头');
-    }
-    if (!providerForm.value.defaultVoice?.trim()) {
-      throw new Error('请选择或输入 Kokoro 默认音色');
-    }
-    if (providerForm.value.authType !== 'NONE' && !editingAuthConfigured.value && !simpleCredential.secret.trim()) {
-      throw new Error('请输入 Kokoro 访问密钥');
-    }
-    providerForm.value.endpointUrl = endpoint;
-    config.model = kokoroOptions.model.trim() || 'kokoro';
-    config.speed = kokoroOptions.speed;
-    config.langCode = kokoroOptions.langCode.trim() || 'z';
-    config.sourceSampleRate = kokoroOptions.sourceSampleRate || 24000;
-    config.volumeMultiplier = kokoroOptions.volumeMultiplier;
-  } else if (providerForm.value.authType !== 'NONE' && !editingAuthConfigured.value && !simpleCredential.secret.trim()) {
-    throw new Error('请输入 API Key');
-  }
-  if (simpleCredential.secret.trim()) {
-    providerForm.value.authToken = simpleCredential.secret.trim();
-  }
-  providerForm.value.remark = Object.keys(config).length ? JSON.stringify(config) : '';
-};
-
-const submitProvider = async () => {
-  await providerFormRef.value?.validate();
-  try {
-    applySimpleCredential();
-  } catch (error) {
-    proxy?.$modal.msgError(error instanceof Error ? error.message : '请检查账号凭证');
-    return;
-  }
-  providerSubmitting.value = true;
-  try {
-    if (providerForm.value.id) {
-      await updateSpeechProvider(providerForm.value);
-    } else {
-      await createSpeechProvider(providerForm.value);
-    }
-    proxy?.$modal.msgSuccess('保存成功');
-    providerDrawer.visible = false;
-    loadProviders();
-  } finally {
-    providerSubmitting.value = false;
-  }
-};
 const removeProvider = async (row: AiSpeechProviderVO) => {
   await proxy?.$modal.confirm(`确认删除语音服务商“${row.providerName}”？`);
   await deleteSpeechProvider(row.id);
   proxy?.$modal.msgSuccess('删除成功');
   loadProviders();
+};
+
+const handleProviderTest = async (command: string, row: AiSpeechProviderVO) => {
+  if (command === 'tts') return openTtsTest(row);
+  if (command === 'asr') return openAsrTest(row);
+  providerTestRunning.value = row.id;
+  try {
+    const res = command === 'connection'
+      ? await testSpeechProviderConnection(row.id)
+      : await testStreamingSpeechProvider(row.id, command === 'streamingTts' ? 'STREAMING_TTS' : 'STREAMING_ASR');
+    proxy?.$modal.msgSuccess(`${res.data.message}（${res.data.durationMs}ms）`);
+    await loadProviders();
+  } finally {
+    providerTestRunning.value = undefined;
+  }
 };
 
 const openTemplateDialog = (row?: AiSpeechTemplateVO) => {
@@ -1288,6 +420,7 @@ const submitTtsTest = async () => {
     const res = await testTtsProvider(testingProviderId.value, ttsTestForm.value);
     ttsTestResult.value = res.data;
     proxy?.$modal.msgSuccess('TTS 测试音频生成成功');
+    await loadProviders();
   } finally {
     ttsTesting.value = false;
   }
@@ -1319,6 +452,7 @@ const submitAsrTest = async () => {
     const res = await testAsrProvider(testingProviderId.value, data);
     asrTestResult.value = res.data;
     proxy?.$modal.msgSuccess('录音识别完成');
+    await loadProviders();
   } finally {
     asrTesting.value = false;
   }
@@ -1362,6 +496,31 @@ onMounted(reloadAll);
 }
 .provider-summary {
   background: linear-gradient(180deg, #f7fbff 0%, #fff 100%);
+}
+.last-test {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.last-test small {
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+}
+.provider-actions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+.provider-actions :deep(.el-button) {
+  margin-left: 0;
+}
+.provider-actions :deep(.el-dropdown) {
+  display: inline-flex;
+  align-items: center;
 }
 .section-title {
   display: flex;

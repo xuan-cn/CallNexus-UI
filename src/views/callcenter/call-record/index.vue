@@ -431,7 +431,6 @@
       </el-tabs>
     </el-drawer>
 
-    <CallCenterBusinessDetail v-model="customerDetailVisible" business-type="CUSTOMER" :business-id="customerDetailId" />
     <CallCenterBusinessDetail v-model="ticketDetailVisible" business-type="TICKET" :business-id="ticketDetailId" />
   </div>
 </template>
@@ -449,6 +448,7 @@ import { Connection, Bell, CircleCheck, SwitchButton, Download, Upload, Warning,
 
 const loading = ref(false);
 const total = ref(0);
+const router = useRouter();
 const detailVisible = ref(false);
 const detail = ref<CallRecordVO>();
 const detailTab = ref('basic');
@@ -504,9 +504,6 @@ const transcriptFullText = computed(() => {
 });
 const recordList = ref<CallRecordVO[]>([]);
 const queryFormRef = ref<ElFormInstance>();
-// 客户详情弹窗：点击「关联客户ID」后展示客户详细资料
-const customerDetailVisible = ref(false);
-const customerDetailId = ref<string | number>();
 const ticketDetailVisible = ref(false);
 const ticketDetailId = ref<string | number>();
 let recordingPollTimer: ReturnType<typeof setTimeout> | undefined;
@@ -930,10 +927,8 @@ const handleVoiceMail = async (id: string | number) => {
     await loadDetail(detail.value.id);
   }
 };
-// 打开客户详情弹窗：先赋 ID 再置 visible，保证组件 watch 触发时 businessId 已是新值
 const openCustomerDetail = (id: string | number) => {
-  customerDetailId.value = id;
-  customerDetailVisible.value = true;
+  void router.push({ name: 'CustomerDetailWorkspace', params: { customerId: String(id) } });
 };
 const openTicketDetail = (id: string | number) => {
   ticketDetailId.value = id;

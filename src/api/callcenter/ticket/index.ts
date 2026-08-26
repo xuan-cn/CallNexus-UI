@@ -44,4 +44,6 @@ export const createTicket = (data: CreateTicketForm) => request({ url: '/api/v1/
 
 export const submitTicket = (id: string | number) => request({ url: `/api/v1/tickets/${id}/submit`, method: 'post' });
 
+export const resolveTicketDirectly = (id: string | number) => request({ url: `/api/v1/tickets/${id}/resolve`, method: 'post' });
+
 export const closeTicket = (id: string | number) => request({ url: `/api/v1/tickets/${id}/close`, method: 'post' });
