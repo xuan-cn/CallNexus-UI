@@ -64,7 +64,16 @@
               <strong>{{ item.label }}</strong>
               <span>{{ capabilityDescription[item.capability] }}</span>
             </div>
-            <el-switch v-model="dynamicForm[capabilityBinding[item.capability].enabled]" />
+            <div class="capability-actions">
+              <el-checkbox
+                v-if="dynamicForm[capabilityBinding[item.capability].enabled]"
+                v-model="dynamicForm[capabilityBinding[item.capability].default]"
+              >默认使用</el-checkbox>
+              <el-switch
+                v-model="dynamicForm[capabilityBinding[item.capability].enabled]"
+                @change="(enabled) => changeCapability(item.capability, Boolean(enabled))"
+              />
+            </div>
           </div>
           <el-row v-if="dynamicForm[capabilityBinding[item.capability].enabled]" :gutter="16" class="capability-fields">
             <el-col :span="item.supportsVoiceList ? 12 : 24">
@@ -201,10 +210,11 @@ const enabledCapabilities = computed(() =>
 );
 
 type FormKey = keyof AiSpeechProviderForm;
-const capabilityBinding: Record<SpeechCapability, { enabled: FormKey; model: FormKey; voice: FormKey; mode: FormKey; endpoint: FormKey }> = {
-  TTS: { enabled: 'ttsEnabled', model: 'ttsModel', voice: 'ttsVoice', mode: 'ttsEndpointMode', endpoint: 'endpointUrl' },
+const capabilityBinding: Record<SpeechCapability, { enabled: FormKey; default: FormKey; model: FormKey; voice: FormKey; mode: FormKey; endpoint: FormKey }> = {
+  TTS: { enabled: 'ttsEnabled', default: 'defaultTts', model: 'ttsModel', voice: 'ttsVoice', mode: 'ttsEndpointMode', endpoint: 'endpointUrl' },
   STREAMING_TTS: {
     enabled: 'streamingTtsEnabled',
+    default: 'defaultStreamingTts',
     model: 'streamingTtsModel',
     voice: 'streamingTtsVoice',
     mode: 'streamingTtsEndpointMode',
@@ -212,6 +222,7 @@ const capabilityBinding: Record<SpeechCapability, { enabled: FormKey; model: For
   },
   RECORDING_ASR: {
     enabled: 'recordingAsrEnabled',
+    default: 'defaultRecordingAsr',
     model: 'recordingAsrModel',
     voice: 'defaultVoice',
     mode: 'recordingAsrEndpointMode',
@@ -219,6 +230,7 @@ const capabilityBinding: Record<SpeechCapability, { enabled: FormKey; model: For
   },
   STREAMING_ASR: {
     enabled: 'streamingAsrEnabled',
+    default: 'defaultStreamingAsr',
     model: 'streamingAsrModel',
     voice: 'defaultVoice',
     mode: 'streamingAsrEndpointMode',
@@ -372,6 +384,10 @@ const changeProvider = () => {
   applyDefinitionDefaults(definition.value);
 };
 
+const changeCapability = (capability: SpeechCapability, enabled: boolean) => {
+  if (!enabled) dynamicForm.value[capabilityBinding[capability].default] = false;
+};
+
 const secretPlaceholder = (field: SpeechFieldDefinitionVO) => {
   if (field.secret && props.provider?.configuredSecretFields?.includes(field.key)) return '已配置，留空表示不修改';
   return field.placeholder || '';
@@ -446,6 +462,11 @@ const previewValidate = async () => {
 .capability-list {
   display: grid;
   gap: 12px;
+}
+.capability-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 .capability-title {
   display: flex;

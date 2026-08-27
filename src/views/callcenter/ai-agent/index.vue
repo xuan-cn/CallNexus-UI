@@ -155,6 +155,17 @@
               <el-form-item label="FAQ阈值">
                 <el-slider v-model="form.faqScoreThreshold" :min="0" :max="1" :step="0.01" show-input />
               </el-form-item>
+              <el-form-item v-if="form.retrievalFailurePolicy === 'FALLBACK_MODEL'" label="FAQ学习审核">
+                <div class="switch-block">
+                  <el-switch v-model="form.faqLearningEnabled" active-text="收集模型兜底问答" />
+                  <p class="field-hint">仅收集没有命中 FAQ 或文档、最终由模型独立回答的问题，不会自动发布。</p>
+                </div>
+              </el-form-item>
+              <el-form-item v-if="form.faqLearningEnabled" label="目标知识库">
+                <el-select v-model="form.faqLearningKnowledgeBaseId" style="width: 100%" placeholder="选择审核通过后发布到的知识库">
+                  <el-option v-for="k in bases.filter((item) => form.knowledgeBaseIds.includes(item.id))" :key="k.id" :label="k.knowledgeName" :value="k.id" />
+                </el-select>
+              </el-form-item>
             </section>
           </el-tab-pane>
 
@@ -263,6 +274,8 @@ const defaults = (): AiAgentForm => ({
   welcomeMessage: '您好，我是 CallNexus AI 助手，请问有什么可以帮您？',
   retrievalMode: 'RAG',
   retrievalFailurePolicy: 'FALLBACK_MODEL',
+  faqLearningEnabled: false,
+  faqLearningKnowledgeBaseId: undefined,
   topK: 5,
   scoreThreshold: 0.5,
   faqScoreThreshold: 0.8,
@@ -323,6 +336,10 @@ const save = async () => {
     temperature: numericValue(form.value.temperature, 0.2),
     bargeInGraceMs: numericValue(form.value.bargeInGraceMs, 500)
   };
+  if (payload.retrievalFailurePolicy !== 'FALLBACK_MODEL') {
+    payload.faqLearningEnabled = false;
+    payload.faqLearningKnowledgeBaseId = undefined;
+  }
   payload.id ? await updateAiAgent(payload.id, payload) : await createAiAgent(payload);
   drawer.value = false;
   proxy?.$modal.msgSuccess('保存成功');

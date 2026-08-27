@@ -90,12 +90,9 @@
         <el-table-column label="客户" min-width="168" fixed="left">
           <template #default="{ row }">
             <button class="customer-cell" type="button" @click="showDetail(row)">
-              <span class="customer-avatar" :style="{ background: avatarTone(row) }">{{ customerInitial(row) }}</span>
               <span class="customer-meta">
                 <span class="customer-name">{{ row.customerName || '未命名客户' }}</span>
                 <span class="customer-sub">
-                  <i class="status-dot" :class="isAssigned(row) ? 'is-on' : 'is-off'" />
-                  {{ isAssigned(row) ? '已分配' : '未分配' }}
                   <template v-if="row.customerType"> · {{ row.customerType }}</template>
                 </span>
               </span>
@@ -150,10 +147,12 @@
         <el-table-column label="归属" min-width="168">
           <template #default="{ row }">
             <div v-if="isAssigned(row)" class="ownership-cell">
-              <el-tag v-if="row.skillGroupId" type="success" effect="plain" round size="small">
-                {{ skillGroupName(row.skillGroupId) }}
-              </el-tag>
-              <span v-if="row.agentId" class="ownership-agent">坐席 {{ row.agentId }}</span>
+              <el-tooltip v-if="row.agentId" placement="bottom" effect="light">
+                <template #content> 坐席 {{ row.agentId }} </template>
+                <el-tag v-if="row.skillGroupId" type="success" effect="plain" round size="small">
+                  {{ skillGroupName(row.skillGroupId) }}
+                </el-tag>
+              </el-tooltip>
             </div>
             <span v-else class="ownership-empty">未分配</span>
           </template>
@@ -1310,7 +1309,7 @@ onBeforeUnmount(stopImportPolling);
   overflow: hidden;
   min-width: 0;
   color: #17324d;
-  font-size: 14px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1.25;
   text-overflow: ellipsis;

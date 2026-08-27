@@ -205,6 +205,8 @@ export interface AiAgentVO {
   welcomeMessage?: string;
   retrievalMode: string;
   retrievalFailurePolicy: 'STRICT' | 'FALLBACK_MODEL';
+  faqLearningEnabled: boolean;
+  faqLearningKnowledgeBaseId?: Id;
   topK: number;
   scoreThreshold: number;
   faqScoreThreshold: number;
@@ -318,4 +320,44 @@ export interface AiIntentRecognitionVO {
   reason: string;
   latencyMs: number;
   rawResponse?: string;
+}
+
+export type FaqLearningStatus = 'PENDING' | 'APPROVED' | 'MERGED' | 'REJECTED';
+export interface FaqLearningCandidateVO {
+  id: Id;
+  knowledgeBaseId: Id;
+  knowledgeBaseName?: string;
+  agentId: Id;
+  agentName?: string;
+  conversationId: Id;
+  sourceChannel: string;
+  standardQuestion: string;
+  standardAnswer: string;
+  faqCode: string;
+  faqName: string;
+  aliases: string[];
+  answerMode: 'DIRECT' | 'CONTEXT';
+  bestFaqScore?: number;
+  bestDocumentScore?: number;
+  occurrenceCount: number;
+  firstOccurredAt: string;
+  lastOccurredAt: string;
+  status: FaqLearningStatus;
+  targetFaqId?: Id;
+  reviewReason?: string;
+  reviewedBy?: Id;
+  reviewedAt?: string;
+  version?: number;
+}
+export interface FaqLearningStatisticsVO {
+  pending: number;
+  approved: number;
+  merged: number;
+  rejected: number;
+}
+export interface FaqLearningBatchResultVO {
+  total: number;
+  success: number;
+  failed: number;
+  items: Array<{ candidateId: Id; success: boolean; message: string }>;
 }

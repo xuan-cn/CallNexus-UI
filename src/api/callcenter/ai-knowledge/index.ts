@@ -133,3 +133,24 @@ export const updateAiIntent = (id: T.Id, data: T.AiIntentForm) => request({ url:
 export const deleteAiIntent = (id: T.Id) => request({ url: `${root}/intents/${id}`, method: 'delete' });
 export const recognizeAiIntent = (data: { agentId: T.Id; text: string }): AxiosPromise<T.AiIntentRecognitionVO> =>
   request({ url: `${root}/intents/recognize-test`, method: 'post', data, timeout: 120000 });
+
+const faqLearningRoot = `${root}/faq-learning-candidates`;
+export const pageFaqLearningCandidates = (params: T.PageQuery & { status?: string; knowledgeBaseId?: T.Id; agentId?: T.Id; keyword?: string }) =>
+  request<{ rows: T.FaqLearningCandidateVO[]; total: number }>({ url: faqLearningRoot, method: 'get', params });
+export const getFaqLearningCandidate = (id: T.Id): AxiosPromise<T.FaqLearningCandidateVO> =>
+  request({ url: `${faqLearningRoot}/${id}`, method: 'get' });
+export const getFaqLearningStatistics = (): AxiosPromise<T.FaqLearningStatisticsVO> =>
+  request({ url: `${faqLearningRoot}/statistics`, method: 'get' });
+export const approveFaqLearningCandidate = (id: T.Id, data: Pick<T.FaqLearningCandidateVO, 'faqCode' | 'faqName' | 'standardQuestion' | 'standardAnswer' | 'aliases' | 'answerMode'>) =>
+  request({ url: `${faqLearningRoot}/${id}/approve`, method: 'post', data });
+export const mergeFaqLearningCandidate = (id: T.Id, targetFaqId: T.Id) =>
+  request({ url: `${faqLearningRoot}/${id}/merge`, method: 'post', data: { targetFaqId } });
+export const rejectFaqLearningCandidate = (id: T.Id, reason: string) =>
+  request({ url: `${faqLearningRoot}/${id}/reject`, method: 'post', data: { reason } });
+export const reopenFaqLearningCandidate = (id: T.Id) => request({ url: `${faqLearningRoot}/${id}/reopen`, method: 'post' });
+export const batchApproveFaqLearningCandidates = (candidateIds: T.Id[]): AxiosPromise<T.FaqLearningBatchResultVO> =>
+  request({ url: `${faqLearningRoot}/batch-approve`, method: 'post', data: { candidateIds } });
+export const batchMergeFaqLearningCandidates = (candidateIds: T.Id[], targetFaqId: T.Id): AxiosPromise<T.FaqLearningBatchResultVO> =>
+  request({ url: `${faqLearningRoot}/batch-merge`, method: 'post', data: { candidateIds, targetFaqId } });
+export const batchRejectFaqLearningCandidates = (candidateIds: T.Id[], reason: string): AxiosPromise<T.FaqLearningBatchResultVO> =>
+  request({ url: `${faqLearningRoot}/batch-reject`, method: 'post', data: { candidateIds, reason } });
