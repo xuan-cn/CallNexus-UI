@@ -97,78 +97,90 @@
           </el-form>
         </div>
 
-        <div class="section-block">
+        <div class="section-block ticket-section" :class="{ collapsed: !ticketSectionExpanded }">
           <div class="section-head">
             <strong>工单信息</strong>
-            <el-select v-model="ticketTemplateId" clearable placeholder="工单模板" style="width: 220px">
-              <el-option
-                v-for="item in ticketTemplates"
-                :key="String(item.id)"
-                :label="item.templateName"
-                :value="item.id"
-                :disabled="!item.enabled"
-              />
-            </el-select>
+            <div class="ticket-section-actions">
+              <el-select v-if="ticketSectionExpanded" v-model="ticketTemplateId" clearable placeholder="工单模板" style="width: 220px">
+                <el-option
+                  v-for="item in ticketTemplates"
+                  :key="String(item.id)"
+                  :label="item.templateName"
+                  :value="item.id"
+                  :disabled="!item.enabled"
+                />
+              </el-select>
+              <el-button link type="primary" @click="ticketSectionExpanded = !ticketSectionExpanded">
+                {{ ticketSectionExpanded ? '收起' : '展开' }}
+                <el-icon class="ticket-toggle-icon" :class="{ expanded: ticketSectionExpanded }"><ArrowDown /></el-icon>
+              </el-button>
+            </div>
           </div>
-          <el-form label-position="top" class="section-form">
-            <el-row :gutter="14">
-              <el-col :span="12">
-                <el-form-item label="来电号码">
-                  <el-input :model-value="phone" disabled />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="关联客户">
-                  <el-input
-                    :model-value="customer?.customerName || customerName || (customer?.id ? `客户#${customer.id}` : '保存后自动关联')"
-                    disabled
-                  />
-                </el-form-item>
-              </el-col>
-              <el-col v-for="field in selectedTicketTemplate?.fields || []" :key="`t-${field.fieldCode}`" :span="field.layoutSpan || 12">
-                <el-form-item :label="field.fieldName" :required="field.required">
-                  <el-input v-if="field.fieldType === 'INPUT'" v-model="ticketFormData[field.fieldCode]" :placeholder="field.placeholder" />
-                  <el-input
-                    v-else-if="field.fieldType === 'TEXTAREA'"
-                    v-model="ticketFormData[field.fieldCode]"
-                    type="textarea"
-                    :rows="3"
-                    :placeholder="field.placeholder"
-                  />
-                  <el-input-number v-else-if="field.fieldType === 'NUMBER'" v-model="ticketFormData[field.fieldCode]" style="width: 100%" />
-                  <file-upload v-else-if="field.fieldType === 'FILE'" v-model="ticketFormData[field.fieldCode]" :limit="5" :file-size="20" />
-                  <el-date-picker
-                    v-else-if="field.fieldType === 'DATE' || field.fieldType === 'DATETIME'"
-                    v-model="ticketFormData[field.fieldCode]"
-                    :type="field.fieldType === 'DATE' ? 'date' : 'datetime'"
-                    value-format="YYYY-MM-DD HH:mm:ss"
-                    style="width: 100%"
-                  />
-                  <el-radio-group v-else-if="field.fieldType === 'RADIO'" v-model="ticketFormData[field.fieldCode]">
-                    <el-radio v-for="option in field.options" :key="option.value" :value="option.value">{{ option.label }}</el-radio>
-                  </el-radio-group>
-                  <el-checkbox-group v-else-if="field.fieldType === 'CHECKBOX'" v-model="ticketFormData[field.fieldCode]">
-                    <el-checkbox v-for="option in field.options" :key="option.value" :value="option.value">{{ option.label }}</el-checkbox>
-                  </el-checkbox-group>
-                  <el-select
-                    v-else
-                    v-model="ticketFormData[field.fieldCode]"
-                    :multiple="field.fieldType === 'MULTI_SELECT'"
-                    clearable
-                    style="width: 100%"
-                  >
-                    <el-option v-for="option in field.options" :key="option.value" :label="option.label" :value="option.value" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-            </el-row>
-          </el-form>
+          <el-collapse-transition>
+            <div v-show="ticketSectionExpanded">
+              <el-form label-position="top" class="section-form">
+                <el-row :gutter="14">
+                  <el-col :span="12">
+                    <el-form-item label="来电号码">
+                      <el-input :model-value="phone" disabled />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="12">
+                    <el-form-item label="关联客户">
+                      <el-input
+                        :model-value="customer?.customerName || customerName || (customer?.id ? `客户#${customer.id}` : '保存后自动关联')"
+                        disabled
+                      />
+                    </el-form-item>
+                  </el-col>
+                  <el-col v-for="field in selectedTicketTemplate?.fields || []" :key="`t-${field.fieldCode}`" :span="field.layoutSpan || 12">
+                    <el-form-item :label="field.fieldName" :required="field.required">
+                      <el-input v-if="field.fieldType === 'INPUT'" v-model="ticketFormData[field.fieldCode]" :placeholder="field.placeholder" />
+                      <el-input
+                        v-else-if="field.fieldType === 'TEXTAREA'"
+                        v-model="ticketFormData[field.fieldCode]"
+                        type="textarea"
+                        :rows="3"
+                        :placeholder="field.placeholder"
+                      />
+                      <el-input-number v-else-if="field.fieldType === 'NUMBER'" v-model="ticketFormData[field.fieldCode]" style="width: 100%" />
+                      <file-upload v-else-if="field.fieldType === 'FILE'" v-model="ticketFormData[field.fieldCode]" :limit="5" :file-size="20" />
+                      <el-date-picker
+                        v-else-if="field.fieldType === 'DATE' || field.fieldType === 'DATETIME'"
+                        v-model="ticketFormData[field.fieldCode]"
+                        :type="field.fieldType === 'DATE' ? 'date' : 'datetime'"
+                        value-format="YYYY-MM-DD HH:mm:ss"
+                        style="width: 100%"
+                      />
+                      <el-radio-group v-else-if="field.fieldType === 'RADIO'" v-model="ticketFormData[field.fieldCode]">
+                        <el-radio v-for="option in field.options" :key="option.value" :value="option.value">{{ option.label }}</el-radio>
+                      </el-radio-group>
+                      <el-checkbox-group v-else-if="field.fieldType === 'CHECKBOX'" v-model="ticketFormData[field.fieldCode]">
+                        <el-checkbox v-for="option in field.options" :key="option.value" :value="option.value">{{ option.label }}</el-checkbox>
+                      </el-checkbox-group>
+                      <el-select
+                        v-else
+                        v-model="ticketFormData[field.fieldCode]"
+                        :multiple="field.fieldType === 'MULTI_SELECT'"
+                        clearable
+                        style="width: 100%"
+                      >
+                        <el-option v-for="option in field.options" :key="option.value" :label="option.label" :value="option.value" />
+                      </el-select>
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+              </el-form>
+              <div class="ticket-submit-actions">
+                <el-button type="success" :loading="savingTicket" @click="submitWorkOrder(false)">提交工单</el-button>
+                <el-button type="warning" :loading="savingTicket" @click="submitWorkOrder(true)">直接办结</el-button>
+              </div>
+            </div>
+          </el-collapse-transition>
         </div>
 
         <div class="action-bar">
           <el-button type="primary" :loading="savingCustomer" @click="saveCustomerInfo">保存信息</el-button>
-          <el-button type="success" :loading="savingTicket" @click="submitWorkOrder(false)">提交工单</el-button>
-          <el-button type="warning" :loading="savingTicket" @click="submitWorkOrder(true)">直接办结</el-button>
         </div>
 
         <div class="history-block">
@@ -263,7 +275,7 @@
 </template>
 
 <script setup lang="ts">
-import { Phone } from '@element-plus/icons-vue';
+import { ArrowDown, Phone } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import AgentAssistPanel from '@/components/AgentAssistPanel/index.vue';
 import {
@@ -322,6 +334,7 @@ const customerFormData = reactive<Record<string, any>>({});
 const ticketFormData = reactive<Record<string, any>>({});
 const savingCustomer = ref(false);
 const savingTicket = ref(false);
+const ticketSectionExpanded = ref(!props.customerView);
 const savingFollowUp = ref(false);
 const followUpContent = ref('');
 const historyTab = ref('calls');
@@ -443,6 +456,7 @@ const bootstrap = async () => {
     customerName.value = '';
     customer.value = undefined;
     followUpContent.value = '';
+    ticketSectionExpanded.value = !props.customerView;
     historyTab.value = 'calls';
     callPageNum.value = 1;
     ticketPageNum.value = 1;
@@ -748,6 +762,10 @@ const handleClosed = () => emit('closed');
   background: #fff;
 }
 
+.ticket-section.collapsed {
+  padding-bottom: 14px;
+}
+
 .section-head {
   display: flex;
   justify-content: space-between;
@@ -759,6 +777,27 @@ const handleClosed = () => emit('closed');
 .section-head strong {
   color: #15233d;
   font-size: 15px;
+}
+
+.ticket-section-actions,
+.ticket-submit-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ticket-toggle-icon {
+  margin-left: 4px;
+  transition: transform 0.2s ease;
+}
+
+.ticket-toggle-icon.expanded {
+  transform: rotate(180deg);
+}
+
+.ticket-submit-actions {
+  justify-content: flex-end;
+  padding-bottom: 12px;
 }
 
 .section-form {
