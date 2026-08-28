@@ -1,12 +1,11 @@
 import request from '@/utils/request';
 import { AxiosPromise } from 'axios';
-import { MediaAssetForm, MediaAssetQuery, MediaAssetUploadForm, MediaAssetVO, MediaSyncVO, MediaVersionVO } from './types';
+import { MediaAssetForm, MediaAssetQuery, MediaAssetTtsForm, MediaAssetUploadForm, MediaAssetVO, MediaSyncVO, MediaVersionVO } from './types';
 
 export const listMediaAssets = (query: MediaAssetQuery): AxiosPromise<MediaAssetVO[]> =>
   request({ url: '/api/v1/media-assets', method: 'get', params: query });
 
-export const getMediaAsset = (id: string | number): AxiosPromise<MediaAssetVO> =>
-  request({ url: `/api/v1/media-assets/${id}`, method: 'get' });
+export const getMediaAsset = (id: string | number): AxiosPromise<MediaAssetVO> => request({ url: `/api/v1/media-assets/${id}`, method: 'get' });
 
 export const uploadMediaAsset = (form: MediaAssetUploadForm) => {
   const data = new FormData();
@@ -18,6 +17,9 @@ export const uploadMediaAsset = (form: MediaAssetUploadForm) => {
   data.append('file', form.file);
   return request({ url: '/api/v1/media-assets', method: 'post', data });
 };
+
+export const generateTtsMediaAsset = (form: MediaAssetTtsForm) =>
+  request({ url: '/api/v1/ai/speech-providers/media/generate', method: 'post', data: form });
 
 export const updateMediaAsset = (form: MediaAssetForm) => request({ url: `/api/v1/media-assets/${form.id}`, method: 'put', data: form });
 

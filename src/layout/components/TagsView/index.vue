@@ -281,22 +281,16 @@ onMounted(() => {
 
       &.active {
         padding-left: 22px;
-        color: #fff;
+        color: var(--el-color-primary);
         font-weight: 600;
-        border-color: transparent;
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 48%),
-          var(--tags-view-active-bg);
-        box-shadow:
-          0 1px 0 rgba(255, 255, 255, 0.28) inset,
-          0 4px 10px rgba(37, 99, 235, 0.2);
+        border-color: var(--tags-view-active-border-color);
+        background: var(--tags-view-active-bg);
+        box-shadow: none;
 
         &:hover {
-          color: #fff;
-          border-color: transparent;
-          background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.24), transparent 48%),
-            var(--tags-view-active-bg);
+          color: var(--el-color-primary-dark-2);
+          border-color: var(--el-color-primary-light-6);
+          background: var(--el-color-primary-light-8);
         }
 
         &::before {
@@ -307,12 +301,9 @@ onMounted(() => {
           height: 6px;
           content: '';
           border-radius: 50%;
-          background: #fff;
+          background: var(--el-color-primary);
           transform: translateY(-50%);
-          box-shadow:
-            0 0 0 3px rgba(255, 255, 255, 0.2),
-            0 0 8px rgba(255, 255, 255, 0.8);
-          animation: tag-live 1.8s ease-out infinite;
+          box-shadow: 0 0 0 3px var(--el-color-primary-light-8);
         }
       }
 
@@ -421,7 +412,8 @@ html.dark .tags-view-container {
     }
 
     &.active .el-icon-close:hover {
-      background-color: rgba(255, 255, 255, 0.28);
+      color: var(--el-color-primary-dark-2);
+      background-color: var(--el-color-primary-light-7);
     }
   }
 }

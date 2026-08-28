@@ -84,43 +84,7 @@
       </el-card>
 
       <el-card shadow="never" class="conversation-card">
-        <template #header>
-          <div class="conversation-header">
-            <div class="card-header-copy">
-              <span class="hero-eyebrow">通话详情</span>
-              <strong>{{ selectedTitle }}</strong>
-              <span v-if="selectedRecord?.businessCallId">{{ selectedRecord.businessCallId }}</span>
-            </div>
-            <el-space wrap>
-              <el-tag v-if="selectedRecord" :type="callStatusType(selectedRecord.callStatus)" effect="light" round>
-                {{ callStatusLabel(selectedRecord.callStatus) }}
-              </el-tag>
-              <el-tag v-if="streamActive" :type="streamConnected ? 'success' : 'info'" effect="light" round>
-                {{ streamConnected ? '实时接收中' : '实时连接中' }}
-              </el-tag>
-            </el-space>
-          </div>
-        </template>
-
         <template v-if="selectedRecord">
-          <div class="record-summary">
-            <div class="summary-item">
-              <span>开始</span>
-              <strong>{{ selectedRecord.startedAt || '-' }}</strong>
-            </div>
-            <div class="summary-item">
-              <span>接听</span>
-              <strong>{{ selectedRecord.answeredAt || '-' }}</strong>
-            </div>
-            <div class="summary-item">
-              <span>结束</span>
-              <strong>{{ selectedRecord.endedAt || '-' }}</strong>
-            </div>
-            <div class="summary-item">
-              <span>时长</span>
-              <strong>{{ durationLabel(selectedRecord.durationSeconds) }}</strong>
-            </div>
-          </div>
           <div v-if="selectedRecord.recordingUrl" class="recording-panel">
             <AudioWaveform :src="selectedRecord.recordingUrl" :height="42" compact />
           </div>
@@ -168,8 +132,6 @@ const total = ref(0);
 const selectedRecord = ref<AiCallRecordVO>();
 const transcript = ref<AiCallTranscriptVO>();
 const chatRef = ref<HTMLElement>();
-const streamActive = ref(false);
-const streamConnected = ref(false);
 let streamController: AbortController | undefined;
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 let transcriptRefreshTimer: ReturnType<typeof setTimeout> | undefined;
@@ -181,11 +143,6 @@ const queryParams = reactive<AiCallRecordQuery>({
   participantNumber: '',
   agentExtension: '',
   callStatus: ''
-});
-
-const selectedTitle = computed(() => {
-  if (!selectedRecord.value) return 'AI 通话详情';
-  return `${selectedRecord.value.callerNumber || '-'} → ${selectedRecord.value.calledNumber || '-'}`;
 });
 
 const normalizePage = (res: any) => {
@@ -201,8 +158,6 @@ const normalizeTranscript = (res: any): AiCallTranscriptVO | undefined => {
 const directionLabel = (value?: string) => ({ INBOUND: '呼入', OUTBOUND: '呼出', INTERNAL: '内部', UNKNOWN: '未知' })[value || 'UNKNOWN'] || value || '-';
 const directionInitial = (value?: string) => ({ INBOUND: '入', OUTBOUND: '出', INTERNAL: '内', UNKNOWN: '通' })[value || 'UNKNOWN'] || '通';
 const directionType = (value?: string) => ({ INBOUND: 'success', OUTBOUND: 'primary', INTERNAL: 'warning', UNKNOWN: 'info' })[value || 'UNKNOWN'] as any;
-const callStatusLabel = (value?: string) => ({ CREATED: '已创建', ACTIVE: '通话中', ENDED: '已结束' })[value || ''] || value || '-';
-const callStatusType = (value?: string) => ({ CREATED: 'info', ACTIVE: 'success', ENDED: 'info' })[value || ''] as any;
 const transcriptLabel = (value?: string) => ({ PROCESSING: '转写中', SUCCESS: '已转写', FAILED: '失败' })[value || ''] || '未转写';
 const transcriptType = (value?: string) => ({ PROCESSING: 'warning', SUCCESS: 'success', FAILED: 'danger' })[value || ''] as any;
 const speakerLabel = (value?: string) => ({ CUSTOMER: '客户', AGENT: '坐席', AI: 'AI', SYSTEM: '系统', UNKNOWN: '未知' })[value || 'UNKNOWN'] || value || '-';
@@ -221,9 +176,11 @@ const formatMs = (value?: number) => {
 const transcriptSegmentKey = (segment: AiCallTranscriptSegmentVO) =>
   String(segment.id || `${segment.speaker || 'UNKNOWN'}-${segment.sentenceIndex ?? ''}-${segment.startMs ?? ''}-${segment.textContent}`);
 const transcriptSegmentTime = (segment: AiCallTranscriptSegmentVO) => {
-  if (segment.startMs !== undefined || segment.endMs !== undefined) {
+  if (segment.startMs != null && segment.endMs != null) {
     return `${formatMs(segment.startMs)} - ${formatMs(segment.endMs)}`;
   }
+  if (segment.startMs != null) return formatMs(segment.startMs);
+  if (segment.endMs != null) return formatMs(segment.endMs);
   return segment.messageTime || '实时';
 };
 const sortSegments = (segments: AiCallTranscriptSegmentVO[]) =>
@@ -314,8 +271,6 @@ const stopStream = () => {
   streamController?.abort();
   streamController = undefined;
   streamSessionId = undefined;
-  streamActive.value = false;
-  streamConnected.value = false;
 };
 
 const stopTranscriptRefresh = () => {
@@ -341,17 +296,14 @@ const startStream = (record: AiCallRecordVO) => {
   if (record.callStatus === 'ENDED') return;
   const callSessionId = record.callSessionId;
   streamSessionId = callSessionId;
-  streamActive.value = true;
   const connect = () => {
     if (String(streamSessionId) !== String(callSessionId)) return;
     const controller = new AbortController();
     streamController = controller;
-    streamConnected.value = false;
     streamCallTranscript(
       callSessionId,
       (event, data) => {
         if (event === 'connected') {
-          streamConnected.value = true;
           void loadTranscript(record, true);
         }
         if (event === 'segment') mergeSegment(data);
@@ -362,7 +314,6 @@ const startStream = (record: AiCallRecordVO) => {
         if (error?.name !== 'AbortError') console.warn('AI call transcript stream disconnected', error);
       })
       .finally(() => {
-        streamConnected.value = false;
         if (controller.signal.aborted || String(streamSessionId) !== String(callSessionId)) return;
         reconnectTimer = setTimeout(connect, 1500);
       });
@@ -462,8 +413,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.card-header,
-.conversation-header {
+.card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -490,13 +440,6 @@ onBeforeUnmount(() => {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-}
-
-.hero-eyebrow {
-  color: #6b7c93;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
 }
 
 .record-list {
@@ -530,7 +473,7 @@ onBeforeUnmount(() => {
 .record-item.active {
   border-color: #c9ddf7;
   background: linear-gradient(90deg, #eef6ff, #f7fbff);
-  box-shadow: inset 3px 0 0 #3b82f6;
+  //box-shadow: inset 3px 0 0 #3b82f6;
 }
 
 .record-main {
@@ -616,35 +559,6 @@ onBeforeUnmount(() => {
   margin-top: 10px !important;
   padding: 8px 0 0 !important;
   border-top: 1px solid #eef3f8;
-}
-
-.record-summary {
-  display: grid;
-  flex: none;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.summary-item {
-  padding: 12px 14px;
-  border: 1px solid #e4ecf6;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #ffffff, #f7faff);
-
-  span {
-    display: block;
-    margin-bottom: 6px;
-    color: #7b8798;
-    font-size: 12px;
-  }
-
-  strong {
-    color: #15233d;
-    font-size: 13px;
-    font-weight: 600;
-    word-break: break-all;
-  }
 }
 
 .recording-panel {
@@ -790,10 +704,6 @@ onBeforeUnmount(() => {
   .conversation-card {
     height: auto;
     min-height: 480px;
-  }
-
-  .record-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

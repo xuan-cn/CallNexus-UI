@@ -81,3 +81,11 @@ export interface MediaAssetUploadForm {
   durationMs?: number;
   file: File;
 }
+
+export interface MediaAssetTtsForm {
+  assetName: string;
+  category: MediaAssetCategory;
+  languageCode?: string;
+  text: string;
+  remark?: string;
+}

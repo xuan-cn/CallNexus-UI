@@ -1,4 +1,15 @@
-export type IvrNodeType = 'START' | 'PLAYBACK' | 'DTMF' | 'EXTENSION' | 'QUEUE' | 'BUSINESS_HOURS' | 'VOICEMAIL' | 'AI_AGENT' | 'EXTERNAL_NUMBER' | 'HANGUP';
+export type IvrNodeType =
+  | 'START'
+  | 'PLAYBACK'
+  | 'TTS_PLAYBACK'
+  | 'DTMF'
+  | 'EXTENSION'
+  | 'QUEUE'
+  | 'BUSINESS_HOURS'
+  | 'VOICEMAIL'
+  | 'AI_AGENT'
+  | 'EXTERNAL_NUMBER'
+  | 'HANGUP';
 
 export interface IvrExternalNumberTarget {
   number: string;
@@ -28,6 +39,7 @@ export interface IvrNode {
   config: {
     [key: string]: unknown;
     mediaId?: string | number;
+    text?: string;
     extension?: string;
     queueId?: string | number;
     planId?: string | number;

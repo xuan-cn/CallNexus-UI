@@ -7,9 +7,11 @@ import BusinessHoursSelectEditor from './BusinessHoursSelectEditor.vue';
 import VoiceMailSelectEditor from './VoiceMailSelectEditor.vue';
 import AiAgentSelectEditor from './AiAgentSelectEditor.vue';
 import ExternalNumberGroupEditor from './ExternalNumberGroupEditor.vue';
+import TextAreaEditor from './TextAreaEditor.vue';
 
 const propertyEditorRegistry: Record<IvrPropertyEditorType, Component> = {
   MEDIA_SELECT: MediaSelectEditor,
+  TEXTAREA: TextAreaEditor,
   EXTENSION_INPUT: ExtensionInputEditor,
   QUEUE_SELECT: QueueSelectEditor,
   BUSINESS_HOURS_SELECT: BusinessHoursSelectEditor,

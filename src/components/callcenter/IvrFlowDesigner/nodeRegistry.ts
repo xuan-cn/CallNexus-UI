@@ -1,6 +1,14 @@
 import type { IvrNodeType } from '@/api/callcenter/ivr-flow/types';
 
-export type IvrPropertyEditorType = 'MEDIA_SELECT' | 'EXTENSION_INPUT' | 'QUEUE_SELECT' | 'BUSINESS_HOURS_SELECT' | 'VOICEMAIL_SELECT' | 'AI_AGENT_SELECT' | 'EXTERNAL_NUMBER_GROUP';
+export type IvrPropertyEditorType =
+  | 'MEDIA_SELECT'
+  | 'TEXTAREA'
+  | 'EXTENSION_INPUT'
+  | 'QUEUE_SELECT'
+  | 'BUSINESS_HOURS_SELECT'
+  | 'VOICEMAIL_SELECT'
+  | 'AI_AGENT_SELECT'
+  | 'EXTERNAL_NUMBER_GROUP';
 export type IvrEdgeEditorType = 'DTMF_DIGIT' | 'BUSINESS_HOURS_BRANCH';
 
 export interface IvrPropertyDefinition {
@@ -42,6 +50,21 @@ const definitions: IvrNodeDefinition[] = [
     color: '#409eff',
     description: '播放已发布的 IVR 提示音',
     propertySchema: [{ key: 'mediaId', label: '提示音', component: 'MEDIA_SELECT', required: true }]
+  },
+  {
+    type: 'TTS_PLAYBACK',
+    label: '播放文字',
+    color: '#0891b2',
+    description: '使用系统默认 TTS 服务商和默认音色播报文字',
+    propertySchema: [
+      {
+        key: 'text',
+        label: '播报文字',
+        component: 'TEXTAREA',
+        required: true,
+        placeholder: '请输入需要向客户播报的文字，最多 1000 个字符'
+      }
+    ]
   },
   {
     type: 'DTMF',

@@ -77,7 +77,7 @@
       @pagination="loadMembers"
     />
 
-    <el-dialog v-model="sourceDialog" title="添加客户资料来源" width="620px" append-to-body destroy-on-close>
+    <el-dialog v-model="sourceDialog" title="添加客户资料来源" width="820px" append-to-body destroy-on-close>
       <el-form :model="sourceForm" label-width="110px">
         <el-form-item label="导入任务" required>
           <el-select v-model="sourceForm.importTaskId" filterable class="full" @change="handleImportTaskChange">
