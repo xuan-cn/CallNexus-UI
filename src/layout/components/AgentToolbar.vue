@@ -2594,15 +2594,17 @@ button {
 }
 
 .agent-panel {
+  box-sizing: border-box;
   display: grid;
-  width: 380px;
-  gap: 13px;
-  padding: 16px;
+  width: 288px;
+  max-width: calc(100vw - 24px);
+  gap: 8px;
+  padding: 12px;
   border: 1px solid #d7e4f4;
-  border-radius: 18px;
+  border-radius: 12px;
   background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
   box-shadow:
-    0 22px 48px rgba(16, 42, 86, 0.2),
+    0 16px 32px rgba(16, 42, 86, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
@@ -2610,6 +2612,7 @@ button {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
+  left: auto;
   z-index: 30;
 }
 
@@ -2617,31 +2620,38 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 12px;
+  gap: 8px;
+  padding-bottom: 8px;
   border-bottom: 1px solid #e8eef6;
   cursor: default;
   user-select: none;
 
   > div {
     display: grid;
-    gap: 3px;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
   }
 
   strong {
+    overflow: hidden;
     color: #1c2a44;
-    font-size: 14px;
-    font-weight: 700;
+    font-size: 13px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   small {
     color: #8b97aa;
-    font-size: 10px;
+    font-size: 11px;
   }
 }
 
 .heading-actions {
   display: flex !important;
   align-items: center;
+  flex: none;
   gap: 6px !important;
 }
 
@@ -2656,10 +2666,10 @@ button {
 }
 
 .collapse-button {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border: 1px solid #e1e7f0;
-  border-radius: 8px;
+  border-radius: 7px;
   background: #fff;
 }
 
@@ -2672,14 +2682,14 @@ button {
 .phone-mode-button {
   display: flex;
   align-items: center;
-  gap: 4px;
-  height: 28px;
-  padding: 0 8px;
+  gap: 3px;
+  height: 26px;
+  padding: 0 7px;
   color: #053b70;
-  font-size: 10px;
+  font-size: 11px;
   cursor: pointer;
   border: 1px solid #d5e1ef;
-  border-radius: 8px;
+  border-radius: 7px;
   background: #f7fbff;
 }
 
@@ -2735,11 +2745,11 @@ button {
 .dial-input {
   display: flex;
   align-items: center;
-  height: 42px;
-  padding-left: 12px;
+  height: 36px;
+  padding-left: 10px;
   color: #6b8ab0;
   border: 1px solid #d7e4f3;
-  border-radius: 12px;
+  border-radius: 9px;
   background: #f8fbff;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
   transition:
@@ -2752,13 +2762,18 @@ button {
     box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.16);
   }
 
+  .el-icon {
+    flex: none;
+    font-size: 14px;
+  }
+
   input {
     min-width: 0;
     flex: 1;
     padding: 0 8px;
     color: #1c2a44;
     font-size: 13px;
-    letter-spacing: 0.4px;
+    letter-spacing: 0.2px;
     border: 0;
     outline: 0;
     background: transparent;
@@ -2766,29 +2781,37 @@ button {
 }
 
 .clear-number {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
 }
 
 .dial-pad {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
 
   button {
-    height: 46px;
-    color: #24324c;
-    font-size: 18px;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-width: 0;
+    height: 36px;
+    color: #1c2a44;
+    font-size: 16px;
     font-weight: 600;
+    line-height: 1;
     cursor: pointer;
-    border: 1px solid #e4ebf4;
-    border-radius: 12px;
+    border: 1px solid #dce5f1;
+    border-radius: 9px;
     background: linear-gradient(180deg, #ffffff, #f5f8fc);
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
     transition:
       transform 0.12s ease,
       border-color 0.12s ease,
-      background 0.12s ease;
+      background 0.12s ease,
+      color 0.12s ease;
   }
 
   button:hover:not(:disabled) {
@@ -2803,8 +2826,9 @@ button {
   }
 
   button:disabled {
+    color: #64748b;
     cursor: not-allowed;
-    opacity: 0.45;
+    opacity: 0.72;
   }
 }
 
@@ -2813,17 +2837,17 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  height: 44px;
+  gap: 6px;
+  height: 36px;
   color: #fff;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
   cursor: pointer;
   border: 0;
-  border-radius: 12px;
+  border-radius: 9px;
   background: linear-gradient(90deg, #34d399 0%, #10b981 48%, #059669 100%);
-  box-shadow: 0 10px 18px rgba(16, 185, 129, 0.28);
+  box-shadow: 0 6px 12px rgba(16, 185, 129, 0.22);
   transition:
     transform 0.16s ease,
     box-shadow 0.16s ease,
@@ -2860,35 +2884,35 @@ button {
   flex-direction: column;
   justify-content: center;
   overflow: hidden;
-  gap: 7px;
-  min-height: 142px;
-  padding: 16px 12px 14px;
+  gap: 5px;
+  min-height: 108px;
+  padding: 12px 10px 10px;
   border: 1px solid #d7e8fb;
-  border-radius: 16px;
+  border-radius: 11px;
   background:
     radial-gradient(circle at 50% 18%, rgba(45, 212, 191, 0.2), transparent 42%),
     radial-gradient(circle at 80% 100%, rgba(59, 130, 246, 0.12), transparent 46%), linear-gradient(180deg, #f8fcff 0%, #eef5ff 100%);
 
   small {
     color: #2563eb;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.8px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
   }
 
   strong {
     color: #12203a;
-    font-size: 28px;
-    font-weight: 700;
-    letter-spacing: 1px;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
     font-variant-numeric: tabular-nums;
   }
 
   > span:last-child {
-    min-width: 64px;
-    padding: 3px 10px;
+    min-width: 52px;
+    padding: 2px 8px;
     color: #4b6280;
-    font-size: 12px;
+    font-size: 11px;
     font-variant-numeric: tabular-nums;
     text-align: center;
     border-radius: 999px;
@@ -2898,7 +2922,7 @@ button {
 
   .number-location {
     color: #0f9f78;
-    font-size: 11px;
+    font-size: 10px;
   }
 
   em {
@@ -2926,20 +2950,20 @@ button {
   z-index: 1;
   display: grid;
   place-items: center;
-  width: 52px;
-  height: 52px;
+  width: 40px;
+  height: 40px;
   color: #fff;
   border-radius: 50%;
   background: linear-gradient(145deg, #5eead4 0%, #10b981 48%, #059669 100%);
   box-shadow:
-    0 10px 18px rgba(16, 185, 129, 0.28),
+    0 6px 12px rgba(16, 185, 129, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .call-pulse::before,
 .call-pulse::after {
   position: absolute;
-  inset: -10px;
+  inset: -7px;
   content: '';
   pointer-events: none;
   border: 1px solid rgba(16, 185, 129, 0.28);
@@ -2948,7 +2972,7 @@ button {
 }
 
 .call-pulse::after {
-  inset: -18px;
+  inset: -12px;
   animation-delay: 0.75s;
 }
 
@@ -2991,21 +3015,21 @@ button {
 .call-control-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 
   button {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 5px;
-    min-height: 40px;
-    padding: 0 8px;
+    gap: 4px;
+    min-height: 32px;
+    padding: 0 6px;
     color: #3f5270;
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 500;
     cursor: pointer;
     border: 1px solid #dce5f1;
-    border-radius: 11px;
+    border-radius: 8px;
     background: linear-gradient(180deg, #ffffff, #f6f9fd);
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
     transition:
@@ -3020,7 +3044,7 @@ button {
     border-color: #b7d4fb;
     background: #f4f8ff;
     transform: translateY(-1px);
-    box-shadow: 0 8px 14px rgba(29, 78, 216, 0.08);
+    box-shadow: 0 5px 10px rgba(29, 78, 216, 0.08);
   }
 
   button:active:not(:disabled) {
@@ -3040,20 +3064,20 @@ button {
 .more-call-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  padding: 10px;
+  gap: 6px;
+  padding: 7px;
   border: 1px solid #e2e9f2;
-  border-radius: 12px;
+  border-radius: 9px;
   background: linear-gradient(180deg, #f8fbff, #f3f7fc);
 
   button {
-    height: 36px;
+    height: 30px;
     color: #40546f;
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 500;
     cursor: pointer;
     border: 1px solid #d8e3f0;
-    border-radius: 10px;
+    border-radius: 8px;
     background: #fff;
   }
 

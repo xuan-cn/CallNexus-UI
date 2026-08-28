@@ -92,9 +92,7 @@
             <button class="customer-cell" type="button" @click="showDetail(row)">
               <span class="customer-meta">
                 <span class="customer-name">{{ row.customerName || '未命名客户' }}</span>
-                <span class="customer-sub">
-                  <template v-if="row.customerType"> · {{ row.customerType }}</template>
-                </span>
+                <span v-if="row.customerType" class="customer-sub">{{ row.customerType }}</span>
               </span>
             </button>
           </template>
@@ -141,26 +139,26 @@
                 </div>
               </el-popover>
             </div>
-            <span v-else class="cell-empty">暂无号码</span>
+            <span v-else class="empty-chip">暂无号码</span>
           </template>
         </el-table-column>
         <el-table-column label="归属" min-width="168">
           <template #default="{ row }">
             <div v-if="isAssigned(row)" class="ownership-cell">
-              <el-tooltip v-if="row.agentId" placement="bottom" effect="light">
-                <template #content> 坐席 {{ row.agentId }} </template>
-                <el-tag v-if="row.skillGroupId" type="success" effect="plain" round size="small">
-                  {{ skillGroupName(row.skillGroupId) }}
-                </el-tag>
+              <el-tag v-if="row.skillGroupId" type="success" effect="plain" round size="small">
+                {{ skillGroupName(row.skillGroupId) }}
+              </el-tag>
+              <el-tooltip v-if="row.agentId" placement="bottom" effect="light" :content="`坐席 ${row.agentId}`">
+                <span class="ownership-agent">坐席 {{ row.agentId }}</span>
               </el-tooltip>
             </div>
-            <span v-else class="ownership-empty">未分配</span>
+            <span v-else class="empty-chip">未分配</span>
           </template>
         </el-table-column>
         <el-table-column v-if="isFixedColumnVisible('customerType')" label="客户类型" min-width="110">
           <template #default="{ row }">
             <el-tag v-if="row.customerType" effect="plain" round size="small">{{ row.customerType }}</el-tag>
-            <span v-else class="cell-empty">未设置</span>
+            <span v-else class="empty-chip">未设置</span>
           </template>
         </el-table-column>
         <el-table-column v-if="isFixedColumnVisible('tags')" label="标签" min-width="150">
@@ -169,19 +167,19 @@
               <el-tag v-for="tag in tagList(row.tags).slice(0, 2)" :key="tag" size="small" effect="plain" round>{{ tag }}</el-tag>
               <span v-if="tagList(row.tags).length > 2" class="tag-more">+{{ tagList(row.tags).length - 2 }}</span>
             </div>
-            <span v-else class="cell-empty">无标签</span>
+            <span v-else class="empty-chip">无标签</span>
           </template>
         </el-table-column>
         <el-table-column v-if="isFixedColumnVisible('sourceChannel')" label="来源渠道" min-width="110" show-overflow-tooltip>
           <template #default="{ row }">
             <span v-if="row.sourceChannel">{{ row.sourceChannel }}</span>
-            <span v-else class="cell-empty">未设置</span>
+            <span v-else class="empty-chip">未设置</span>
           </template>
         </el-table-column>
         <el-table-column v-if="isFixedColumnVisible('sourceCallId')" label="来源通话" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
             <span v-if="row.sourceCallId" class="mono-text">{{ row.sourceCallId }}</span>
-            <span v-else class="cell-empty">无</span>
+            <span v-else class="empty-chip">无</span>
           </template>
         </el-table-column>
         <el-table-column v-for="field in listVisibleCustomerFields" :key="field.fieldCode" :label="field.fieldName" min-width="130" show-overflow-tooltip>
@@ -620,7 +618,6 @@ const configurableFixedColumns = [
   { key: 'sourceCallId', label: '来源通话' }
 ];
 const visibleFixedColumns = ref<string[]>(['tags']);
-const AVATAR_TONES = ['#2563eb', '#0ea5e9', '#0891b2', '#4f46e5', '#0284c7', '#1d4ed8'];
 const defaultImportForm = (): CustomerImportForm => ({
   duplicateStrategy: 'SKIP',
   defaultCustomerType: '',
@@ -720,21 +717,6 @@ const tagList = (tags?: string) =>
     .split(/[,，;；\s]+/)
     .map((item) => item.trim())
     .filter(Boolean);
-
-const customerInitial = (row: CustomerVO) => {
-  const name = (row.customerName || '').trim();
-  if (!name) return '客';
-  return name.slice(0, 1).toUpperCase();
-};
-
-const avatarTone = (row: CustomerVO) => {
-  const seed = String(row.id || row.customerName || '0');
-  let hash = 0;
-  for (let i = 0; i < seed.length; i += 1) {
-    hash = (hash * 31 + seed.charCodeAt(i)) % AVATAR_TONES.length;
-  }
-  return AVATAR_TONES[Math.abs(hash) % AVATAR_TONES.length];
-};
 
 const formatCreateTime = (time?: string) => {
   if (!time) return '暂无时间';
@@ -1129,12 +1111,12 @@ onBeforeUnmount(stopImportPolling);
 }
 
 .hero-card :deep(.el-card__body) {
-  padding: 16px 18px 8px !important;
+  padding: 18px 20px 10px !important;
 }
 
 .filter-divider {
   height: 1px;
-  margin: 14px 0 10px;
+  margin: 16px 0 12px;
   background: linear-gradient(90deg, transparent, #e8eef6 12%, #e8eef6 88%, transparent);
 }
 
@@ -1142,17 +1124,17 @@ onBeforeUnmount(stopImportPolling);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 2px 2px;
+  gap: 0 4px;
 }
 
 .filter-form :deep(.el-form-item) {
-  margin-right: 10px;
-  margin-bottom: 10px;
+  margin-right: 12px;
+  margin-bottom: 12px;
 }
 
 .filter-form :deep(.el-form-item__label) {
-  color: #5b6b82;
-  font-weight: 600;
+  color: #64748b;
+  font-weight: 500;
 }
 
 .filter-form :deep(.el-segmented) {
@@ -1164,19 +1146,19 @@ onBeforeUnmount(stopImportPolling);
 .table-card :deep(.el-card__body) {
   display: flex;
   flex-direction: column;
-  padding: 14px 16px 10px !important;
+  padding: 14px 16px 12px !important;
 }
 
 .table-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
-  padding: 8px 10px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
   gap: 10px;
   border: 1px solid #e8eef6;
   border-radius: 12px;
-  background: linear-gradient(180deg, #f8fbff, #f3f7fc);
+  background: #f7faff;
 }
 
 .table-toolbar-left,
@@ -1187,6 +1169,11 @@ onBeforeUnmount(stopImportPolling);
 .ownership-cell {
   display: flex;
   align-items: center;
+}
+
+.ownership-cell {
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .table-toolbar-left {
@@ -1201,6 +1188,15 @@ onBeforeUnmount(stopImportPolling);
 .customer-phone-summary {
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.row-actions {
+  justify-content: center;
+  gap: 8px;
+}
+
+.row-actions :deep(.el-button) {
+  font-weight: 500;
 }
 
 .stat-pill {
@@ -1218,7 +1214,7 @@ onBeforeUnmount(stopImportPolling);
 .stat-pill b {
   margin: 0 2px;
   color: #153b60;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .stat-pill.is-active {
@@ -1258,16 +1254,15 @@ onBeforeUnmount(stopImportPolling);
 
 .customer-table :deep(.el-table__header th) {
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-weight: 600;
 }
 
 .customer-table :deep(.el-table__row) {
-  height: 56px;
+  height: 52px;
 }
 
 .customer-table :deep(.el-table__cell) {
-  padding: 8px 0;
+  padding: 7px 0;
 }
 
 .customer-cell {
@@ -1282,35 +1277,19 @@ onBeforeUnmount(stopImportPolling);
   text-align: left;
 }
 
-.customer-avatar {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 700;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
-    0 4px 10px rgba(37, 99, 235, 0.18);
-}
-
 .customer-meta {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 .customer-name {
   overflow: hidden;
   min-width: 0;
   color: #17324d;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1321,36 +1300,40 @@ onBeforeUnmount(stopImportPolling);
 }
 
 .customer-sub {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  overflow: hidden;
+  max-width: 100%;
   color: #94a3b8;
   font-size: 12px;
   line-height: 1.2;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #cbd5e1;
-}
-
-.status-dot.is-on {
-  background: #22c55e;
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.16);
-}
-
-.status-dot.is-off {
-  background: #f59e0b;
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.14);
-}
-
+.empty-chip,
 .cell-empty,
 .ownership-empty {
-  color: #b6c2d2;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid #e8eef6;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #94a3b8;
   font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.ownership-agent {
+  display: inline-flex;
+  align-items: center;
+  max-width: 120px;
+  overflow: hidden;
+  color: #64748b;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .time-text {
@@ -1373,21 +1356,29 @@ onBeforeUnmount(stopImportPolling);
   min-height: 28px;
   padding: 0 10px;
   gap: 5px;
-  border: 1px solid rgba(37, 99, 235, 0.16);
+  border: 1px solid #dbe5f2;
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(59, 130, 246, 0.1), rgba(37, 99, 235, 0.05));
-  color: #1d4ed8;
+  background: #f5f8fc;
+  color: #35507a;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.phone-chip .el-icon {
+  color: #3b82f6;
 }
 
 .phone-chip:hover {
-  border-color: rgba(37, 99, 235, 0.35);
-  background: rgba(37, 99, 235, 0.12);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
-  transform: translateY(-1px);
+  border-color: rgba(59, 130, 246, 0.35);
+  background: #eff6ff;
+  color: #1d4ed8;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.06);
 }
 
 .phone-chip.is-disabled {
@@ -1396,8 +1387,11 @@ onBeforeUnmount(stopImportPolling);
   color: #94a3b8;
   text-decoration: line-through;
   cursor: default;
-  transform: none;
   box-shadow: none;
+}
+
+.phone-chip.is-disabled .el-icon {
+  color: #94a3b8;
 }
 
 .phone-more {
@@ -1412,7 +1406,7 @@ onBeforeUnmount(stopImportPolling);
   background: #fff;
   color: #3b82f6;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   transition: border-color 0.2s ease, background-color 0.2s ease;
 }
@@ -1426,18 +1420,7 @@ onBeforeUnmount(stopImportPolling);
   height: auto;
   padding: 0;
   gap: 4px;
-  font-weight: 600;
-}
-
-.ownership-cell {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-}
-
-.ownership-agent {
-  color: #64748b;
-  font-size: 12px;
+  font-weight: 500;
 }
 
 .tag-list {
@@ -1455,7 +1438,7 @@ onBeforeUnmount(stopImportPolling);
 }
 
 .customer-pagination {
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .phone-popover-title {
