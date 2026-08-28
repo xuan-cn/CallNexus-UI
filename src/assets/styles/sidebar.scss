@@ -86,6 +86,45 @@
       display: inline-block !important;
     }
 
+    // 一级菜单：字重更醒目，与二级拉开层次
+    & > .el-scrollbar .el-menu > div > .el-sub-menu > .el-sub-menu__title,
+    & > .el-scrollbar .el-menu > div > a > .el-menu-item,
+    & > .el-scrollbar .el-menu > div > .el-menu-item {
+      font-weight: 600;
+      letter-spacing: 0.02em;
+
+      .menu-title {
+        font-size: 14px;
+      }
+
+      .svg-icon {
+        font-size: 16px;
+      }
+    }
+
+    // 二级及以下：更轻字重/略小字号，弱化视觉权重
+    .nest-menu .el-menu-item,
+    .nest-menu .el-sub-menu > .el-sub-menu__title,
+    .el-sub-menu .el-menu .el-menu-item,
+    .el-sub-menu .el-menu .el-sub-menu > .el-sub-menu__title {
+      font-weight: 400;
+      height: 40px;
+
+      .menu-title {
+        font-size: 13px;
+      }
+
+      .svg-icon {
+        font-size: 14px;
+        margin-right: 8px;
+        opacity: 0.85;
+      }
+
+      &.is-active .svg-icon {
+        opacity: 1;
+      }
+    }
+
     // menu hover
     .theme-dark .sub-menu-title-noDropdown,
     .theme-dark .el-sub-menu__title {
@@ -109,14 +148,6 @@
       background-color: var(--el-color-primary-light-9) !important;
     }
 
-    .el-sub-menu > .el-menu {
-      .el-menu-item,
-      .el-sub-menu__title {
-        font-size: 13px;
-        font-weight: 400;
-      }
-    }
-
     .theme-dark {
       .el-sub-menu.is-opened > .el-sub-menu__title {
         color: #dbeafe;
@@ -130,9 +161,9 @@
 
     & .nest-menu .el-sub-menu > .el-sub-menu__title,
     & .el-sub-menu .el-menu-item {
-      min-width: calc($base-sidebar-width - 20px) !important;
+      min-width: #{$base-sidebar-width - 20px} !important;
       border-radius: var(--app-radius-md);
-      height: 45px;
+      height: 40px;
       margin: 1px 5px 1px 5px;
       &:not(.is-active):hover {
         background-color: rgba(0, 0, 0, 0.1) !important;
@@ -143,7 +174,7 @@
     & .theme-dark .el-sub-menu .el-menu-item {
       background-color: $base-sub-menu-background !important;
       border-radius: var(--app-radius-md);
-      height: 45px;
+      height: 40px;
       margin: 1px 5px 1px 5px;
 
       &.is-active {
@@ -172,6 +203,10 @@
       }
     }
 
+    & .theme-dark .el-sub-menu .el-menu-item {
+      height: 40px;
+    }
+
     & .nest-menu .el-sub-menu > .el-sub-menu__title,
     & .el-menu-item {
       border-radius: var(--app-radius-md);
@@ -186,6 +221,11 @@
         // you can use $sub-menuHover
         background-color: rgba(0, 0, 0, 0.04) !important;
       }
+    }
+
+    & .el-sub-menu .el-menu-item,
+    & .nest-menu .el-sub-menu > .el-sub-menu__title {
+      height: 40px;
     }
   }
 

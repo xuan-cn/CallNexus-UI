@@ -10,9 +10,9 @@
   --subMenuHover: #001528;
   --subMenuTitleHover: #293444;
 
-  // 菜单栏缩进
-  --el-menu-base-level-padding: 12px;
-  --el-menu-level-padding: 8px;
+  // 菜单栏缩进（加大层级缩进，强化一二级区分）
+  --el-menu-base-level-padding: 14px;
+  --el-menu-level-padding: 20px;
   --el-menu-item-height: 50px;
 
   --fixedHeaderBg: #ffffff;
