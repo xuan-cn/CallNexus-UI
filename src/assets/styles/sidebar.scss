@@ -86,12 +86,11 @@
       display: inline-block !important;
     }
 
-    // 一级菜单：字重更醒目，与二级拉开层次
+    // 一级菜单
     & > .el-scrollbar .el-menu > div > .el-sub-menu > .el-sub-menu__title,
     & > .el-scrollbar .el-menu > div > a > .el-menu-item,
     & > .el-scrollbar .el-menu > div > .el-menu-item {
-      font-weight: 600;
-      letter-spacing: 0.02em;
+      font-weight: 400;
 
       .menu-title {
         font-size: 14px;
@@ -102,7 +101,7 @@
       }
     }
 
-    // 二级及以下：更轻字重/略小字号，弱化视觉权重
+    // 二级及以下
     .nest-menu .el-menu-item,
     .nest-menu .el-sub-menu > .el-sub-menu__title,
     .el-sub-menu .el-menu .el-menu-item,
