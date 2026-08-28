@@ -1,24 +1,136 @@
 <template>
   <div ref="phoneShellRef" class="agent-phone-shell is-embedded" :class="{ incoming: incomingCall, open: panelOpen, calling: callActive }">
-    <div class="soft-bar">
-      <div class="soft-status" :class="softbarTone">
+    <div class="soft-bar" :class="{ 'is-in-call': callActive }">
+      <!-- 空闲：状态提示 -->
+      <div v-if="!callActive" class="soft-status" :class="softbarTone">
         <i class="soft-status-dot" aria-hidden="true"></i>
         <span class="soft-status-text">{{ softbarStatusText }}</span>
         <span v-if="softTimerText" class="soft-timer">{{ softTimerText }}</span>
       </div>
 
+      <!-- 通话中：操作条（号码展示交给右侧电话框，避免重复） -->
+      <div v-else class="soft-call-strip">
+        <div class="soft-live-bar">
+          <div class="soft-live-peer">
+            <i class="soft-live-dot" aria-hidden="true"></i>
+            <span class="soft-live-label">通话中</span>
+            <em>{{ softTimerText || '00:00' }}</em>
+          </div>
+          <div class="soft-live-actions" aria-label="通话快捷操作">
+            <button
+              type="button"
+              class="soft-live-btn is-primary"
+              :class="{ 'is-active': callHeld }"
+              :title="callHeld ? '恢复通话' : '保持通话'"
+              :disabled="callActionLoading"
+              @click="toggleHold"
+            >
+              <el-icon><VideoPause /></el-icon><span>{{ callHeld ? '恢复' : '保持' }}</span>
+            </button>
+            <button
+              type="button"
+              class="soft-live-btn is-primary"
+              :class="{ 'is-active': callMuted }"
+              :title="callMuted ? '取消静音' : '静音'"
+              :disabled="callActionLoading"
+              @click="toggleMute"
+            >
+              <el-icon><Microphone /></el-icon><span>{{ callMuted ? '取消静音' : '静音' }}</span>
+            </button>
+            <span class="soft-live-sep" aria-hidden="true"></span>
+            <button
+              type="button"
+              class="soft-live-btn"
+              :class="{ 'is-active': transferPanelOpen }"
+              title="盲转"
+              :disabled="callActionLoading || consultActive"
+              @click="toggleSoftTransferPanel"
+            >
+              <el-icon><Switch /></el-icon><span>盲转</span>
+            </button>
+            <button
+              type="button"
+              class="soft-live-btn"
+              :class="{ 'is-active': consultPanelOpen || consultActive }"
+              title="咨询转接"
+              :disabled="callActionLoading || callHeld"
+              @click="toggleSoftConsultPanel"
+            >
+              <el-icon><ChatDotRound /></el-icon><span>咨询</span>
+            </button>
+            <button
+              type="button"
+              class="soft-live-btn"
+              title="多方通话"
+              :disabled="callActionLoading || callHeld || consultActive"
+              @click="openConferenceDrawer"
+            >
+              <el-icon><Connection /></el-icon><span>多方</span>
+            </button>
+            <span class="soft-live-sep" aria-hidden="true"></span>
+            <button type="button" class="soft-live-btn" title="打开工作台" @click="openScreenPop">
+              <el-icon><Monitor /></el-icon><span>工作台</span>
+            </button>
+            <button
+              type="button"
+              class="soft-live-btn is-more"
+              :class="{ 'is-active': morePanelOpen }"
+              title="更多"
+              :disabled="callActionLoading"
+              @click="toggleSoftMorePanel"
+            >
+              <el-icon><MoreFilled /></el-icon><span>更多</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div class="soft-actions">
-        <div class="soft-dial">
+        <!-- 电话框：未通话可拨打；通话中显示号码 + 挂断（沿用原 soft-dial 形态） -->
+        <div
+          v-if="!(incomingCall && !callActive)"
+          class="soft-dial"
+          :class="{ 'is-live': callActive }"
+        >
+          <span class="soft-dial-lead" aria-hidden="true">
+            <el-icon><Phone /></el-icon>
+          </span>
           <input
-            v-model="dialNumber"
             class="soft-dial-input"
             maxlength="20"
+            :value="dialNumber"
             :disabled="incomingCall || callActive"
-            placeholder="外呼号码"
+            :placeholder="callActive ? '' : '外呼号码'"
+            @input="onSoftDialInput"
             @keyup.enter="makeCall"
           />
           <button
-            v-if="incomingCall && webRtcIncoming"
+            v-if="callActive"
+            type="button"
+            class="soft-call-btn is-hangup"
+            title="挂断"
+            :disabled="callActionLoading"
+            @click="hangup"
+          >
+            <el-icon><PhoneFilled /></el-icon>
+          </button>
+          <button
+            v-else
+            type="button"
+            class="soft-call-btn"
+            :class="{ 'is-ready': canDial }"
+            :title="dialButtonTitle"
+            @click="makeCall"
+          >
+            <el-icon><PhoneFilled /></el-icon>
+          </button>
+        </div>
+
+        <!-- 来电：接听/挂断入口 -->
+        <div v-else class="soft-dial soft-dial-incoming">
+          <span class="soft-incoming-label">来电 {{ incomingNumber }}</span>
+          <button
+            v-if="webRtcIncoming"
             type="button"
             class="soft-call-btn is-answer"
             title="接听"
@@ -27,10 +139,7 @@
           >
             <el-icon><PhoneFilled /></el-icon>
           </button>
-          <button v-else-if="incomingCall || callActive" type="button" class="soft-call-btn is-hangup" title="挂断" @click="hangup">
-            <el-icon><CloseBold /></el-icon>
-          </button>
-          <button v-else type="button" class="soft-call-btn" :class="{ 'is-ready': canDial }" :title="dialButtonTitle" @click="makeCall">
+          <button type="button" class="soft-call-btn is-hangup" title="挂断" @click="hangup">
             <el-icon><PhoneFilled /></el-icon>
           </button>
         </div>
@@ -57,10 +166,7 @@
           <span class="soft-tag agent" :title="currentAgent.agentName || currentAgent.agentCode">
             {{ currentAgent.agentCode || currentAgent.agentName || '坐席' }}
           </span>
-          <button v-if="incomingCall || callActive" type="button" class="soft-screen-pop" title="打开坐席工作台" @click="openScreenPop">
-            工作台
-          </button>
-          <button type="button" class="soft-more" :class="{ active: panelOpen }" title="更多功能" @click="togglePanel">
+          <button type="button" class="soft-more" :class="{ active: panelOpen }" title="打开拨号盘" @click="togglePanel">
             <el-icon><Operation /></el-icon>
           </button>
         </div>
@@ -237,7 +343,22 @@
 </template>
 
 <script setup lang="ts">
-import { ArrowDown, CloseBold, Operation, Phone, PhoneFilled, Tickets, User } from '@element-plus/icons-vue';
+import {
+  ArrowDown,
+  ChatDotRound,
+  CloseBold,
+  Connection,
+  Microphone,
+  Monitor,
+  MoreFilled,
+  Operation,
+  Phone,
+  PhoneFilled,
+  Switch,
+  Tickets,
+  User,
+  VideoPause
+} from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   changeCurrentAgentStatus,
@@ -301,6 +422,10 @@ const agentStatus = ref<AgentStatus>('idle');
 const currentAgent = ref<CurrentAgentVO>({ configured: false, status: 'OFFLINE' });
 const dialNumber = ref('');
 const callActive = ref(false);
+const onSoftDialInput = (event: Event) => {
+  if (callActive.value) return;
+  dialNumber.value = (event.target as HTMLInputElement).value;
+};
 const callHeld = ref(false);
 const callMuted = ref(false);
 const callActionLoading = ref(false);
@@ -1169,6 +1294,34 @@ const openConferenceDrawer = () => {
   conferenceDrawerOpen.value = true;
 };
 
+/** 顶栏快捷操作：与小电话弹框同逻辑；需表单的操作会展开面板 */
+const toggleSoftTransferPanel = () => {
+  if (callActionLoading.value || consultActive.value) return;
+  consultPanelOpen.value = false;
+  ivrTransferPanelOpen.value = false;
+  morePanelOpen.value = false;
+  transferPanelOpen.value = !transferPanelOpen.value;
+  if (transferPanelOpen.value) panelOpen.value = true;
+};
+
+const toggleSoftConsultPanel = () => {
+  if (callActionLoading.value || callHeld.value) return;
+  transferPanelOpen.value = false;
+  ivrTransferPanelOpen.value = false;
+  morePanelOpen.value = false;
+  consultPanelOpen.value = !consultPanelOpen.value;
+  if (consultPanelOpen.value) panelOpen.value = true;
+};
+
+const toggleSoftMorePanel = () => {
+  if (callActionLoading.value) return;
+  transferPanelOpen.value = false;
+  consultPanelOpen.value = false;
+  ivrTransferPanelOpen.value = false;
+  morePanelOpen.value = !morePanelOpen.value;
+  if (morePanelOpen.value) panelOpen.value = true;
+};
+
 const toggleDtmfPanel = () => {
   dtmfPanelOpen.value = !dtmfPanelOpen.value;
   notePanelOpen.value = false;
@@ -1723,8 +1876,330 @@ button {
   justify-content: space-between;
   min-width: 0;
   height: 42px;
-  gap: 16px;
+  gap: 12px;
   padding: 0 2px 0 6px;
+}
+
+.soft-bar.is-in-call {
+  gap: 10px;
+}
+
+.soft-call-strip {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.soft-live-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  height: 34px;
+  padding: 3px 6px 3px 12px;
+  border: 1px solid #e2eaf5;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f8fc 100%);
+  box-shadow:
+    0 1px 2px rgba(28, 48, 78, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.soft-live-peer {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding-right: 10px;
+  border-right: 1px solid #e3ebf6;
+  white-space: nowrap;
+
+  .soft-live-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #243552;
+  }
+
+  em {
+    font-style: normal;
+    font-size: 12px;
+    font-weight: 600;
+    color: #7b8ba5;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.soft-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.16);
+  animation: soft-dot-pulse 1.2s ease-in-out infinite;
+}
+
+.soft-live-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.soft-live-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex: none;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #405574;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+
+  .el-icon {
+    font-size: 14px;
+    color: #6b7f9c;
+  }
+
+  &:hover:not(:disabled) {
+    border-color: #d7e4f4;
+    background: #fff;
+    color: #1f4fb8;
+    box-shadow: 0 1px 2px rgba(28, 48, 78, 0.06);
+
+    .el-icon {
+      color: #2f6bff;
+    }
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  &.is-primary {
+    border-color: #e2eaf8;
+    background: #fff;
+    color: #35507a;
+
+    .el-icon {
+      color: #3b82f6;
+    }
+
+    &:hover:not(:disabled) {
+      border-color: #bfdbfe;
+      background: #f5f9ff;
+      color: #1d4ed8;
+    }
+  }
+
+  &.is-more {
+    color: #7b8ba5;
+
+    .el-icon {
+      color: #94a3b8;
+    }
+  }
+
+  &.is-active {
+    border-color: #93c5fd;
+    background: #eff6ff;
+    color: #1d4ed8;
+
+    .el-icon {
+      color: #2563eb;
+    }
+  }
+}
+
+.soft-call-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  filter: grayscale(0.2);
+}
+
+.soft-live-sep {
+  flex: none;
+  width: 1px;
+  height: 14px;
+  margin: 0 2px;
+  background: #e3ebf6;
+}
+
+.soft-dial {
+  display: flex;
+  flex: none;
+  align-items: stretch;
+  width: 228px;
+  height: 32px;
+  overflow: hidden;
+  border: 1px solid #d7e4f4;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow:
+    0 1px 2px rgba(28, 48, 78, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    width 0.2s ease;
+}
+
+.soft-dial.is-live {
+  width: 210px;
+  border-color: #bbf7d0;
+  background: linear-gradient(180deg, #ffffff 0%, #f3fdf7 100%);
+  box-shadow:
+    0 1px 2px rgba(22, 163, 74, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.soft-dial-lead {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 34px;
+  color: #7b8ba5;
+  background: #f5f8fc;
+  border-right: 1px solid #e8eef6;
+
+  .el-icon {
+    font-size: 14px;
+  }
+}
+
+.soft-dial.is-live .soft-dial-lead {
+  color: #16a34a;
+  background: #ecfdf3;
+  border-right-color: #bbf7d0;
+}
+
+.soft-dial:focus-within {
+  border-color: #2f6bff;
+  box-shadow: 0 0 0 3px rgba(47, 107, 255, 0.14);
+}
+
+.soft-dial.is-live:focus-within {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.14);
+}
+
+.soft-dial-input {
+  min-width: 0;
+  flex: 1;
+  height: 100%;
+  padding: 0 10px;
+  color: #172033;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 0;
+  outline: 0;
+  background: transparent;
+
+  &::placeholder {
+    color: #9aabbc;
+    font-weight: 500;
+  }
+}
+
+.soft-dial-input:disabled {
+  color: #243552;
+  -webkit-text-fill-color: #243552;
+  opacity: 1;
+  cursor: default;
+}
+
+.soft-call-btn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 100%;
+  border: 0;
+  border-left: 1px solid #d7e4f4;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(135deg, #3b82f6 0%, #2f6bff 52%, #2459cf 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  transition:
+    filter 0.2s ease,
+    box-shadow 0.2s ease;
+
+  .el-icon {
+    font-size: 16px;
+  }
+
+  &:hover {
+    filter: brightness(1.05);
+  }
+
+  &.is-ready {
+    background: linear-gradient(135deg, #43d3ff 0%, #2f6bff 48%, #1e4fc7 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.28),
+      0 6px 14px rgba(36, 89, 207, 0.28);
+  }
+
+  &.is-answer {
+    background: linear-gradient(135deg, #20bd8d 0%, #14b88b 100%);
+  }
+
+  &.is-hangup {
+    border-left-color: #fecdd3;
+    background: linear-gradient(135deg, #ff6b6b 0%, #e5484d 100%);
+  }
+}
+
+.soft-dial-incoming {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 12px;
+  height: 32px;
+  border: 1px solid #fecdd3;
+  border-radius: 10px;
+  background: #fff1f2;
+}
+
+.soft-incoming-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #be123c;
+  white-space: nowrap;
+}
+
+.soft-more.is-subtle {
+  opacity: 0.55;
+
+  &:hover,
+  &.active {
+    opacity: 1;
+  }
 }
 
 .soft-status {
@@ -1834,84 +2309,6 @@ button {
   align-items: center;
   gap: 10px;
   margin-left: auto;
-}
-
-.soft-dial {
-  display: flex;
-  flex: none;
-  align-items: stretch;
-  width: 228px;
-  height: 32px;
-  overflow: hidden;
-  border: 1px solid #d7e4f4;
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.soft-dial:focus-within {
-  border-color: #2f6bff;
-  box-shadow: 0 0 0 3px rgba(47, 107, 255, 0.14);
-}
-
-.soft-dial-input {
-  min-width: 0;
-  flex: 1;
-  height: 100%;
-  padding: 0 12px;
-  color: #172033;
-  font-size: 13px;
-  border: 0;
-  outline: 0;
-  background: transparent;
-}
-
-.soft-dial-input::placeholder {
-  color: #9aabbc;
-}
-
-.soft-dial-input:disabled {
-  color: #7b8798;
-  background: #f7faff;
-}
-
-.soft-call-btn {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 100%;
-  color: #fff;
-  cursor: pointer;
-  border: 0;
-  background: linear-gradient(135deg, #3b82f6 0%, #2f6bff 52%, #2459cf 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
-  transition:
-    filter 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.soft-call-btn:hover {
-  filter: brightness(1.05);
-}
-
-.soft-call-btn.is-ready {
-  background: linear-gradient(135deg, #43d3ff 0%, #2f6bff 48%, #1e4fc7 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    0 6px 14px rgba(36, 89, 207, 0.28);
-}
-
-.soft-call-btn.is-answer {
-  background: linear-gradient(135deg, #20bd8d 0%, #14b88b 100%);
-}
-
-.soft-call-btn.is-hangup {
-  background: linear-gradient(135deg, #ff6b6b 0%, #e5484d 100%);
 }
 
 .soft-tags {
