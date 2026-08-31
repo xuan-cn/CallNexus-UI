@@ -115,6 +115,34 @@
                   <el-empty v-else description="点击客户话语查看对应建议" :image-size="62" />
                 </div>
               </div>
+              <div v-if="assistDetail?.ticketDraft" class="live-ticket-draft">
+                <div class="live-ticket-header">
+                  <div>
+                    <span class="live-ticket-label">AI 工单草稿</span>
+                    <strong>{{ assistDetail.ticketDraft.title || '待确认工单' }}</strong>
+                  </div>
+                  <el-tag :type="assistDetail.ticketDraft.status === 'CREATED' ? 'success' : 'warning'" effect="plain">
+                    {{ assistDetail.ticketDraft.status === 'CREATED' ? '已建单' : '待确认' }}
+                  </el-tag>
+                </div>
+                <p>{{ assistDetail.ticketDraft.summary || 'AI 正在根据当前对话补充工单摘要。' }}</p>
+                <div class="live-ticket-meta">
+                  <span>置信度 {{ Math.round(Number(assistDetail.ticketDraft.confidence || 0) * 100) }}%</span>
+                  <span v-if="assistDetail.ticketDraft.missingFields?.length" class="live-ticket-missing">
+                    缺少字段：{{ assistDetail.ticketDraft.missingFields.join('、') }}
+                  </span>
+                  <span v-if="assistDetail.ticketDraft.formalTicketId">工单 ID：{{ assistDetail.ticketDraft.formalTicketId }}</span>
+                </div>
+                <div v-if="assistDetail.ticketDraft.status !== 'CREATED'" class="live-ticket-actions">
+                  <span v-if="assistDetail.ticketDraft.missingFields?.length">请在草稿审核中补齐必填字段后建单</span>
+                  <el-button
+                    type="primary"
+                    :loading="ticketDraftApproving"
+                    :disabled="Boolean(assistDetail.ticketDraft.missingFields?.length)"
+                    @click="approveLiveTicketDraft"
+                  >确认建单</el-button>
+                </div>
+              </div>
             </el-tab-pane>
             <el-tab-pane v-if="businessType === 'CUSTOMER'" label="电话号码" name="phones">
               <div class="phone-toolbar">
@@ -261,7 +289,7 @@ import { listCallRecords } from '@/api/callcenter/call-record';
 import { hangupCauseLabel } from '@/api/callcenter/call-record/display';
 import { CallDirection, CallRecordVO } from '@/api/callcenter/call-record/types';
 import { useAgentDialBus } from '@/composables/useAgentDial';
-import { getAgentAssist, regenerateAgentAssistSuggestion, streamAgentAssist } from '@/api/callcenter/agent-assist';
+import { approveAgentAssistTicketDraft, getAgentAssist, regenerateAgentAssistSuggestion, streamAgentAssist } from '@/api/callcenter/agent-assist';
 import type { AgentAssistDetailVO, AgentAssistSuggestionVO } from '@/api/callcenter/agent-assist/types';
 import type { AiCallTranscriptSegmentVO } from '@/api/callcenter/ai-speech/types';
 
@@ -277,6 +305,7 @@ const callRecords = ref<CallRecordVO[]>([]);
 const activeTab = ref('followUp');
 const assistDetail = ref<AgentAssistDetailVO>();
 const assistConnected = ref(false);
+const ticketDraftApproving = ref(false);
 const selectedAssistSegmentId = ref<string | number>();
 const assistTranscriptRef = ref<HTMLElement>();
 const sidePanelScrolling = ref(false);
@@ -352,6 +381,20 @@ const regenerateSuggestion = async (suggestion: AgentAssistSuggestionVO) => {
   await loadAssist();
 };
 
+const approveLiveTicketDraft = async () => {
+  const draft = assistDetail.value?.ticketDraft;
+  if (!draft || !businessCallId.value || draft.missingFields?.length) return;
+  await ElMessageBox.confirm('确认使用当前 AI 草稿创建正式工单吗？', '确认建单', { type: 'warning' });
+  ticketDraftApproving.value = true;
+  try {
+    await approveAgentAssistTicketDraft(businessCallId.value, draft.id, draft.version);
+    ElMessage.success('正式工单已创建');
+    await Promise.all([loadAssist(), loadDetail()]);
+  } finally {
+    ticketDraftApproving.value = false;
+  }
+};
+
 const stopAssistStream = () => {
   if (assistReconnectTimer) clearTimeout(assistReconnectTimer);
   assistReconnectTimer = undefined;
@@ -374,7 +417,7 @@ const startAssistStream = () => {
       callId,
       (event) => {
         if (event === 'connected') assistConnected.value = true;
-        if (event === 'segment' || event === 'suggestion') void loadAssist();
+        if (event === 'segment' || event === 'suggestion' || event === 'ticket-draft') void loadAssist();
       },
       controller.signal
     )
@@ -739,6 +782,66 @@ defineExpose({ reload: loadDetail });
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.live-ticket-draft {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid #d9e7fb;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f7fbff, #eef6ff);
+
+  p {
+    margin: 10px 0;
+    color: #46566f;
+    font-size: 12px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+  }
+}
+
+.live-ticket-header,
+.live-ticket-actions,
+.live-ticket-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.live-ticket-header {
+  justify-content: space-between;
+
+  > div {
+    display: grid;
+    gap: 3px;
+  }
+
+  strong {
+    color: #1d2c45;
+    font-size: 14px;
+  }
+}
+
+.live-ticket-label,
+.live-ticket-meta,
+.live-ticket-actions {
+  color: #7b899d;
+  font-size: 11px;
+}
+
+.live-ticket-meta {
+  flex-wrap: wrap;
+}
+
+.live-ticket-missing {
+  color: #d97706;
+}
+
+.live-ticket-actions {
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #dce8f8;
 }
 
 .recommendation-title {

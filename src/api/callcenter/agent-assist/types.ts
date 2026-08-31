@@ -1,4 +1,5 @@
 import type { AiCallTranscriptSegmentVO } from '@/api/callcenter/ai-speech/types';
+import type { AiTicketDraftVO } from '@/api/callcenter/ai-ticket-draft';
 
 export interface AgentAssistSuggestionVO {
   id: string | number;
@@ -22,10 +23,12 @@ export interface AgentAssistDetailVO {
   sessionState?: string;
   transcriptSegments: AiCallTranscriptSegmentVO[];
   suggestions: AgentAssistSuggestionVO[];
+  ticketDraft?: AiTicketDraftVO;
 }
 
 export interface AgentAssistStreamEvent {
   businessCallId: string;
   suggestion?: AgentAssistSuggestionVO;
   segment?: AiCallTranscriptSegmentVO;
+  ticketDraft?: AiTicketDraftVO;
 }

@@ -228,6 +228,56 @@ export interface AiAgentVO {
 export interface AiAgentForm extends Omit<AiAgentVO, 'id' | 'chatModelName' | 'knowledgeBaseNames'> {
   id?: Id;
 }
+export interface AiTicketPolicyVO {
+  id?: Id;
+  aiAgentId: Id;
+  enabled: boolean;
+  creationMode: 'DRAFT_REVIEW' | 'AUTO_CREATE';
+  ticketTemplateId?: Id;
+  triggerTypes: string[];
+  includeIntents: string[];
+  excludeIntents: string[];
+  confidenceThreshold: number;
+  missingRequiredAction: 'KEEP_DRAFT' | 'REJECT_DRAFT';
+  duplicatePolicy: 'MERGE_PENDING' | 'ALLOW' | 'SKIP';
+  duplicateWindowHours: number;
+  afterCreateAction: 'CREATE_ONLY' | 'SUBMIT' | 'RESOLVE';
+  customerTemplateId?: Id;
+  defaultSkillGroupId?: Id;
+  defaultValues: Record<string, unknown>;
+  activePromptVersionId?: Id;
+  version?: number;
+}
+export interface AiTicketPromptVO {
+  policyId?: Id;
+  promptVersionId?: Id;
+  versionNo?: number;
+  versionName?: string;
+  status: 'DEFAULT' | 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+  promptContent: string;
+  protocolVersion: string;
+  jsonSchema: string;
+  safetyConstraints: string;
+  availableVariables: string[];
+  requiredVariables: string[];
+  customPrompt: boolean;
+}
+export interface AiTicketPromptVersionVO {
+  id: Id;
+  versionNo: number;
+  versionName?: string;
+  status: string;
+  protocolVersion: string;
+  promptHash: string;
+  publishedBy?: Id;
+  publishedAt?: string;
+  createTime?: string;
+}
+export interface AiTicketPromptValidationVO {
+  valid: boolean;
+  errors: string[];
+  compiledPreview?: string;
+}
 export interface AiConversationVO {
   id: Id;
   agentId: Id;

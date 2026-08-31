@@ -84,6 +84,21 @@ export const updateAiAgent = (id: T.Id, data: T.AiAgentForm) => request({ url: `
 export const deleteAiAgent = (id: T.Id) => request({ url: `${root}/agents/${id}`, method: 'delete' });
 export const setAiAgentEnabled = (id: T.Id, enabled: boolean) =>
   request({ url: `${root}/agents/${id}/${enabled ? 'enable' : 'disable'}`, method: 'post' });
+const aiTicketRoot = (agentId: T.Id) => `${root}/agents/${agentId}/ticket`;
+export const getAiTicketPolicy = (agentId: T.Id): AxiosPromise<T.AiTicketPolicyVO> =>
+  request({ url: `${aiTicketRoot(agentId)}/policy`, method: 'get' });
+export const saveAiTicketPolicy = (agentId: T.Id, data: Omit<T.AiTicketPolicyVO, 'id' | 'aiAgentId' | 'activePromptVersionId' | 'version'>) =>
+  request({ url: `${aiTicketRoot(agentId)}/policy`, method: 'put', data });
+export const getAiTicketPrompt = (agentId: T.Id): AxiosPromise<T.AiTicketPromptVO> =>
+  request({ url: `${aiTicketRoot(agentId)}/prompt`, method: 'get' });
+export const saveAiTicketPromptDraft = (agentId: T.Id, data: { promptContent: string; versionName?: string }) =>
+  request({ url: `${aiTicketRoot(agentId)}/prompt/draft`, method: 'put', data });
+export const validateAiTicketPrompt = (agentId: T.Id, data: { promptContent: string; versionName?: string }): AxiosPromise<T.AiTicketPromptValidationVO> =>
+  request({ url: `${aiTicketRoot(agentId)}/prompt/validate`, method: 'post', data });
+export const publishAiTicketPrompt = (agentId: T.Id) => request({ url: `${aiTicketRoot(agentId)}/prompt/publish`, method: 'post' });
+export const restoreDefaultAiTicketPrompt = (agentId: T.Id) => request({ url: `${aiTicketRoot(agentId)}/prompt/restore-default`, method: 'post' });
+export const listAiTicketPromptVersions = (agentId: T.Id): AxiosPromise<T.AiTicketPromptVersionVO[]> =>
+  request({ url: `${aiTicketRoot(agentId)}/prompt/versions`, method: 'get' });
 export const listAiConversations = (agentId?: T.Id): AxiosPromise<T.AiConversationVO[]> =>
   request({ url: `${root}/conversations`, method: 'get', params: { agentId } });
 export const startAiConversation = (agentId: T.Id): AxiosPromise<T.AiConversationStartVO> =>

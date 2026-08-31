@@ -1,5 +1,10 @@
 <template>
   <div class="p-2">
+    <el-tabs v-model="activeTab" class="ticket-tabs">
+      <el-tab-pane label="正式工单" name="tickets" />
+      <el-tab-pane v-hasPermi="['callcenter:ai-ticket-draft:list']" label="AI 草稿审核" name="aiDrafts" />
+    </el-tabs>
+    <template v-if="activeTab === 'tickets'">
     <el-card class="mb-2" shadow="hover">
       <el-form :model="query" inline>
         <el-form-item label="工单编号"><el-input v-model="query.ticketNo" clearable @keyup.enter="load" /></el-form-item>
@@ -36,9 +41,16 @@
         <el-table-column label="来电号码" prop="callerNumber" min-width="140" />
         <el-table-column label="来源通话" prop="sourceCallId" min-width="240" show-overflow-tooltip />
         <el-table-column label="创建时间" prop="createTime" min-width="170" />
-        <el-table-column label="操作" fixed="right" width="210">
+        <el-table-column label="操作" fixed="right" width="260">
           <template #default="{ row }">
             <el-button v-if="canSubmit(row)" link type="primary" @click="submit(row)">提交</el-button>
+            <el-button
+              v-if="canResolveDirectly(row)"
+              v-hasPermi="['callcenter:ticket:create']"
+              link
+              type="warning"
+              @click="resolveDirectly(row)"
+            >直接办结</el-button>
             <el-button v-if="row.flowInstanceId" link type="primary" @click="showProgress(row)">流程进度</el-button>
             <el-button v-if="row.ticketStatus === 'RESOLVED'" link type="success" @click="close(row)">关闭</el-button>
           </template>
@@ -60,16 +72,19 @@
     <SubmitVerify ref="submitVerifyRef" :task-variables="taskVariables" @submit-callback="handleWorkflowUpdated" />
     <ApprovalRecord ref="approvalRecordRef" />
     <DynamicBusinessFormDialog v-model="createVisible" business-type="TICKET" @saved="handleCreated" />
+    </template>
+    <AiTicketDraftReview v-else @open-ticket="openCreatedTicket" />
   </div>
 </template>
 
 <script setup name="TicketManagement" lang="ts">
-import { closeTicket, listTickets, submitTicket, TicketQuery, TicketVO } from '@/api/callcenter/ticket';
+import { closeTicket, listTickets, resolveTicketDirectly, submitTicket, TicketQuery, TicketVO } from '@/api/callcenter/ticket';
 import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/index.vue';
 import DynamicBusinessFormDialog from '@/layout/components/DynamicBusinessFormDialog.vue';
 import SubmitVerify from '@/components/Process/submitVerify.vue';
 import ApprovalRecord from '@/components/Process/approvalRecord.vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import AiTicketDraftReview from './AiTicketDraftReview.vue';
 
 const route = useRoute();
 const loading = ref(false);
@@ -83,6 +98,7 @@ const submitVerifyRef = ref<InstanceType<typeof SubmitVerify>>();
 const approvalRecordRef = ref<InstanceType<typeof ApprovalRecord>>();
 const taskVariables = ref<Record<string, unknown>>({});
 const query = reactive<TicketQuery>({ pageNum: 1, pageSize: 10 });
+const activeTab = ref('tickets');
 const load = async () => {
   loading.value = true;
   try {
@@ -100,6 +116,8 @@ const showDetail = (row: TicketVO) => {
 };
 const canSubmit = (ticket?: TicketVO) =>
   Boolean(ticket && ticket.ticketStatus === 'OPEN' && ticket.workflowCode && !ticket.flowInstanceId && ticket.processStatus !== 'waiting');
+const canResolveDirectly = (ticket?: TicketVO) =>
+  Boolean(ticket && ticket.ticketStatus === 'OPEN' && !ticket.flowInstanceId && ticket.processStatus !== 'waiting');
 const processStatusLabel = (status?: string) =>
   (
     ({
@@ -120,6 +138,12 @@ const submit = async (ticket: TicketVO) => {
   ElMessage.success('工单流程已启动');
   await handleWorkflowUpdated();
 };
+const resolveDirectly = async (ticket: TicketVO) => {
+  await ElMessageBox.confirm(`确认直接办结工单 ${ticket.ticketNo} 吗？该操作不会启动审批流程。`, '直接办结', { type: 'warning' });
+  await resolveTicketDirectly(ticket.id);
+  ElMessage.success('工单已直接办结');
+  await load();
+};
 const close = async (ticket: TicketVO) => {
   await ElMessageBox.confirm(`确认关闭工单 ${ticket.ticketNo} 吗？`, '关闭工单', { type: 'warning' });
   await closeTicket(ticket.id);
@@ -136,6 +160,12 @@ const handleCreated = async () => {
   query.pageNum = 1;
   await load();
 };
+const openCreatedTicket = async (id: string | number) => {
+  activeTab.value = 'tickets';
+  await load();
+  detailId.value = id;
+  detailVisible.value = true;
+};
 onMounted(async () => {
   await load();
   if (route.query.id) {
@@ -149,6 +179,7 @@ onMounted(async () => {
 .table-toolbar {
   margin-bottom: 12px;
 }
+.ticket-tabs { margin-bottom: 10px; }
 
 .ticket-detail-actions {
   display: flex;

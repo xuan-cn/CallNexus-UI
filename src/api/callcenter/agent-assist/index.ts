@@ -11,6 +11,13 @@ export const getAgentAssist = (businessCallId: string): AxiosPromise<AgentAssist
 export const regenerateAgentAssistSuggestion = (businessCallId: string, suggestionId: string | number) =>
   request({ url: `${root}/${businessCallId}/agent-assist/suggestions/${suggestionId}/regenerate`, method: 'post' });
 
+export const approveAgentAssistTicketDraft = (businessCallId: string, draftId: string | number, version: number) =>
+  request<string | number>({
+    url: `${root}/${businessCallId}/agent-assist/ticket-drafts/${draftId}/approve`,
+    method: 'post',
+    params: { version }
+  });
+
 export const streamAgentAssist = async (
   businessCallId: string,
   onEvent: (event: string, data: AgentAssistStreamEvent) => void,
