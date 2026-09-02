@@ -2,6 +2,7 @@ import request from '@/utils/request';
 import { getToken } from '@/utils/auth';
 import type { AxiosPromise } from 'axios';
 import type { AgentAssistDetailVO, AgentAssistStreamEvent } from './types';
+import type { AiTicketDraftVO } from '@/api/callcenter/ai-ticket-draft';
 
 const root = '/api/v1/calls';
 
@@ -16,6 +17,17 @@ export const approveAgentAssistTicketDraft = (businessCallId: string, draftId: s
     url: `${root}/${businessCallId}/agent-assist/ticket-drafts/${draftId}/approve`,
     method: 'post',
     params: { version }
+  });
+
+export const updateAgentAssistTicketDraft = (
+  businessCallId: string,
+  draftId: string | number,
+  data: Pick<AiTicketDraftVO, 'version' | 'title' | 'summary' | 'formData'>
+) =>
+  request<AiTicketDraftVO>({
+    url: `${root}/${businessCallId}/agent-assist/ticket-drafts/${draftId}`,
+    method: 'put',
+    data
   });
 
 export const streamAgentAssist = async (

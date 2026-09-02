@@ -27,9 +27,18 @@
           >
             <div class="task-name">{{ task.taskName }}</div>
             <div class="task-counts">
-              <span><b>{{ task.importedCount || 0 }}</b>导入</span>
-              <span class="is-warn"><b>{{ task.unassignedCount || 0 }}</b>未分配</span>
-              <span class="is-ok"><b>{{ task.assignedCount || 0 }}</b>已分配</span>
+              <span
+                ><b>{{ task.importedCount || 0 }}</b
+                >导入</span
+              >
+              <span class="is-warn"
+                ><b>{{ task.unassignedCount || 0 }}</b
+                >未分配</span
+              >
+              <span class="is-ok"
+                ><b>{{ task.assignedCount || 0 }}</b
+                >已分配</span
+              >
             </div>
             <div class="last-time">最近导入 {{ task.lastImportTime || '暂无' }}</div>
           </button>
@@ -71,12 +80,7 @@
             </el-form-item>
             <el-form-item label="导入批次">
               <el-select v-model="query.importBatchId" clearable filterable placeholder="全部批次">
-                <el-option
-                  v-for="batch in batches"
-                  :key="batch.batchId"
-                  :label="batch.fileName || '未命名批次'"
-                  :value="batch.batchId!"
-                />
+                <el-option v-for="batch in batches" :key="batch.batchId" :label="batch.fileName || '未命名批次'" :value="batch.batchId!" />
               </el-select>
             </el-form-item>
             <el-form-item label="客户类型">
@@ -93,38 +97,25 @@
 
           <div class="table-toolbar">
             <div class="selection-summary">
-              <span class="stat-pill">共 <b>{{ total }}</b> 条</span>
-              <span v-if="selectedRows.length" class="stat-pill is-active">已选 <b>{{ selectedRows.length }}</b></span>
+              <span class="stat-pill"
+                >共 <b>{{ total }}</b> 条</span
+              >
+              <span v-if="selectedRows.length" class="stat-pill is-active"
+                >已选 <b>{{ selectedRows.length }}</b></span
+              >
             </div>
             <div class="toolbar-actions">
-              <el-button
-                v-hasPermi="['callcenter:customer-assignment:assign']"
-                type="primary"
-                :disabled="!selectedRows.length"
-                @click="openAssign()"
-              >
+              <el-button v-hasPermi="['callcenter:customer-assignment:assign']" type="primary" :disabled="!selectedRows.length" @click="openAssign()">
                 分配选中{{ selectedRows.length ? `（${selectedRows.length}）` : '' }}
               </el-button>
-              <el-button
-                v-hasPermi="['callcenter:customer-assignment:assign']"
-                plain
-                :disabled="!total"
-                @click="openAssignAll"
-              >
+              <el-button v-hasPermi="['callcenter:customer-assignment:assign']" plain :disabled="!total" @click="openAssignAll">
                 平均分配筛选结果（{{ total }}）
               </el-button>
               <el-button circle :icon="Refresh" title="刷新列表" @click="loadCustomers" />
             </div>
           </div>
 
-          <el-table
-            v-loading="loading"
-            :data="rows"
-            class="assignment-table"
-            row-key="id"
-            stripe
-            @selection-change="selectedRows = $event"
-          >
+          <el-table v-loading="loading" :data="rows" class="assignment-table" row-key="id" stripe @selection-change="selectedRows = $event">
             <el-table-column type="selection" width="46" />
             <el-table-column label="客户" min-width="140">
               <template #default="{ row }">
@@ -200,19 +191,13 @@
           <el-tag>{{ assignDrawer.form.selectAll ? `当前筛选结果 ${total} 个` : `${assignDrawer.form.customerIds.length} 个客户` }}</el-tag>
         </el-form-item>
         <el-form-item label="分配方式" required>
-          <el-radio-group v-model="assignDrawer.form.allocationMode" @change="assignDrawer.form.agentId = undefined">
+          <el-radio-group v-model="assignDrawer.form.allocationMode" @change="handleAllocationModeChange">
             <el-radio-button value="EVEN">组内平均分配</el-radio-button>
             <el-radio-button value="SPECIFIED_AGENT">指定坐席</el-radio-button>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="技能组" required>
-          <el-select
-            v-model="assignDrawer.form.skillGroupId"
-            filterable
-            class="w-full"
-            placeholder="请选择技能组"
-            @change="assignDrawer.form.agentId = undefined"
-          >
+          <el-select v-model="assignDrawer.form.skillGroupId" filterable class="w-full" placeholder="请选择技能组" @change="handleSkillGroupChange">
             <el-option v-for="group in enabledGroups" :key="group.id" :label="group.groupName" :value="group.id" />
           </el-select>
         </el-form-item>
@@ -224,17 +209,38 @@
             :disabled="!assignDrawer.form.skillGroupId"
             placeholder="请选择具体坐席"
           >
-            <el-option
-              v-for="agent in availableAgents"
-              :key="agent.id"
-              :label="`${agent.agentName}（${agent.agentCode}）`"
-              :value="agent.id"
-            />
+            <el-option v-for="agent in availableAgents" :key="agent.id" :label="`${agent.agentName}（${agent.agentCode}）`" :value="agent.id" />
           </el-select>
         </el-form-item>
-        <el-form-item v-else label="分配预览">
-          <el-alert :closable="false" :type="availableAgents.length ? 'success' : 'warning'" :title="allocationPreview" show-icon />
-        </el-form-item>
+        <template v-else>
+          <el-form-item label="参与坐席" required>
+            <div class="agent-selector">
+              <div class="agent-selector-toolbar">
+                <span>仅选择本次实际参与资料分配的坐席</span>
+                <div>
+                  <el-button link type="primary" :disabled="!availableAgents.length" @click="selectAllAvailableAgents">全选有效坐席</el-button>
+                  <el-button link :disabled="!assignDrawer.form.agentIds?.length" @click="assignDrawer.form.agentIds = []">清空</el-button>
+                </div>
+              </div>
+              <el-select
+                v-model="assignDrawer.form.agentIds"
+                multiple
+                collapse-tags
+                collapse-tags-tooltip
+                filterable
+                class="w-full"
+                :disabled="!assignDrawer.form.skillGroupId"
+                placeholder="请选择参与平均分配的坐席"
+              >
+                <el-option v-for="agent in availableAgents" :key="agent.id" :label="`${agent.agentName}（${agent.agentCode}）`" :value="agent.id" />
+              </el-select>
+              <div v-if="assignDrawer.form.skillGroupId && !availableAgents.length" class="agent-selector-empty">当前技能组没有启用的坐席</div>
+            </div>
+          </el-form-item>
+          <el-form-item label="分配预览">
+            <el-alert :closable="false" :type="selectedAllocationAgents.length ? 'success' : 'warning'" :title="allocationPreview" show-icon />
+          </el-form-item>
+        </template>
         <el-form-item label="客户类型"><el-input v-model="assignDrawer.form.customerType" /></el-form-item>
         <el-form-item label="来源渠道"><el-input v-model="assignDrawer.form.sourceChannel" /></el-form-item>
         <el-form-item label="标签"><el-input v-model="assignDrawer.form.tags" /></el-form-item>
@@ -301,14 +307,20 @@ const defaultAssign = (): CustomerAssignmentForm => ({
   tags: '',
   skillGroupId: undefined,
   agentId: undefined,
+  agentIds: [],
   remark: ''
 });
 const assignDrawer = reactive({ visible: false, loading: false, form: defaultAssign() });
 const assignmentTargetCount = computed(() => (assignDrawer.form.selectAll ? total.value : assignDrawer.form.customerIds.length));
+const selectedAllocationAgents = computed(() => {
+  const selectedIds = new Set((assignDrawer.form.agentIds || []).map(String));
+  return availableAgents.value.filter((agent) => selectedIds.has(String(agent.id)));
+});
 const allocationPreview = computed(() => {
   if (!assignDrawer.form.skillGroupId) return '选择技能组后可查看平均分配结果';
-  const agentCount = availableAgents.value.length;
-  if (!agentCount) return '当前技能组没有启用的坐席，无法平均分配';
+  const agentCount = selectedAllocationAgents.value.length;
+  if (!availableAgents.value.length) return '当前技能组没有启用的坐席，无法平均分配';
+  if (!agentCount) return '请选择参与本次平均分配的坐席，也可以一键全选';
   const minimum = Math.floor(assignmentTargetCount.value / agentCount);
   const remainder = assignmentTargetCount.value % agentCount;
   if (!remainder) return `${assignmentTargetCount.value} 条资料将平均分给 ${agentCount} 位坐席，每人 ${minimum} 条`;
@@ -391,12 +403,31 @@ const resetAssign = () => {
   assignDrawer.loading = false;
   assignDrawer.form = defaultAssign();
 };
+const handleAllocationModeChange = () => {
+  assignDrawer.form.agentId = undefined;
+  assignDrawer.form.agentIds = [];
+};
+const handleSkillGroupChange = () => {
+  assignDrawer.form.agentId = undefined;
+  assignDrawer.form.agentIds = [];
+};
+const selectAllAvailableAgents = () => {
+  assignDrawer.form.agentIds = availableAgents.value.map((agent) => agent.id);
+};
 const submitAssign = async () => {
   if (!selectedTaskId.value || !assignDrawer.form.skillGroupId) return ElMessage.warning('请选择技能组');
-  if (assignDrawer.form.allocationMode === 'EVEN' && !availableAgents.value.length) return ElMessage.warning('当前技能组没有启用的坐席');
+  if (assignDrawer.form.allocationMode === 'EVEN' && !selectedAllocationAgents.value.length) {
+    return ElMessage.warning('请选择参与平均分配的坐席');
+  }
   if (assignDrawer.form.allocationMode === 'SPECIFIED_AGENT' && !assignDrawer.form.agentId) return ElMessage.warning('请选择具体坐席');
   if (assignDrawer.form.agentId && !availableAgents.value.some((item) => `${item.id}` === `${assignDrawer.form.agentId}`)) {
     return ElMessage.warning('所选坐席不属于当前技能组');
+  }
+  if (
+    assignDrawer.form.allocationMode === 'EVEN' &&
+    (assignDrawer.form.agentIds || []).some((id) => !availableAgents.value.some((item) => `${item.id}` === `${id}`))
+  ) {
+    return ElMessage.warning('参与分配的坐席包含已停用或不属于当前技能组的坐席');
   }
   assignDrawer.loading = true;
   try {
@@ -714,6 +745,32 @@ onMounted(async () => {
 
 .assign-form {
   margin-top: 18px;
+}
+
+.agent-selector {
+  width: 100%;
+}
+
+.agent-selector-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.agent-selector-toolbar > div {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.agent-selector-empty {
+  margin-top: 6px;
+  color: #e6a23c;
+  font-size: 12px;
 }
 
 .w-full {

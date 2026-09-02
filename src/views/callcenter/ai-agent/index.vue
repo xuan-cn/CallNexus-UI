@@ -33,13 +33,7 @@
         ></el-table
       >
     </el-card>
-    <el-drawer
-      v-model="drawer"
-      :title="form.id ? '修改 AI 助手' : '新增 AI 助手'"
-      size="1080px"
-      class="ai-agent-edit-drawer"
-      destroy-on-close
-    >
+    <el-drawer v-model="drawer" :title="form.id ? '修改 AI 助手' : '新增 AI 助手'" size="1080px" class="ai-agent-edit-drawer" destroy-on-close>
       <el-form :model="form" label-width="120px" class="agent-edit-form">
         <el-tabs v-model="activeTab" class="agent-config-tabs">
           <el-tab-pane label="基础信息" name="basic">
@@ -110,12 +104,7 @@
               <div class="edit-section-title">绑定与回答策略</div>
               <el-form-item label="绑定知识库">
                 <el-select v-model="form.knowledgeBaseIds" multiple style="width: 100%">
-                  <el-option
-                    v-for="k in bases"
-                    :key="k.id"
-                    :label="`${k.knowledgeName}（${k.embeddingModelName || ''}）`"
-                    :value="k.id"
-                  />
+                  <el-option v-for="k in bases" :key="k.id" :label="`${k.knowledgeName}（${k.embeddingModelName || ''}）`" :value="k.id" />
                 </el-select>
               </el-form-item>
               <el-alert
@@ -163,7 +152,12 @@
               </el-form-item>
               <el-form-item v-if="form.faqLearningEnabled" label="目标知识库">
                 <el-select v-model="form.faqLearningKnowledgeBaseId" style="width: 100%" placeholder="选择审核通过后发布到的知识库">
-                  <el-option v-for="k in bases.filter((item) => form.knowledgeBaseIds.includes(item.id))" :key="k.id" :label="k.knowledgeName" :value="k.id" />
+                  <el-option
+                    v-for="k in bases.filter((item) => form.knowledgeBaseIds.includes(item.id))"
+                    :key="k.id"
+                    :label="k.knowledgeName"
+                    :value="k.id"
+                  />
                 </el-select>
               </el-form-item>
             </section>
@@ -192,9 +186,7 @@
               <el-form-item label="语音打断">
                 <div class="barge-in-setting">
                   <el-switch v-model="form.bargeInEnabled" active-text="允许用户在 AI 播报时插话" />
-                  <p class="field-hint">
-                    开启后播放与 ASR 并行；检测到用户说话会停止当前播放并取消该轮剩余 TTS。默认关闭，不影响现有半双工流程。
-                  </p>
+                  <p class="field-hint">开启后播放与 ASR 并行；检测到用户说话会停止当前播放并取消该轮剩余 TTS。默认关闭，不影响现有半双工流程。</p>
                 </div>
               </el-form-item>
               <template v-if="form.bargeInEnabled">
@@ -229,6 +221,50 @@
             </section>
           </el-tab-pane>
 
+          <el-tab-pane label="AI编排" name="workflow">
+            <el-alert v-if="!form.id" type="info" :closable="false" title="请先保存 AI 助手，再绑定已发布的 AI 编排。" />
+            <template v-else>
+              <section class="edit-section">
+                <div class="edit-section-title">场景编排</div>
+                <el-alert
+                  class="mb-4"
+                  type="info"
+                  :closable="false"
+                  title="IVR 和自动外呼仍选择 AI 助手；进入 AI 后按场景启动这里绑定的编排。未绑定时继续使用普通 AI 对话。"
+                />
+                <div v-for="scene in workflowScenes" :key="scene.value" class="workflow-binding-row">
+                  <div class="workflow-scene">
+                    <strong>{{ scene.label }}</strong
+                    ><span>{{ scene.description }}</span>
+                  </div>
+                  <el-select
+                    v-model="workflowBindingForms[scene.value].workflowVersionId"
+                    clearable
+                    filterable
+                    placeholder="使用普通 AI 对话"
+                    style="min-width: 280px"
+                  >
+                    <el-option
+                      v-for="item in workflowOptionsForScene(scene.value)"
+                      :key="item.publishedVersionId"
+                      :label="`${item.workflowName}（v${item.publishedVersionNo}）`"
+                      :value="item.publishedVersionId!"
+                    />
+                  </el-select>
+                  <el-select v-model="workflowBindingForms[scene.value].fallbackAction" style="width: 170px">
+                    <el-option label="失败后普通对话" value="DEFAULT_CONVERSATION" />
+                    <el-option label="失败后转人工" value="TRANSFER_AGENT" />
+                    <el-option label="失败后结束" value="END_CONVERSATION" />
+                  </el-select>
+                  <el-switch v-model="workflowBindingForms[scene.value].enabled" active-text="启用" />
+                  <el-button type="primary" plain :loading="workflowBindingSaving === scene.value" @click="saveWorkflowBinding(scene.value)"
+                    >保存</el-button
+                  >
+                </div>
+              </section>
+            </template>
+          </el-tab-pane>
+
           <el-tab-pane label="自动工单" name="ticket">
             <el-alert v-if="!form.id" type="info" :closable="false" title="请先保存 AI 助手，再配置自动工单策略和提示词。" />
             <template v-else>
@@ -240,75 +276,157 @@
                   class="mb-4"
                   :type="ticketPolicy.creationMode === 'AUTO_CREATE' ? 'warning' : 'info'"
                   :closable="false"
-                  :title="ticketPolicy.creationMode === 'AUTO_CREATE'
-                    ? '只有置信度、必填字段、客户号码和重复检查全部通过时才自动建单；其他情况进入人工审核。'
-                    : '通话结束后生成待人工审核草稿，不会自动创建正式工单。'"
+                  :title="
+                    ticketPolicy.creationMode === 'AUTO_CREATE'
+                      ? '只有置信度、必填字段、客户号码和重复检查全部通过时才自动建单；其他情况进入人工审核。'
+                      : '通话结束后生成待人工审核草稿，不会自动创建正式工单。'
+                  "
                 />
                 <el-row :gutter="16">
-                  <el-col :span="8"><el-form-item label="建单模式">
-                    <el-select v-model="ticketPolicy.creationMode" style="width: 100%">
-                      <el-option label="生成草稿，人工审核" value="DRAFT_REVIEW" />
-                      <el-option label="满足条件时自动建单" value="AUTO_CREATE" />
-                    </el-select>
-                  </el-form-item></el-col>
-                  <el-col :span="8"><el-form-item label="工单模板" required>
-                    <el-select v-model="ticketPolicy.ticketTemplateId" clearable filterable style="width: 100%" placeholder="选择用于字段提取的工单模板">
-                      <el-option v-for="item in ticketTemplates" :key="item.id" :label="item.templateName" :value="item.id!" />
-                    </el-select>
-                  </el-form-item></el-col>
-                  <el-col :span="8"><el-form-item label="生成时机">
-                    <el-select v-model="ticketPolicy.triggerTypes" multiple style="width: 100%">
-                      <el-option label="通话结束后" value="CALL_ENDED" /><el-option label="AI 转人工时" value="TRANSFER_TO_AGENT" />
-                    </el-select>
-                  </el-form-item></el-col>
-                  <el-col :span="8"><el-form-item label="置信度阈值"><el-input-number v-model="ticketPolicy.confidenceThreshold" :min="0" :max="1" :step="0.05" style="width: 100%" /></el-form-item></el-col>
-                  <el-col :span="8"><el-form-item label="必填项缺失"><el-select v-model="ticketPolicy.missingRequiredAction" style="width: 100%"><el-option label="保留草稿并标记缺失" value="KEEP_DRAFT" /><el-option label="不生成草稿" value="REJECT_DRAFT" /></el-select></el-form-item></el-col>
-                  <el-col :span="8"><el-form-item label="重复工单"><el-select v-model="ticketPolicy.duplicatePolicy" style="width: 100%"><el-option label="转人工审核" value="MERGE_PENDING" /><el-option label="允许重复" value="ALLOW" /><el-option label="阻止自动建单" value="SKIP" /></el-select></el-form-item></el-col>
+                  <el-col :span="8"
+                    ><el-form-item label="建单模式">
+                      <el-select v-model="ticketPolicy.creationMode" style="width: 100%">
+                        <el-option label="生成草稿，人工审核" value="DRAFT_REVIEW" />
+                        <el-option label="满足条件时自动建单" value="AUTO_CREATE" />
+                      </el-select> </el-form-item
+                  ></el-col>
+                  <el-col :span="8"
+                    ><el-form-item label="工单模板" required>
+                      <el-select
+                        v-model="ticketPolicy.ticketTemplateId"
+                        clearable
+                        filterable
+                        style="width: 100%"
+                        placeholder="选择用于字段提取的工单模板"
+                      >
+                        <el-option v-for="item in ticketTemplates" :key="item.id" :label="item.templateName" :value="item.id!" />
+                      </el-select> </el-form-item
+                  ></el-col>
+                  <el-col :span="8"
+                    ><el-form-item label="生成时机">
+                      <el-select v-model="ticketPolicy.triggerTypes" multiple style="width: 100%">
+                        <el-option label="通话结束后" value="CALL_ENDED" /><el-option label="AI 转人工时" value="TRANSFER_TO_AGENT" />
+                      </el-select> </el-form-item
+                  ></el-col>
+                  <el-col :span="8"
+                    ><el-form-item label="置信度阈值"
+                      ><el-input-number v-model="ticketPolicy.confidenceThreshold" :min="0" :max="1" :step="0.05" style="width: 100%" /></el-form-item
+                  ></el-col>
+                  <el-col :span="8"
+                    ><el-form-item label="必填项缺失"
+                      ><el-select v-model="ticketPolicy.missingRequiredAction" style="width: 100%"
+                        ><el-option label="保留草稿并标记缺失" value="KEEP_DRAFT" /><el-option
+                          label="不生成草稿"
+                          value="REJECT_DRAFT" /></el-select></el-form-item
+                  ></el-col>
+                  <el-col :span="8"
+                    ><el-form-item label="重复工单"
+                      ><el-select v-model="ticketPolicy.duplicatePolicy" style="width: 100%"
+                        ><el-option label="转人工审核" value="MERGE_PENDING" /><el-option label="允许重复" value="ALLOW" /><el-option
+                          label="阻止自动建单"
+                          value="SKIP" /></el-select></el-form-item
+                  ></el-col>
                   <template v-if="ticketPolicy.creationMode === 'AUTO_CREATE'">
-                    <el-col :span="8"><el-form-item label="重复判断窗口（小时）"><el-input-number v-model="ticketPolicy.duplicateWindowHours" :min="1" :max="720" style="width: 100%" /></el-form-item></el-col>
-                    <el-col :span="8"><el-form-item label="建单后动作"><el-select v-model="ticketPolicy.afterCreateAction" style="width: 100%"><el-option label="仅创建工单" value="CREATE_ONLY" /><el-option label="提交工作流" value="SUBMIT" /><el-option label="直接办结" value="RESOLVE" /></el-select></el-form-item></el-col>
-                    <el-col :span="8"><el-form-item label="默认归属技能组"><el-select v-model="ticketPolicy.defaultSkillGroupId" clearable filterable style="width: 100%" placeholder="不选择则保持未分配"><el-option v-for="group in ticketSkillGroups" :key="group.id" :label="group.groupName" :value="group.id" /></el-select></el-form-item></el-col>
+                    <el-col :span="8"
+                      ><el-form-item label="重复判断窗口（小时）"
+                        ><el-input-number v-model="ticketPolicy.duplicateWindowHours" :min="1" :max="720" style="width: 100%" /></el-form-item
+                    ></el-col>
+                    <el-col :span="8"
+                      ><el-form-item label="建单后动作"
+                        ><el-select v-model="ticketPolicy.afterCreateAction" style="width: 100%"
+                          ><el-option label="仅创建工单" value="CREATE_ONLY" /><el-option label="提交工作流" value="SUBMIT" /><el-option
+                            label="直接办结"
+                            value="RESOLVE" /></el-select></el-form-item
+                    ></el-col>
+                    <el-col :span="8"
+                      ><el-form-item label="默认归属技能组"
+                        ><el-select
+                          v-model="ticketPolicy.defaultSkillGroupId"
+                          clearable
+                          filterable
+                          style="width: 100%"
+                          placeholder="不选择则保持未分配"
+                          ><el-option
+                            v-for="group in ticketSkillGroups"
+                            :key="group.id"
+                            :label="group.groupName"
+                            :value="group.id" /></el-select></el-form-item
+                    ></el-col>
                   </template>
                 </el-row>
                 <div class="section-actions"><el-button type="primary" :loading="ticketSaving" @click="saveTicketPolicy">保存策略</el-button></div>
               </section>
 
               <section class="edit-section">
-                <div class="edit-section-title ticket-section-title"><span>业务提示词</span><el-tag :type="ticketPrompt.status === 'PUBLISHED' ? 'success' : ticketPrompt.status === 'DRAFT' ? 'warning' : 'info'">{{ promptStatusLabel(ticketPrompt.status) }}</el-tag></div>
-                <el-form-item label="版本说明"><el-input v-model="promptVersionName" maxlength="128" placeholder="例如：售后工单提取规则 v1" /></el-form-item>
-                <el-form-item label="完整提示词"><div class="prompt-editor-wrap">
-                  <el-input v-model="ticketPrompt.promptContent" type="textarea" :rows="20" maxlength="30000" show-word-limit />
-                  <div class="prompt-variable-list">
-                    <span class="field-hint">可用变量（点击插入）：</span>
-                    <el-tooltip
-                      v-for="variable in ticketPrompt.availableVariables"
-                      :key="variable"
-                      :content="promptVariableDescriptions[variable] || variable"
-                      placement="top"
-                    >
-                      <el-tag class="variable-tag" :type="ticketPrompt.requiredVariables.includes(variable) ? 'danger' : 'info'" @click="insertPromptVariable(variable)">
-                        {{ formatPromptVariable(variable) }}{{ ticketPrompt.requiredVariables.includes(variable) ? ' 必需' : '' }}
-                      </el-tag>
-                    </el-tooltip>
-                  </div>
-                  <div class="prompt-variable-help">
-                    <div v-for="variable in ticketPrompt.availableVariables" :key="`${variable}-help`" class="prompt-variable-help-item">
-                      <code>{{ formatPromptVariable(variable) }}</code>
-                      <span>{{ promptVariableDescriptions[variable] || '-' }}</span>
-                      <el-tag v-if="ticketPrompt.requiredVariables.includes(variable)" size="small" type="danger">必需</el-tag>
+                <div class="edit-section-title ticket-section-title">
+                  <span>业务提示词</span
+                  ><el-tag :type="ticketPrompt.status === 'PUBLISHED' ? 'success' : ticketPrompt.status === 'DRAFT' ? 'warning' : 'info'">{{
+                    promptStatusLabel(ticketPrompt.status)
+                  }}</el-tag>
+                </div>
+                <el-form-item label="版本说明"
+                  ><el-input v-model="promptVersionName" maxlength="128" placeholder="例如：售后工单提取规则 v1"
+                /></el-form-item>
+                <el-form-item label="完整提示词"
+                  ><div class="prompt-editor-wrap">
+                    <el-input v-model="ticketPrompt.promptContent" type="textarea" :rows="20" maxlength="30000" show-word-limit />
+                    <div class="prompt-variable-list">
+                      <span class="field-hint">可用变量（点击插入）：</span>
+                      <el-tooltip
+                        v-for="variable in ticketPrompt.availableVariables"
+                        :key="variable"
+                        :content="promptVariableDescriptions[variable] || variable"
+                        placement="top"
+                      >
+                        <el-tag
+                          class="variable-tag"
+                          :type="ticketPrompt.requiredVariables.includes(variable) ? 'danger' : 'info'"
+                          @click="insertPromptVariable(variable)"
+                        >
+                          {{ formatPromptVariable(variable) }}{{ ticketPrompt.requiredVariables.includes(variable) ? ' 必需' : '' }}
+                        </el-tag>
+                      </el-tooltip>
                     </div>
-                  </div>
-                </div></el-form-item>
-                <div class="section-actions"><el-button @click="restoreTicketPrompt">恢复默认</el-button><el-button @click="validateTicketPrompt">校验与预览</el-button><el-button type="primary" plain :loading="promptSaving" @click="saveTicketPrompt">保存草稿</el-button><el-button type="success" :loading="promptPublishing" @click="publishTicketPrompt">发布版本</el-button></div>
+                    <div class="prompt-variable-help">
+                      <div v-for="variable in ticketPrompt.availableVariables" :key="`${variable}-help`" class="prompt-variable-help-item">
+                        <code>{{ formatPromptVariable(variable) }}</code>
+                        <span>{{ promptVariableDescriptions[variable] || '-' }}</span>
+                        <el-tag v-if="ticketPrompt.requiredVariables.includes(variable)" size="small" type="danger">必需</el-tag>
+                      </div>
+                    </div>
+                  </div></el-form-item
+                >
+                <div class="section-actions">
+                  <el-button @click="restoreTicketPrompt">恢复默认</el-button><el-button @click="validateTicketPrompt">校验与预览</el-button
+                  ><el-button type="primary" plain :loading="promptSaving" @click="saveTicketPrompt">保存草稿</el-button
+                  ><el-button type="success" :loading="promptPublishing" @click="publishTicketPrompt">发布版本</el-button>
+                </div>
               </section>
 
               <section class="edit-section">
                 <div class="edit-section-title">系统输出协议（只读）</div>
-                <el-alert class="mb-3" type="warning" :closable="false" title="业务提示词可以修改；JSON Schema 与安全约束由系统固定追加，前端仅展示，不能编辑。" />
+                <el-alert
+                  class="mb-3"
+                  type="warning"
+                  :closable="false"
+                  title="业务提示词可以修改；JSON Schema 与安全约束由系统固定追加，前端仅展示，不能编辑。"
+                />
                 <el-collapse>
-                  <el-collapse-item title="JSON Schema" name="schema"><pre class="readonly-protocol">{{ ticketPrompt.jsonSchema }}</pre></el-collapse-item>
-                  <el-collapse-item title="安全字段约束" name="safety"><pre class="readonly-protocol">{{ ticketPrompt.safetyConstraints }}</pre></el-collapse-item>
-                  <el-collapse-item title="历史版本" name="versions"><el-table :data="promptVersions" size="small" max-height="260"><el-table-column label="版本" prop="versionNo" width="80" /><el-table-column label="说明" prop="versionName" min-width="180" /><el-table-column label="状态" width="100"><template #default="{ row }">{{ promptStatusLabel(row.status) }}</template></el-table-column><el-table-column label="发布时间" prop="publishedAt" min-width="170" /></el-table></el-collapse-item>
+                  <el-collapse-item title="JSON Schema" name="schema">
+                    <pre class="readonly-protocol">{{ ticketPrompt.jsonSchema }}</pre>
+                  </el-collapse-item>
+                  <el-collapse-item title="安全字段约束" name="safety">
+                    <pre class="readonly-protocol">{{ ticketPrompt.safetyConstraints }}</pre>
+                  </el-collapse-item>
+                  <el-collapse-item title="历史版本" name="versions"
+                    ><el-table :data="promptVersions" size="small" max-height="260"
+                      ><el-table-column label="版本" prop="versionNo" width="80" /><el-table-column
+                        label="说明"
+                        prop="versionName"
+                        min-width="180" /><el-table-column label="状态" width="100"
+                        ><template #default="{ row }">{{ promptStatusLabel(row.status) }}</template></el-table-column
+                      ><el-table-column label="发布时间" prop="publishedAt" min-width="170" /></el-table
+                  ></el-collapse-item>
                 </el-collapse>
               </section>
             </template>
@@ -345,11 +463,22 @@ import {
   updateAiAgent,
   validateAiTicketPrompt
 } from '@/api/callcenter/ai-knowledge';
-import type { AiAgentForm, AiAgentVO, AiModelVO, AiTicketPolicyVO, AiTicketPromptVO, AiTicketPromptVersionVO, Id, KnowledgeBaseVO } from '@/api/callcenter/ai-knowledge/types';
+import type {
+  AiAgentForm,
+  AiAgentVO,
+  AiModelVO,
+  AiTicketPolicyVO,
+  AiTicketPromptVO,
+  AiTicketPromptVersionVO,
+  Id,
+  KnowledgeBaseVO
+} from '@/api/callcenter/ai-knowledge/types';
 import { listFormTemplates } from '@/api/callcenter/form-template';
 import type { FormTemplate } from '@/api/callcenter/form-template/types';
 import { listSkillGroups } from '@/api/callcenter/skill-group';
 import type { SkillGroupVO } from '@/api/callcenter/skill-group/types';
+import { deleteAiAgentWorkflowBinding, listAiAgentWorkflowBindings, listAiWorkflows, saveAiAgentWorkflowBinding } from '@/api/callcenter/ai-workflow';
+import type { AiAgentWorkflowBindingForm, AiWorkflowScene, AiWorkflowVO } from '@/api/callcenter/ai-workflow/types';
 import AiAgentTestDialog from './AiAgentTestDialog.vue';
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const agents = ref<AiAgentVO[]>([]),
@@ -368,6 +497,25 @@ const promptVersionName = ref('');
 const promptVersions = ref<AiTicketPromptVersionVO[]>([]);
 const promptPreviewVisible = ref(false);
 const promptPreview = ref('');
+type BindingScene = Exclude<AiWorkflowScene, 'COMMON'>;
+const workflowOptions = ref<AiWorkflowVO[]>([]);
+const workflowBindingSaving = ref<BindingScene>();
+const workflowScenes: Array<{ label: string; value: BindingScene; description: string }> = [
+  { label: '呼入语音', value: 'VOICE_INBOUND', description: 'DID/IVR 进入 AI 助手时使用' },
+  { label: '外呼语音', value: 'VOICE_OUTBOUND', description: '自动外呼客户接听后使用' },
+  { label: '在线客服', value: 'ONLINE_CHAT', description: 'AI 在线接待会话使用' }
+];
+const emptyWorkflowBinding = (sceneType: BindingScene): AiAgentWorkflowBindingForm => ({
+  sceneType,
+  workflowVersionId: '',
+  fallbackAction: 'DEFAULT_CONVERSATION',
+  enabled: true
+});
+const workflowBindingForms = reactive<Record<BindingScene, AiAgentWorkflowBindingForm>>({
+  VOICE_INBOUND: emptyWorkflowBinding('VOICE_INBOUND'),
+  VOICE_OUTBOUND: emptyWorkflowBinding('VOICE_OUTBOUND'),
+  ONLINE_CHAT: emptyWorkflowBinding('ONLINE_CHAT')
+});
 const ticketPolicyDefaults = (agentId: Id = ''): AiTicketPolicyVO => ({
   aiAgentId: agentId,
   enabled: false,
@@ -444,10 +592,11 @@ const numericValue = (value: unknown, fallback: number) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 const load = async () => {
-  const [a, m, k] = await Promise.all([listAiAgents(), listAiModels('CHAT'), listKnowledgeBases()]);
+  const [a, m, k, w] = await Promise.all([listAiAgents(), listAiModels('CHAT'), listKnowledgeBases(), listAiWorkflows()]);
   agents.value = a.data || [];
   chatModels.value = m.data || [];
   bases.value = (k.data || []).filter((item) => item.enabled);
+  workflowOptions.value = (w.data || []).filter((item) => item.enabled && item.publishedVersionId);
 };
 const edit = async (row?: AiAgentVO) => {
   activeTab.value = 'basic';
@@ -469,7 +618,37 @@ const edit = async (row?: AiAgentVO) => {
   ticketPrompt.value = ticketPromptDefaults();
   promptVersions.value = [];
   promptVersionName.value = '';
-  if (row?.id) await loadTicketConfiguration(row.id);
+  resetWorkflowBindings();
+  if (row?.id) await Promise.all([loadTicketConfiguration(row.id), loadWorkflowBindings(row.id)]);
+};
+const resetWorkflowBindings = () =>
+  workflowScenes.forEach((scene) => Object.assign(workflowBindingForms[scene.value], emptyWorkflowBinding(scene.value)));
+const loadWorkflowBindings = async (agentId: Id) => {
+  resetWorkflowBindings();
+  const bindings = (await listAiAgentWorkflowBindings(agentId)).data || [];
+  bindings.forEach((binding) =>
+    Object.assign(workflowBindingForms[binding.sceneType], {
+      sceneType: binding.sceneType,
+      workflowVersionId: binding.workflowVersionId,
+      fallbackAction: binding.fallbackAction,
+      enabled: binding.enabled
+    })
+  );
+};
+const workflowOptionsForScene = (scene: BindingScene) =>
+  workflowOptions.value.filter((item) => item.sceneType === 'COMMON' || item.sceneType === scene);
+const saveWorkflowBinding = async (scene: BindingScene) => {
+  if (!form.value.id) return;
+  workflowBindingSaving.value = scene;
+  try {
+    const binding = workflowBindingForms[scene];
+    if (binding.workflowVersionId) await saveAiAgentWorkflowBinding(form.value.id, binding);
+    else await deleteAiAgentWorkflowBinding(form.value.id, scene);
+    proxy?.$modal.msgSuccess(binding.workflowVersionId ? 'AI 编排绑定已保存' : '已恢复普通 AI 对话');
+    await loadWorkflowBindings(form.value.id);
+  } finally {
+    workflowBindingSaving.value = undefined;
+  }
 };
 const loadTicketConfiguration = async (agentId: Id) => {
   const [policyResult, promptResult, versionsResult, templatesResult, skillGroupsResult] = await Promise.all([
@@ -511,7 +690,10 @@ const saveTicketPrompt = async () => {
 };
 const validateTicketPrompt = async () => {
   if (!form.value.id) return;
-  const result = await validateAiTicketPrompt(form.value.id, { promptContent: ticketPrompt.value.promptContent, versionName: promptVersionName.value });
+  const result = await validateAiTicketPrompt(form.value.id, {
+    promptContent: ticketPrompt.value.promptContent,
+    versionName: promptVersionName.value
+  });
   if (!result.data.valid) {
     proxy?.$modal.msgError(result.data.errors.join('；'));
     return;
@@ -543,7 +725,8 @@ const insertPromptVariable = (variable: string) => {
   ticketPrompt.value.promptContent = `${ticketPrompt.value.promptContent}${ticketPrompt.value.promptContent.endsWith('\n') ? '' : '\n'}${token}`;
 };
 const formatPromptVariable = (variable: string) => `{{${variable}}}`;
-const promptStatusLabel = (status: string) => ({ DEFAULT: '系统默认', DRAFT: '未发布草稿', PUBLISHED: '已发布', ARCHIVED: '历史版本' })[status] || status;
+const promptStatusLabel = (status: string) =>
+  ({ DEFAULT: '系统默认', DRAFT: '未发布草稿', PUBLISHED: '已发布', ARCHIVED: '历史版本' })[status] || status;
 const openTest = (row: AiAgentVO) => {
   testAgent.value = row;
   testVisible.value = true;
@@ -646,6 +829,30 @@ onMounted(load);
   line-height: 1.65;
 }
 
+.workflow-binding-row {
+  display: grid;
+  grid-template-columns: 180px minmax(260px, 1fr) 170px 90px 72px;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid #e8eef6;
+}
+
+.workflow-binding-row:last-child {
+  border-bottom: 0;
+}
+
+.workflow-scene {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.workflow-scene span {
+  color: #7b8798;
+  font-size: 12px;
+}
+
 .ticket-section-title,
 .section-actions,
 .prompt-variable-list {
@@ -719,7 +926,9 @@ onMounted(load);
   border-radius: 8px;
   background: #f7f9fc;
   color: #44546a;
-  font: 12px/1.65 Consolas, monospace;
+  font:
+    12px/1.65 Consolas,
+    monospace;
   white-space: pre-wrap;
 }
 </style>

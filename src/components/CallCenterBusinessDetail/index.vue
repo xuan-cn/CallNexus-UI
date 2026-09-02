@@ -125,22 +125,107 @@
                     {{ assistDetail.ticketDraft.status === 'CREATED' ? '已建单' : '待确认' }}
                   </el-tag>
                 </div>
-                <p>{{ assistDetail.ticketDraft.summary || 'AI 正在根据当前对话补充工单摘要。' }}</p>
+                <p v-if="!ticketDraftEditing">{{ assistDetail.ticketDraft.summary || 'AI 正在根据当前对话补充工单摘要。' }}</p>
                 <div class="live-ticket-meta">
                   <span>置信度 {{ Math.round(Number(assistDetail.ticketDraft.confidence || 0) * 100) }}%</span>
                   <span v-if="assistDetail.ticketDraft.missingFields?.length" class="live-ticket-missing">
-                    缺少字段：{{ assistDetail.ticketDraft.missingFields.join('、') }}
+                    缺少字段：{{ draftMissingFieldNames.join('、') }}
                   </span>
                   <span v-if="assistDetail.ticketDraft.formalTicketId">工单 ID：{{ assistDetail.ticketDraft.formalTicketId }}</span>
                 </div>
+                <el-collapse-transition>
+                  <div v-if="ticketDraftEditing && ticketDraftForm" v-loading="ticketDraftTemplateLoading" class="live-ticket-editor">
+                    <el-alert
+                      v-if="draftLocalMissingFields.length"
+                      type="warning"
+                      :closable="false"
+                      :title="`请补齐必填字段：${draftLocalMissingFieldNames.join('、')}`"
+                    />
+                    <el-form label-position="top">
+                      <el-form-item label="工单标题" required>
+                        <el-input v-model="ticketDraftForm.title" maxlength="256" placeholder="请输入工单标题" />
+                      </el-form-item>
+                      <el-form-item label="问题摘要">
+                        <el-input v-model="ticketDraftForm.summary" type="textarea" :rows="3" maxlength="4000" show-word-limit />
+                      </el-form-item>
+                      <div class="live-ticket-template-title">
+                        <strong>工单字段</strong>
+                        <span>{{ ticketDraftTemplate?.templateName || '正在加载模板' }}</span>
+                      </div>
+                      <el-row :gutter="12">
+                        <el-col v-for="field in ticketDraftTemplate?.fields || []" :key="field.fieldCode" :span="field.layoutSpan || 12">
+                          <el-form-item :label="field.fieldName" :required="field.required">
+                            <el-input
+                              v-if="field.fieldType === 'INPUT'"
+                              v-model="ticketDraftForm.formData[field.fieldCode]"
+                              :placeholder="field.placeholder"
+                            />
+                            <el-input
+                              v-else-if="field.fieldType === 'TEXTAREA'"
+                              v-model="ticketDraftForm.formData[field.fieldCode]"
+                              type="textarea"
+                              :rows="3"
+                              :placeholder="field.placeholder"
+                            />
+                            <el-input-number
+                              v-else-if="field.fieldType === 'NUMBER'"
+                              v-model="ticketDraftForm.formData[field.fieldCode]"
+                              class="w-full"
+                            />
+                            <file-upload
+                              v-else-if="field.fieldType === 'FILE'"
+                              v-model="ticketDraftForm.formData[field.fieldCode]"
+                              :limit="5"
+                              :file-size="20"
+                            />
+                            <el-date-picker
+                              v-else-if="field.fieldType === 'DATE' || field.fieldType === 'DATETIME'"
+                              v-model="ticketDraftForm.formData[field.fieldCode]"
+                              :type="field.fieldType === 'DATE' ? 'date' : 'datetime'"
+                              :value-format="field.fieldType === 'DATE' ? 'YYYY-MM-DD' : 'YYYY-MM-DD HH:mm:ss'"
+                              class="w-full"
+                            />
+                            <el-radio-group v-else-if="field.fieldType === 'RADIO'" v-model="ticketDraftForm.formData[field.fieldCode]">
+                              <el-radio v-for="option in field.options || []" :key="option.value" :value="option.value">{{ option.label }}</el-radio>
+                            </el-radio-group>
+                            <el-checkbox-group v-else-if="field.fieldType === 'CHECKBOX'" v-model="ticketDraftForm.formData[field.fieldCode]">
+                              <el-checkbox v-for="option in field.options || []" :key="option.value" :value="option.value">{{
+                                option.label
+                              }}</el-checkbox>
+                            </el-checkbox-group>
+                            <el-select
+                              v-else
+                              v-model="ticketDraftForm.formData[field.fieldCode]"
+                              :multiple="field.fieldType === 'MULTI_SELECT'"
+                              clearable
+                              filterable
+                              class="w-full"
+                            >
+                              <el-option v-for="option in field.options || []" :key="option.value" :label="option.label" :value="option.value" />
+                            </el-select>
+                          </el-form-item>
+                        </el-col>
+                      </el-row>
+                    </el-form>
+                  </div>
+                </el-collapse-transition>
                 <div v-if="assistDetail.ticketDraft.status !== 'CREATED'" class="live-ticket-actions">
-                  <span v-if="assistDetail.ticketDraft.missingFields?.length">请在草稿审核中补齐必填字段后建单</span>
-                  <el-button
-                    type="primary"
-                    :loading="ticketDraftApproving"
-                    :disabled="Boolean(assistDetail.ticketDraft.missingFields?.length)"
-                    @click="approveLiveTicketDraft"
-                  >确认建单</el-button>
+                  <span>{{ ticketDraftEditing ? '坐席修改的字段不会被后续 AI 增量更新覆盖' : '可直接编辑 AI 提取结果后创建工单' }}</span>
+                  <div v-if="!ticketDraftEditing">
+                    <el-button @click="beginTicketDraftEdit">编辑草稿</el-button>
+                    <el-button
+                      type="primary"
+                      :loading="ticketDraftApproving"
+                      :disabled="Boolean(assistDetail.ticketDraft.missingFields?.length)"
+                      @click="approveLiveTicketDraft"
+                      >确认建单</el-button
+                    >
+                  </div>
+                  <div v-else>
+                    <el-button @click="cancelTicketDraftEdit">取消</el-button>
+                    <el-button :loading="ticketDraftSaving" @click="saveLiveTicketDraft()">保存草稿</el-button>
+                    <el-button type="primary" :loading="ticketDraftApproving" @click="saveAndApproveLiveTicketDraft">保存并建单</el-button>
+                  </div>
                 </div>
               </div>
             </el-tab-pane>
@@ -282,16 +367,23 @@ import {
   updateCustomerPhone
 } from '@/api/callcenter/customer';
 import { ElDialog, ElDrawer, ElMessage, ElMessageBox } from 'element-plus';
-import { listFormTemplates } from '@/api/callcenter/form-template';
+import { getFormTemplate, listFormTemplates } from '@/api/callcenter/form-template';
 import { FormBusinessType, FormField, FormTemplate } from '@/api/callcenter/form-template/types';
 import { getTicket, TicketVO } from '@/api/callcenter/ticket';
 import { listCallRecords } from '@/api/callcenter/call-record';
 import { hangupCauseLabel } from '@/api/callcenter/call-record/display';
 import { CallDirection, CallRecordVO } from '@/api/callcenter/call-record/types';
 import { useAgentDialBus } from '@/composables/useAgentDial';
-import { approveAgentAssistTicketDraft, getAgentAssist, regenerateAgentAssistSuggestion, streamAgentAssist } from '@/api/callcenter/agent-assist';
+import {
+  approveAgentAssistTicketDraft,
+  getAgentAssist,
+  regenerateAgentAssistSuggestion,
+  streamAgentAssist,
+  updateAgentAssistTicketDraft
+} from '@/api/callcenter/agent-assist';
 import type { AgentAssistDetailVO, AgentAssistSuggestionVO } from '@/api/callcenter/agent-assist/types';
 import type { AiCallTranscriptSegmentVO } from '@/api/callcenter/ai-speech/types';
+import type { AiTicketDraftVO } from '@/api/callcenter/ai-ticket-draft';
 
 const props = defineProps<{ businessType: FormBusinessType; businessId?: string | number; businessCallId?: string }>();
 const visible = defineModel<boolean>({ default: false });
@@ -306,6 +398,11 @@ const activeTab = ref('followUp');
 const assistDetail = ref<AgentAssistDetailVO>();
 const assistConnected = ref(false);
 const ticketDraftApproving = ref(false);
+const ticketDraftSaving = ref(false);
+const ticketDraftEditing = ref(false);
+const ticketDraftForm = ref<AiTicketDraftVO>();
+const ticketDraftTemplate = ref<FormTemplate>();
+const ticketDraftTemplateLoading = ref(false);
 const selectedAssistSegmentId = ref<string | number>();
 const assistTranscriptRef = ref<HTMLElement>();
 const sidePanelScrolling = ref(false);
@@ -335,6 +432,16 @@ const selectedCustomerSegment = computed(() =>
 const selectedSuggestion = computed(() =>
   assistDetail.value?.suggestions.find((item) => String(item.transcriptSegmentId) === String(selectedAssistSegmentId.value))
 );
+const draftFieldName = (code: string) => ticketDraftTemplate.value?.fields.find((field) => field.fieldCode === code)?.fieldName || code;
+const draftMissingFieldNames = computed(() => (assistDetail.value?.ticketDraft?.missingFields || []).map(draftFieldName));
+const emptyDraftValue = (value: unknown) =>
+  value === null || value === undefined || (typeof value === 'string' && !value.trim()) || (Array.isArray(value) && !value.length);
+const draftLocalMissingFields = computed(() =>
+  (ticketDraftTemplate.value?.fields || [])
+    .filter((field) => field.required && emptyDraftValue(ticketDraftForm.value?.formData?.[field.fieldCode]))
+    .map((field) => field.fieldCode)
+);
+const draftLocalMissingFieldNames = computed(() => draftLocalMissingFields.value.map(draftFieldName));
 
 const assistSpeakerLabel = (speaker?: string) => ({ CUSTOMER: '客户', AGENT: '坐席', AI: 'AI' })[speaker || ''] || '通话方';
 const assistSourceLabel = (source?: string) => {
@@ -359,7 +466,14 @@ const loadAssist = async () => {
     assistDetail.value = undefined;
     return;
   }
-  assistDetail.value = (await getAgentAssist(businessCallId.value)).data;
+  const nextDetail = (await getAgentAssist(businessCallId.value)).data;
+  const previousDraftId = assistDetail.value?.ticketDraft?.id;
+  assistDetail.value = nextDetail;
+  const draft = nextDetail.ticketDraft;
+  if (draft?.ticketTemplateId != null) await loadTicketDraftTemplate(draft.ticketTemplateId);
+  if (!draft || draft.status === 'CREATED' || (ticketDraftEditing.value && String(previousDraftId) !== String(draft.id))) {
+    cancelTicketDraftEdit();
+  }
   chooseLatestCustomerSegment();
   await nextTick();
   assistTranscriptRef.value?.scrollTo({ top: assistTranscriptRef.value.scrollHeight, behavior: 'smooth' });
@@ -379,6 +493,89 @@ const regenerateSuggestion = async (suggestion: AgentAssistSuggestionVO) => {
   if (!businessCallId.value) return;
   await regenerateAgentAssistSuggestion(businessCallId.value, suggestion.id);
   await loadAssist();
+};
+
+const loadTicketDraftTemplate = async (templateId: string | number) => {
+  if (String(ticketDraftTemplate.value?.id) === String(templateId)) return;
+  ticketDraftTemplateLoading.value = true;
+  try {
+    ticketDraftTemplate.value = (await getFormTemplate(templateId)).data;
+  } finally {
+    ticketDraftTemplateLoading.value = false;
+  }
+};
+
+const cloneTicketDraft = (draft: AiTicketDraftVO): AiTicketDraftVO => ({
+  ...draft,
+  formData: JSON.parse(JSON.stringify(draft.formData || {}))
+});
+
+const normalizeDraftCollectionFields = () => {
+  if (!ticketDraftForm.value) return;
+  for (const field of ticketDraftTemplate.value?.fields || []) {
+    if (['CHECKBOX', 'MULTI_SELECT'].includes(field.fieldType) && !Array.isArray(ticketDraftForm.value.formData[field.fieldCode])) {
+      ticketDraftForm.value.formData[field.fieldCode] = [];
+    }
+  }
+};
+
+const beginTicketDraftEdit = async () => {
+  const draft = assistDetail.value?.ticketDraft;
+  if (!draft || draft.status === 'CREATED') return;
+  await loadTicketDraftTemplate(draft.ticketTemplateId);
+  ticketDraftForm.value = cloneTicketDraft(draft);
+  normalizeDraftCollectionFields();
+  ticketDraftEditing.value = true;
+};
+
+const cancelTicketDraftEdit = () => {
+  ticketDraftEditing.value = false;
+  ticketDraftForm.value = undefined;
+};
+
+const saveLiveTicketDraft = async (showMessage = true) => {
+  const draft = ticketDraftForm.value;
+  if (!draft || !businessCallId.value) return undefined;
+  if (!draft.title?.trim()) {
+    ElMessage.warning('请填写工单标题');
+    return undefined;
+  }
+  ticketDraftSaving.value = true;
+  try {
+    const response = await updateAgentAssistTicketDraft(businessCallId.value, draft.id, {
+      version: draft.version,
+      title: draft.title.trim(),
+      summary: draft.summary?.trim(),
+      formData: draft.formData
+    });
+    const saved = response.data;
+    if (assistDetail.value) assistDetail.value.ticketDraft = saved;
+    ticketDraftForm.value = cloneTicketDraft(saved);
+    normalizeDraftCollectionFields();
+    if (showMessage) ElMessage.success('工单草稿已保存');
+    return saved;
+  } finally {
+    ticketDraftSaving.value = false;
+  }
+};
+
+const saveAndApproveLiveTicketDraft = async () => {
+  if (draftLocalMissingFields.value.length) {
+    ElMessage.warning(`请先补齐必填字段：${draftLocalMissingFieldNames.value.join('、')}`);
+    return;
+  }
+  await ElMessageBox.confirm('确认保存当前内容并创建正式工单吗？', '确认建单', { type: 'warning' });
+  ticketDraftApproving.value = true;
+  try {
+    const saved = await saveLiveTicketDraft(false);
+    if (!saved || !businessCallId.value) return;
+    await approveAgentAssistTicketDraft(businessCallId.value, saved.id, saved.version);
+    ElMessage.success('正式工单已创建');
+    cancelTicketDraftEdit();
+    await Promise.all([loadAssist(), loadDetail()]);
+  } finally {
+    ticketDraftApproving.value = false;
+  }
 };
 
 const approveLiveTicketDraft = async () => {
@@ -603,6 +800,7 @@ const loadDetail = async () => {
 watch(visible, async (opened) => {
   if (!opened) {
     stopAssistStream();
+    cancelTicketDraftEdit();
     return;
   }
   await loadDetail();
@@ -842,6 +1040,54 @@ defineExpose({ reload: loadDetail });
   margin-top: 12px;
   padding-top: 10px;
   border-top: 1px solid #dce8f8;
+
+  > div {
+    display: flex;
+    gap: 8px;
+  }
+}
+
+.live-ticket-editor {
+  max-height: 520px;
+  margin-top: 12px;
+  padding: 14px;
+  overflow-y: auto;
+  border: 1px solid #dce8f8;
+  border-radius: 10px;
+  background: #fff;
+
+  :deep(.el-form-item) {
+    margin-bottom: 14px;
+  }
+
+  :deep(.el-form-item__label) {
+    color: #53637a;
+    font-size: 12px;
+  }
+}
+
+.live-ticket-template-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 0 12px;
+  padding-top: 12px;
+  border-top: 1px solid #edf1f6;
+
+  strong {
+    color: #27364d;
+    font-size: 13px;
+  }
+
+  span {
+    color: #8391a7;
+    font-size: 11px;
+  }
+}
+
+.w-full {
+  width: 100%;
 }
 
 .recommendation-title {
