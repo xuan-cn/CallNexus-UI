@@ -85,6 +85,7 @@ export interface CustomerAssignmentForm {
   tags?: string;
   skillGroupId?: string | number;
   agentId?: string | number;
+  agentIds?: Array<string | number>;
   allocationMode?: 'SPECIFIED_AGENT' | 'EVEN';
   remark?: string;
 }
