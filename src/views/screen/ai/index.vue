@@ -6,7 +6,10 @@
     :badge-tone="liveDataOk ? 'live' : loadFailed ? 'demo' : 'loading'"
     :switch-links="[{ label: text.switchHome, path: '/screen/home' }]"
   >
-    <div class="screen-page ai-page theme-exhibit" :class="{ 'is-bootstrapping': isBootstrapping }">
+    <div
+      class="screen-page ai-page theme-exhibit"
+      :class="{ 'is-bootstrapping': isBootstrapping, 'is-revealing': isRevealing }"
+    >
       <section class="ai-kpis screen-kpi-grid screen-kpi-grid-compact screen-kpi-grid-4">
         <article v-for="(item, index) in displayKpis" :key="`ai-kpi-${index}`" class="screen-kpi-card" :class="`is-tone-${index}`">
           <div class="screen-kpi-label">{{ item.label }}</div>
@@ -272,7 +275,10 @@ let latencyChart: echarts.ECharts | undefined;
 let refreshTimer: number | undefined;
 const liveDataOk = ref(false);
 const loadFailed = ref(false);
+const hasRevealed = ref(false);
+const isRevealing = ref(false);
 const isBootstrapping = computed(() => !liveDataOk.value && !loadFailed.value);
+let revealTimer: number | undefined;
 
 const RING_R = 52;
 const ringLength = 2 * Math.PI * RING_R;
@@ -311,7 +317,7 @@ const ensureChart = (el: HTMLDivElement | undefined, chart?: echarts.ECharts) =>
   return echarts.init(el);
 };
 
-const renderTrafficChart = () => {
+const renderTrafficChart = (withAnimation = false) => {
   trafficChart = ensureChart(trafficChartRef.value, trafficChart);
   if (!trafficChart) return;
   const maxVal = Math.max(
@@ -320,7 +326,9 @@ const renderTrafficChart = () => {
   );
   trafficChart.setOption(
     {
-      animation: false,
+      animation: withAnimation,
+      animationDuration: withAnimation ? 650 : 0,
+      animationEasing: 'cubicOut',
       color: ['#9b7bff', '#6ec8ff', '#3dd6a5'],
       tooltip: screenTooltip,
       legend: screenLegend,
@@ -372,13 +380,15 @@ const renderTrafficChart = () => {
   );
 };
 
-const renderLatencyChart = () => {
+const renderLatencyChart = (withAnimation = false) => {
   latencyChart = ensureChart(latencyChartRef.value, latencyChart);
   if (!latencyChart) return;
   const maxVal = Math.max(1, ...latencyTrend.value.map((item) => item.asr));
   latencyChart.setOption(
     {
-      animation: false,
+      animation: withAnimation,
+      animationDuration: withAnimation ? 550 : 0,
+      animationEasing: 'cubicOut',
       color: ['#9b7bff'],
       tooltip: screenTooltip,
       legend: screenLegend,
@@ -408,9 +418,20 @@ const renderLatencyChart = () => {
   );
 };
 
-const renderCharts = () => {
-  renderTrafficChart();
-  renderLatencyChart();
+const renderCharts = (withAnimation = false) => {
+  renderTrafficChart(withAnimation);
+  renderLatencyChart(withAnimation);
+};
+
+const triggerFirstReveal = () => {
+  if (hasRevealed.value) return false;
+  hasRevealed.value = true;
+  isRevealing.value = true;
+  if (revealTimer) window.clearTimeout(revealTimer);
+  revealTimer = window.setTimeout(() => {
+    isRevealing.value = false;
+  }, 700);
+  return true;
 };
 
 const applyDashboard = (data: AiScreenDashboard) => {
@@ -438,11 +459,12 @@ const loadDashboard = async () => {
     if (!payload || typeof payload !== 'object') {
       throw new Error('empty dashboard');
     }
+    const firstReveal = triggerFirstReveal();
     applyDashboard(payload as AiScreenDashboard);
     liveDataOk.value = true;
     loadFailed.value = false;
     nextTick(() => {
-      renderCharts();
+      renderCharts(firstReveal);
       requestAnimationFrame(handleResize);
     });
   } catch {
@@ -450,7 +472,7 @@ const loadDashboard = async () => {
     if (!liveDataOk.value) {
       loadFailed.value = true;
       nextTick(() => {
-        renderCharts();
+        renderCharts(false);
         requestAnimationFrame(handleResize);
       });
     }
@@ -471,6 +493,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize);
   if (refreshTimer) window.clearInterval(refreshTimer);
+  if (revealTimer) window.clearTimeout(revealTimer);
   trafficChart?.dispose();
   latencyChart?.dispose();
 });

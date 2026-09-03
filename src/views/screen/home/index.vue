@@ -6,7 +6,10 @@
     :badge-tone="liveDataOk ? 'live' : loadFailed ? 'demo' : 'loading'"
     :switch-links="[{ label: text.switchAi, path: '/screen/ai' }]"
   >
-    <div class="screen-page home-page theme-ops" :class="{ 'is-bootstrapping': isBootstrapping }">
+    <div
+      class="screen-page home-page theme-ops"
+      :class="{ 'is-bootstrapping': isBootstrapping, 'is-revealing': isRevealing }"
+    >
       <section class="home-kpis screen-kpi-grid screen-kpi-grid-compact screen-kpi-grid-4">
         <article v-for="(item, index) in displayKpis" :key="`home-kpi-${index}`" class="screen-kpi-card" :class="`is-tone-${index}`">
           <div class="screen-kpi-label">{{ item.label }}</div>
@@ -156,12 +159,13 @@
                 <span class="screen-skel-line is-long" />
                 <span class="screen-skel-line is-short" />
               </div>
-              <table v-else-if="liveFeed.length" class="screen-scroll-table">
+              <table v-else-if="liveFeed.length" class="screen-scroll-table home-feed-table">
                 <thead>
                   <tr>
                     <th>{{ text.thTime }}</th>
                     <th>{{ text.thType }}</th>
                     <th>{{ text.thPhone }}</th>
+                    <th>{{ text.thTarget }}</th>
                     <th>{{ text.thStatus }}</th>
                   </tr>
                 </thead>
@@ -170,6 +174,7 @@
                     <td>{{ row.time }}</td>
                     <td>{{ row.type }}</td>
                     <td>{{ row.phone }}</td>
+                    <td class="home-feed-target" :title="row.target">{{ row.target || '-' }}</td>
                     <td><span class="screen-tag" :class="row.tagClass">{{ row.status }}</span></td>
                   </tr>
                 </tbody>
@@ -262,7 +267,10 @@ let skillChart: echarts.ECharts | undefined;
 let refreshTimer: number | undefined;
 const liveDataOk = ref(false);
 const loadFailed = ref(false);
+const hasRevealed = ref(false);
+const isRevealing = ref(false);
 const isBootstrapping = computed(() => !liveDataOk.value && !loadFailed.value);
+let revealTimer: number | undefined;
 
 const RING_R = 52;
 const ringLength = 2 * Math.PI * RING_R;
@@ -288,7 +296,7 @@ const ensureChart = (el: HTMLDivElement | undefined, chart?: echarts.ECharts) =>
   return echarts.init(el);
 };
 
-const renderTrendChart = () => {
+const renderTrendChart = (withAnimation = false) => {
   trendChart = ensureChart(trendChartRef.value, trendChart);
   if (!trendChart) return;
 
@@ -304,7 +312,9 @@ const renderTrendChart = () => {
 
   trendChart.setOption(
     {
-      animation: false,
+      animation: withAnimation,
+      animationDuration: withAnimation ? 650 : 0,
+      animationEasing: 'cubicOut',
       color: ['#2ecbff', '#9b7bff', '#3dd6a5'],
       tooltip: screenTooltip,
       legend: screenLegend,
@@ -359,7 +369,7 @@ const renderTrendChart = () => {
   );
 };
 
-const renderSkillChart = () => {
+const renderSkillChart = (withAnimation = false) => {
   skillChart = ensureChart(skillChartRef.value, skillChart);
   if (!skillChart) return;
   if (!skillGroups.value.length) {
@@ -372,7 +382,9 @@ const renderSkillChart = () => {
 
   skillChart.setOption(
     {
-      animation: false,
+      animation: withAnimation,
+      animationDuration: withAnimation ? 550 : 0,
+      animationEasing: 'cubicOut',
       color: ['#2ecbff'],
       tooltip: {
         trigger: 'axis',
@@ -422,9 +434,20 @@ const renderSkillChart = () => {
   );
 };
 
-const renderCharts = () => {
-  renderTrendChart();
-  renderSkillChart();
+const renderCharts = (withAnimation = false) => {
+  renderTrendChart(withAnimation);
+  renderSkillChart(withAnimation);
+};
+
+const triggerFirstReveal = () => {
+  if (hasRevealed.value) return false;
+  hasRevealed.value = true;
+  isRevealing.value = true;
+  if (revealTimer) window.clearTimeout(revealTimer);
+  revealTimer = window.setTimeout(() => {
+    isRevealing.value = false;
+  }, 700);
+  return true;
 };
 
 const applyDashboard = (data: HomeScreenDashboard) => {
@@ -465,11 +488,12 @@ const loadDashboard = async () => {
     if (!payload || typeof payload !== 'object') {
       throw new Error('empty dashboard');
     }
+    const firstReveal = triggerFirstReveal();
     applyDashboard(payload as HomeScreenDashboard);
     liveDataOk.value = true;
     loadFailed.value = false;
     nextTick(() => {
-      renderCharts();
+      renderCharts(firstReveal);
       requestAnimationFrame(handleResize);
     });
   } catch {
@@ -477,7 +501,7 @@ const loadDashboard = async () => {
     if (!liveDataOk.value) {
       loadFailed.value = true;
       nextTick(() => {
-        renderCharts();
+        renderCharts(false);
         requestAnimationFrame(handleResize);
       });
     }
@@ -498,6 +522,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize);
   if (refreshTimer) window.clearInterval(refreshTimer);
+  if (revealTimer) window.clearTimeout(revealTimer);
   trendChart?.dispose();
   skillChart?.dispose();
 });
@@ -867,6 +892,36 @@ onBeforeUnmount(() => {
 
 .home-feed-wrap {
   min-height: 0;
+}
+
+.home-feed-table th:nth-child(1),
+.home-feed-table td:nth-child(1) {
+  width: 18%;
+  white-space: nowrap;
+}
+
+.home-feed-table th:nth-child(2),
+.home-feed-table td:nth-child(2) {
+  width: 12%;
+  white-space: nowrap;
+}
+
+.home-feed-table th:nth-child(4),
+.home-feed-table td:nth-child(4) {
+  width: 16%;
+}
+
+.home-feed-table th:nth-child(5),
+.home-feed-table td:nth-child(5) {
+  width: 16%;
+  white-space: nowrap;
+}
+
+.home-feed-target {
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .home-empty {

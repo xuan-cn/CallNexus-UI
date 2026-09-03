@@ -1247,3 +1247,49 @@
   );
   background-size: 200% 100%;
 }
+
+/* ---------- First data reveal ---------- */
+
+@keyframes screen-reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes screen-reveal-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.screen-page.is-revealing {
+  .screen-kpi-card {
+    animation: screen-reveal-up 0.42s ease both;
+  }
+
+  .screen-kpi-card:nth-child(1) { animation-delay: 0ms; }
+  .screen-kpi-card:nth-child(2) { animation-delay: 45ms; }
+  .screen-kpi-card:nth-child(3) { animation-delay: 90ms; }
+  .screen-kpi-card:nth-child(4) { animation-delay: 135ms; }
+
+  .screen-cols {
+    animation: screen-reveal-fade 0.48s ease both;
+    animation-delay: 100ms;
+  }
+
+  .screen-kpi-value,
+  .home-hero-inbound,
+  .home-rate-value,
+  .home-agent-num,
+  .ai-rate-value,
+  .ai-stat-value,
+  .ai-extra-value,
+  .ai-bar-num {
+    animation: screen-reveal-fade 0.36s ease both;
+    animation-delay: 160ms;
+  }
+}
