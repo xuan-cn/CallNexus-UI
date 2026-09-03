@@ -235,8 +235,7 @@
   border: 1px solid rgba(56, 160, 220, 0.18);
 
   background:
-
-    linear-gradient(160deg, rgba(10, 32, 68, 0.55) 0%, rgba(4, 14, 34, 0.78) 48%, rgba(6, 22, 48, 0.62) 100%);
+    linear-gradient(160deg, rgba(10, 32, 68, 0.92) 0%, rgba(4, 14, 34, 0.96) 48%, rgba(6, 22, 48, 0.94) 100%);
 
   backdrop-filter: blur(12px) saturate(1.2);
 
@@ -455,6 +454,8 @@
   position: relative;
 
   overflow: hidden;
+
+  min-height: 64px;
 
   padding: 11px 12px 11px 14px;
 
@@ -1135,4 +1136,114 @@
 .theme-ops .screen-scroll-table thead th,
 .theme-ops .screen-scroll-table th {
   background: #071828;
+}
+
+/* ---------- First-load skeleton ---------- */
+
+@keyframes screen-skel-shine {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+%screen-skel-shine {
+  color: transparent !important;
+  background: linear-gradient(
+    90deg,
+    rgba(80, 140, 200, 0.12) 20%,
+    rgba(140, 200, 255, 0.28) 50%,
+    rgba(80, 140, 200, 0.12) 80%
+  ) !important;
+  background-size: 200% 100% !important;
+  animation: screen-skel-shine 1.35s ease-in-out infinite;
+  border-radius: 4px;
+  text-shadow: none !important;
+  box-shadow: none !important;
+  min-width: 2.5em;
+  display: inline-block;
+}
+
+.screen-page.is-bootstrapping {
+  .screen-kpi-value,
+  .screen-kpi-extra,
+  .home-hero-inbound,
+  .home-rate-value,
+  .home-agent-num,
+  .home-hero-extra,
+  .ai-rate-value,
+  .ai-rate-sub,
+  .ai-stat-value,
+  .ai-bar-num,
+  .ai-bar-pct,
+  .ai-extra-value {
+    @extend %screen-skel-shine;
+  }
+
+  .screen-chart {
+    opacity: 0.22;
+    filter: saturate(0.4);
+  }
+
+  .home-target-fill,
+  .ai-bar-fill,
+  .ai-rate-progress,
+  .home-rate-progress {
+    opacity: 0.15 !important;
+  }
+}
+
+.screen-skel-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+  padding: 8px 4px;
+  box-sizing: border-box;
+}
+
+.screen-skel-line {
+  height: 12px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    rgba(80, 140, 200, 0.1) 20%,
+    rgba(140, 200, 255, 0.22) 50%,
+    rgba(80, 140, 200, 0.1) 80%
+  );
+  background-size: 200% 100%;
+  animation: screen-skel-shine 1.35s ease-in-out infinite;
+}
+
+.screen-skel-line.is-short { width: 42%; }
+.screen-skel-line.is-mid { width: 68%; }
+.screen-skel-line.is-long { width: 88%; }
+
+.theme-exhibit.screen-page.is-bootstrapping {
+  .screen-kpi-value,
+  .screen-kpi-extra,
+  .ai-rate-value,
+  .ai-rate-sub,
+  .ai-stat-value,
+  .ai-bar-num,
+  .ai-bar-pct,
+  .ai-extra-value {
+    background: linear-gradient(
+      90deg,
+      rgba(120, 100, 200, 0.14) 20%,
+      rgba(180, 160, 255, 0.3) 50%,
+      rgba(120, 100, 200, 0.14) 80%
+    ) !important;
+    background-size: 200% 100% !important;
+  }
+}
+
+.theme-exhibit .screen-skel-line {
+  background: linear-gradient(
+    90deg,
+    rgba(120, 100, 200, 0.12) 20%,
+    rgba(180, 160, 255, 0.26) 50%,
+    rgba(120, 100, 200, 0.12) 80%
+  );
+  background-size: 200% 100%;
 }

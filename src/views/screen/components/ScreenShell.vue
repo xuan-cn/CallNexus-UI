@@ -20,7 +20,7 @@
       </div>
       <div class="screen-header-side screen-header-left">
         <span class="screen-date">{{ dateText }}</span>
-        <span class="screen-badge" :class="{ 'is-live': badgeTone === 'live' }">{{ resolvedBadge }}</span>
+        <span class="screen-badge" :class="badgeClass">{{ resolvedBadge }}</span>
         <span
           v-for="link in resolvedSwitches"
           :key="link.path"
@@ -71,7 +71,7 @@ const props = defineProps<{
   subtitle?: string;
   footerText?: string;
   badgeText?: string;
-  badgeTone?: 'demo' | 'live';
+  badgeTone?: 'demo' | 'live' | 'loading';
   switchTo?: { label: string; path: string };
   switchLinks?: { label: string; path: string }[];
 }>();
@@ -89,9 +89,20 @@ const refreshTime = ref('');
 const isFullscreen = ref(false);
 const screenfullEnabled = screenfull.isEnabled;
 
-const demoBadgeText = '\u6f14\u793a\u6570\u636e';
+const loadingBadgeText = '\u52a0\u8f7d\u4e2d';
 const liveBadgeText = '\u5b9e\u65f6\u6570\u636e';
-const resolvedBadge = computed(() => props.badgeText || (props.badgeTone === 'live' ? liveBadgeText : demoBadgeText));
+const failBadgeText = '\u6570\u636e\u5f02\u5e38';
+const resolvedBadge = computed(() => {
+  if (props.badgeText) return props.badgeText;
+  if (props.badgeTone === 'live') return liveBadgeText;
+  if (props.badgeTone === 'demo') return failBadgeText;
+  if (props.badgeTone === 'loading') return loadingBadgeText;
+  return loadingBadgeText;
+});
+const badgeClass = computed(() => ({
+  'is-live': props.badgeTone === 'live',
+  'is-loading': !props.badgeTone || props.badgeTone === 'loading'
+}));
 const exitFullscreenText = '\u9000\u51fa\u5168\u5c4f';
 const fullscreenText = '\u5168\u5c4f';
 const backText = '\u8fd4\u56de\u7cfb\u7edf';
@@ -147,21 +158,32 @@ onBeforeUnmount(() => {
 
 <style lang="scss">
 html.screen-route-active,
-html.screen-route-active body {
-  overflow: hidden;
-  height: 100%;
+html.screen-route-active body,
+html.screen-route-active #app {
+  overflow: hidden !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: #030a16 !important;
+}
+
+html.screen-route-active #app > * {
+  min-height: 100%;
 }
 </style>
 
 <style scoped lang="scss">
 .screen-shell {
-  position: relative;
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
   display: flex;
   flex-direction: column;
   width: 100vw;
   height: 100vh;
-  max-height: 100vh;
+  max-height: 100dvh;
   overflow: hidden;
+  isolation: isolate;
   color: #b8d4ea;
   background:
     radial-gradient(ellipse 90% 55% at 50% -10%, rgba(18, 70, 140, 0.55), transparent 55%),
@@ -409,6 +431,12 @@ html.screen-route-active body {
   border-color: rgba(61, 214, 165, 0.45);
   background: rgba(20, 120, 90, 0.16);
   color: #6ee7b7;
+}
+
+.screen-badge.is-loading {
+  border-color: rgba(61, 191, 255, 0.4);
+  background: rgba(20, 80, 140, 0.18);
+  color: #7dd8ff;
 }
 
 .screen-switch {

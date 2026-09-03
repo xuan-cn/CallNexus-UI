@@ -3,15 +3,15 @@
     :title="text.title"
     subtitle="CALL CENTER OPERATIONS DASHBOARD"
     :footer-text="text.footer"
-    :badge-tone="liveDataOk ? 'live' : 'demo'"
+    :badge-tone="liveDataOk ? 'live' : loadFailed ? 'demo' : 'loading'"
     :switch-links="[{ label: text.switchAi, path: '/screen/ai' }]"
   >
-    <div class="screen-page home-page theme-ops">
+    <div class="screen-page home-page theme-ops" :class="{ 'is-bootstrapping': isBootstrapping }">
       <section class="home-kpis screen-kpi-grid screen-kpi-grid-compact screen-kpi-grid-4">
-        <article v-for="(item, index) in kpis" :key="item.label" class="screen-kpi-card" :class="`is-tone-${index}`">
+        <article v-for="(item, index) in displayKpis" :key="`home-kpi-${index}`" class="screen-kpi-card" :class="`is-tone-${index}`">
           <div class="screen-kpi-label">{{ item.label }}</div>
-          <div class="screen-kpi-value">{{ item.value }}</div>
-          <div class="screen-kpi-extra" :class="item.tone">{{ item.extra }}</div>
+          <div class="screen-kpi-value">{{ isBootstrapping ? '00' : item.value }}</div>
+          <div class="screen-kpi-extra" :class="item.tone">{{ isBootstrapping ? '----' : item.extra }}</div>
         </article>
       </section>
 
@@ -35,9 +35,14 @@
                 <div class="screen-panel-sub">{{ text.skillSub }}</div>
               </div>
             </div>
-            <div class="screen-panel-body">
-              <div v-show="skillGroups.length" ref="skillChartRef" class="screen-chart" />
-              <div v-if="!skillGroups.length" class="home-empty">
+            <div class="screen-panel-body home-skill-body">
+              <div ref="skillChartRef" class="screen-chart" :class="{ 'is-hidden': isBootstrapping || !skillGroups.length }" />
+              <div v-if="isBootstrapping" class="screen-skel-panel">
+                <span class="screen-skel-line is-long" />
+                <span class="screen-skel-line is-mid" />
+                <span class="screen-skel-line is-short" />
+              </div>
+              <div v-else-if="!skillGroups.length" class="home-empty">
                 <span class="home-empty-line" />
                 <span>{{ text.emptySkill }}</span>
                 <span class="home-empty-line" />
@@ -68,17 +73,18 @@
                       />
                     </svg>
                     <div class="home-rate-hole">
-                      <div class="home-rate-value">{{ displayAnswerRate }}%</div>
+                      <div class="home-rate-value">{{ isBootstrapping ? '00' : displayAnswerRate }}%</div>
                       <div class="home-rate-label">{{ text.heroRate }}</div>
                     </div>
                   </div>
                 </div>
                 <div class="home-hero-copy">
                   <div class="home-hero-kicker">{{ text.heroInbound }}</div>
-                  <div class="home-hero-inbound">{{ heroCore.inbound }}</div>
-                  <div class="home-hero-extra" :class="heroCore.inboundTone">
-                    {{ heroCore.inboundExtra || text.heroTarget }}
+                  <div class="home-hero-inbound">{{ isBootstrapping ? '00' : heroCore.inbound }}</div>
+                  <div v-if="!isBootstrapping && heroCore.inboundExtra" class="home-hero-extra" :class="heroCore.inboundTone">
+                    {{ heroCore.inboundExtra }}
                   </div>
+                  <div v-else-if="isBootstrapping" class="home-hero-extra">----</div>
                   <div class="home-target-row">
                     <span>{{ text.heroTarget }}</span>
                     <div class="home-target-track">
@@ -115,7 +121,13 @@
               </div>
             </div>
             <div class="screen-panel-body">
-              <div v-if="queueRanking.length" class="screen-rank-list">
+              <div v-if="isBootstrapping" class="screen-skel-panel">
+                <span class="screen-skel-line is-long" />
+                <span class="screen-skel-line is-mid" />
+                <span class="screen-skel-line is-long" />
+                <span class="screen-skel-line is-short" />
+              </div>
+              <div v-else-if="queueRanking.length" class="screen-rank-list">
                 <div v-for="(item, index) in queueRanking" :key="item.name" class="screen-rank-item" :class="{ 'is-top': index < 3 }">
                   <span class="screen-rank-no">{{ index + 1 }}</span>
                   <span class="screen-rank-name">{{ item.name }}</span>
@@ -138,7 +150,13 @@
               </div>
             </div>
             <div class="screen-panel-body home-feed-wrap screen-panel-scroll">
-              <table v-if="liveFeed.length" class="screen-scroll-table">
+              <div v-if="isBootstrapping" class="screen-skel-panel">
+                <span class="screen-skel-line is-long" />
+                <span class="screen-skel-line is-mid" />
+                <span class="screen-skel-line is-long" />
+                <span class="screen-skel-line is-short" />
+              </div>
+              <table v-else-if="liveFeed.length" class="screen-scroll-table">
                 <thead>
                   <tr>
                     <th>{{ text.thTime }}</th>
@@ -171,31 +189,70 @@
 
 <script setup lang="ts">
 import * as echarts from 'echarts';
-import { getHomeScreenDashboard, type HomeScreenDashboard } from '@/api/screen/home';
+import {
+  getHomeScreenDashboard,
+  type HomeScreenDashboard,
+  type HomeScreenFeedItem,
+  type HomeScreenHeroCore,
+  type HomeScreenKpi,
+  type HomeScreenQueueRank,
+  type HomeScreenSkillRate,
+  type HomeScreenTrendPoint
+} from '@/api/screen/home';
 import ScreenShell from '../components/ScreenShell.vue';
 import { homeText as text } from '../constants/text';
 import { buildAreaStyle, screenAxisStyle, screenGrid, screenLegend, screenTooltip } from '../utils/chart-theme';
-import {
-  createHomeAgentSummary,
-  createHomeHeroCore,
-  createHomeKpis,
-  createHomeLiveFeed,
-  createHomeQueueRanking,
-  createHomeSkillGroups,
-  createHomeTrendHours,
-  type HomeKpi,
-  type HomeLiveFeedItem
-} from '../mock/home';
 
 defineOptions({ name: 'ScreenHome' });
 
-const kpis = ref<HomeKpi[]>(createHomeKpis());
-const heroCore = ref(createHomeHeroCore());
-const queueRanking = ref(createHomeQueueRanking());
-const liveFeed = ref<HomeLiveFeedItem[]>(createHomeLiveFeed());
-const agentSummary = ref(createHomeAgentSummary());
-const trendHours = ref(createHomeTrendHours());
-const skillGroups = ref(createHomeSkillGroups());
+const emptyHeroCore = (): HomeScreenHeroCore => ({
+  inbound: '0',
+  inboundExtra: '',
+  inboundTone: null,
+  answerRate: 0
+});
+
+const emptyKpis = (): HomeScreenKpi[] => [
+  { label: '在线坐席', value: '0', extra: '签入率 0%' },
+  { label: '当前排队', value: '0', extra: '正常' },
+  { label: '外呼任务', value: '0', extra: '完成率 0%' },
+  { label: '留言待处理', value: '0', extra: '优先处理' }
+];
+
+const emptyTrendHours = (): HomeScreenTrendPoint[] =>
+  Array.from({ length: 11 }, (_, i) => ({
+    hour: `${String(8 + i).padStart(2, '0')}:00`,
+    inbound: 0,
+    outbound: 0,
+    answered: 0
+  }));
+
+const emptyAgentSummary = () => ({
+  total: 0,
+  items: [
+    { label: '空闲', value: 0, color: '#34d399' },
+    { label: '通话中', value: 0, color: '#38bdf8' },
+    { label: '话后处理', value: 0, color: '#818cf8' },
+    { label: '离线', value: 0, color: '#fbbf24' }
+  ]
+});
+
+const kpis = ref<HomeScreenKpi[]>(emptyKpis());
+const heroCore = ref(emptyHeroCore());
+const queueRanking = ref<HomeScreenQueueRank[]>([]);
+const liveFeed = ref<HomeScreenFeedItem[]>([]);
+const agentSummary = ref(emptyAgentSummary());
+const trendHours = ref(emptyTrendHours());
+const skillGroups = ref<HomeScreenSkillRate[]>([]);
+
+const displayKpis = computed(() => {
+  const base = emptyKpis();
+  const current = kpis.value || [];
+  return base.map((item, index) => ({
+    ...item,
+    ...(current[index] || {})
+  }));
+});
 
 const trendChartRef = ref<HTMLDivElement>();
 const skillChartRef = ref<HTMLDivElement>();
@@ -204,6 +261,8 @@ let trendChart: echarts.ECharts | undefined;
 let skillChart: echarts.ECharts | undefined;
 let refreshTimer: number | undefined;
 const liveDataOk = ref(false);
+const loadFailed = ref(false);
+const isBootstrapping = computed(() => !liveDataOk.value && !loadFailed.value);
 
 const RING_R = 52;
 const ringLength = 2 * Math.PI * RING_R;
@@ -245,6 +304,7 @@ const renderTrendChart = () => {
 
   trendChart.setOption(
     {
+      animation: false,
       color: ['#2ecbff', '#9b7bff', '#3dd6a5'],
       tooltip: screenTooltip,
       legend: screenLegend,
@@ -255,7 +315,7 @@ const renderTrendChart = () => {
         data: trendHours.value.map((item) => item.hour),
         ...screenAxisStyle
       },
-      yAxis: { type: 'value', minInterval: 1, ...screenAxisStyle },
+      yAxis: { type: 'value', min: 0, minInterval: 1, ...screenAxisStyle },
       series: [
         {
           name: text.chartInbound,
@@ -300,19 +360,19 @@ const renderTrendChart = () => {
 };
 
 const renderSkillChart = () => {
-  if (!skillGroups.value.length) {
-    skillChart?.clear();
-    return;
-  }
   skillChart = ensureChart(skillChartRef.value, skillChart);
   if (!skillChart) return;
+  if (!skillGroups.value.length) {
+    skillChart.clear();
+    return;
+  }
 
   const names = skillGroups.value.map((item) => item.name);
   const rates = skillGroups.value.map((item) => Math.round(Number(item.rate) || 0));
 
-  skillChart.clear();
   skillChart.setOption(
     {
+      animation: false,
       color: ['#2ecbff'],
       tooltip: {
         trigger: 'axis',
@@ -367,24 +427,16 @@ const renderCharts = () => {
   renderSkillChart();
 };
 
-const applyMock = (randomize = false) => {
-  kpis.value = createHomeKpis(randomize);
-  heroCore.value = createHomeHeroCore(randomize);
-  queueRanking.value = createHomeQueueRanking(randomize);
-  liveFeed.value = createHomeLiveFeed(randomize);
-  agentSummary.value = createHomeAgentSummary(randomize);
-  trendHours.value = createHomeTrendHours(randomize);
-  skillGroups.value = createHomeSkillGroups(randomize);
-};
-
 const applyDashboard = (data: HomeScreenDashboard) => {
-  kpis.value = (data.kpis || []).map((item) => ({
-    label: item.label,
-    value: item.value,
-    extra: item.extra,
-    tone: item.tone === 'is-up' || item.tone === 'is-down' ? item.tone : undefined
-  }));
-  const hero = data.heroCore || createHomeHeroCore();
+  kpis.value = (data.kpis || []).length
+    ? (data.kpis || []).map((item) => ({
+        label: item.label,
+        value: item.value,
+        extra: item.extra,
+        tone: item.tone === 'is-up' || item.tone === 'is-down' ? item.tone : undefined
+      }))
+    : emptyKpis();
+  const hero = data.heroCore || emptyHeroCore();
   heroCore.value = {
     inbound: String(hero.inbound ?? '0'),
     inboundExtra: hero.inboundExtra || '',
@@ -396,13 +448,13 @@ const applyDashboard = (data: HomeScreenDashboard) => {
         total: data.agentSummary.total || data.agentSummary.items.reduce((s, i) => s + i.value, 0),
         items: data.agentSummary.items
       }
-    : { total: 0, items: [] };
+    : emptyAgentSummary();
   queueRanking.value = Array.isArray(data.queueRanking) ? data.queueRanking : [];
   skillGroups.value = (data.skillGroups || []).map((item) => ({
     name: item.name,
     rate: Math.round(Number(item.rate) || 0)
   }));
-  trendHours.value = data.trendHours?.length ? data.trendHours : createHomeTrendHours();
+  trendHours.value = data.trendHours?.length ? data.trendHours : emptyTrendHours();
   liveFeed.value = Array.isArray(data.liveFeed) ? data.liveFeed : [];
 };
 
@@ -415,11 +467,19 @@ const loadDashboard = async () => {
     }
     applyDashboard(payload as HomeScreenDashboard);
     liveDataOk.value = true;
-    nextTick(renderCharts);
+    loadFailed.value = false;
+    nextTick(() => {
+      renderCharts();
+      requestAnimationFrame(handleResize);
+    });
   } catch {
+    // 轮询失败时保留上一帧；仅首次失败进入异常态，不清成误导性的 0
     if (!liveDataOk.value) {
-      applyMock(false);
-      nextTick(renderCharts);
+      loadFailed.value = true;
+      nextTick(() => {
+        renderCharts();
+        requestAnimationFrame(handleResize);
+      });
     }
   }
 };
@@ -430,10 +490,6 @@ const handleResize = () => {
 };
 
 onMounted(() => {
-  nextTick(() => {
-    renderCharts();
-    requestAnimationFrame(handleResize);
-  });
   window.addEventListener('resize', handleResize);
   loadDashboard();
   refreshTimer = window.setInterval(loadDashboard, 15000);
@@ -453,6 +509,31 @@ onBeforeUnmount(() => {
 
 .home-page {
   gap: 8px;
+}
+
+.home-kpis {
+  flex: 0 0 auto;
+  min-height: 68px;
+}
+
+.home-page :deep(.screen-kpi-value),
+.home-agent-num,
+.home-hero-inbound,
+.home-rate-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.home-skill-body {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+}
+
+.home-skill-body .screen-chart.is-hidden {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .home-page :deep(.screen-panel-sub) {
@@ -504,7 +585,7 @@ onBeforeUnmount(() => {
   border-color: rgba(46, 203, 255, 0.3);
   background:
     radial-gradient(ellipse 78% 58% at 50% 36%, rgba(0, 150, 220, 0.18), transparent 64%),
-    linear-gradient(180deg, rgba(4, 36, 72, 0.48) 0%, rgba(2, 14, 34, 0.92) 100%);
+    linear-gradient(180deg, rgba(4, 36, 72, 0.92) 0%, rgba(2, 14, 34, 0.98) 100%);
 }
 
 .home-hero-body {

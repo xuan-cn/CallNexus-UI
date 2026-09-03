@@ -3,15 +3,15 @@
     :title="text.title"
     subtitle="AI VOICEBOT OPERATIONS DASHBOARD"
     :footer-text="text.footer"
-    :badge-tone="liveDataOk ? 'live' : 'demo'"
+    :badge-tone="liveDataOk ? 'live' : loadFailed ? 'demo' : 'loading'"
     :switch-links="[{ label: text.switchHome, path: '/screen/home' }]"
   >
-    <div class="screen-page ai-page theme-exhibit">
+    <div class="screen-page ai-page theme-exhibit" :class="{ 'is-bootstrapping': isBootstrapping }">
       <section class="ai-kpis screen-kpi-grid screen-kpi-grid-compact screen-kpi-grid-4">
-        <article v-for="(item, index) in kpis" :key="item.label" class="screen-kpi-card" :class="`is-tone-${index}`">
+        <article v-for="(item, index) in displayKpis" :key="`ai-kpi-${index}`" class="screen-kpi-card" :class="`is-tone-${index}`">
           <div class="screen-kpi-label">{{ item.label }}</div>
-          <div class="screen-kpi-value">{{ item.value }}</div>
-          <div class="screen-kpi-extra" :class="item.tone">{{ item.extra }}</div>
+          <div class="screen-kpi-value">{{ isBootstrapping ? '00%' : item.value }}</div>
+          <div class="screen-kpi-extra" :class="item.tone">{{ isBootstrapping ? '----' : item.extra }}</div>
         </article>
       </section>
 
@@ -65,8 +65,8 @@
                     />
                   </svg>
                   <div class="ai-rate-hole">
-                    <div class="ai-rate-value">{{ heroCore.resolve }}%</div>
-                    <div class="ai-rate-sub">{{ text.funnelInbound }} {{ heroCore.inbound }}</div>
+                    <div class="ai-rate-value">{{ isBootstrapping ? '00' : heroCore.resolve }}%</div>
+                    <div class="ai-rate-sub">{{ text.funnelInbound }} {{ isBootstrapping ? '00' : heroCore.inbound }}</div>
                   </div>
                 </div>
               </div>
@@ -117,14 +117,25 @@
                 <div class="screen-panel-sub">{{ text.intentSub }}</div>
               </div>
             </div>
-            <div class="screen-panel-body">
-              <div class="screen-rank-list ai-intent-rank">
+            <div class="screen-panel-body ai-intent-body">
+              <div v-if="isBootstrapping" class="screen-skel-panel">
+                <span class="screen-skel-line is-long" />
+                <span class="screen-skel-line is-mid" />
+                <span class="screen-skel-line is-long" />
+                <span class="screen-skel-line is-short" />
+              </div>
+              <div v-else-if="intentRanking.length" class="screen-rank-list ai-intent-rank">
                 <div v-for="(item, index) in intentRanking" :key="item.name" class="screen-rank-item" :class="{ 'is-top': index < 3 }">
                   <span class="screen-rank-no">{{ index + 1 }}</span>
                   <span class="screen-rank-name">{{ item.name }}</span>
                   <span class="screen-rank-value">{{ item.count }}</span>
                   <div class="screen-rank-bar"><span :style="{ width: `${item.percent}%` }" /></div>
                 </div>
+              </div>
+              <div v-else class="ai-empty">
+                <span class="ai-empty-line" />
+                <span>{{ text.emptyIntent }}</span>
+                <span class="ai-empty-line" />
               </div>
             </div>
           </article>
@@ -136,7 +147,13 @@
               </div>
             </div>
             <div class="screen-panel-body ai-feed-wrap screen-panel-scroll">
-              <table class="screen-scroll-table">
+              <div v-if="isBootstrapping" class="screen-skel-panel">
+                <span class="screen-skel-line is-long" />
+                <span class="screen-skel-line is-mid" />
+                <span class="screen-skel-line is-long" />
+                <span class="screen-skel-line is-short" />
+              </div>
+              <table v-else-if="feed.length" class="screen-scroll-table">
                 <thead>
                   <tr>
                     <th>{{ text.thTime }}</th>
@@ -154,6 +171,11 @@
                   </tr>
                 </tbody>
               </table>
+              <div v-else class="ai-empty">
+                <span class="ai-empty-line" />
+                <span>{{ text.emptyFeed }}</span>
+                <span class="ai-empty-line" />
+              </div>
             </div>
           </article>
         </div>
@@ -164,33 +186,83 @@
 
 <script setup lang="ts">
 import * as echarts from 'echarts';
-import { getAiScreenDashboard, type AiScreenDashboard } from '@/api/screen/ai';
+import {
+  getAiScreenDashboard,
+  type AiScreenDashboard,
+  type AiScreenFeedItem,
+  type AiScreenHeroCore,
+  type AiScreenHeroExtras,
+  type AiScreenIntentRank,
+  type AiScreenKpi,
+  type AiScreenLatencyPoint,
+  type AiScreenOutcome,
+  type AiScreenTrafficPoint
+} from '@/api/screen/ai';
 import ScreenShell from '../components/ScreenShell.vue';
 import { aiText as text } from '../constants/text';
 import { buildAreaStyle, screenAxisStyle, screenGrid, screenLegend, screenTooltip } from '../utils/chart-theme';
-import {
-  createAiFeed,
-  createAiHeroCore,
-  createAiHeroExtras,
-  createAiIntentRanking,
-  createAiKpis,
-  createAiLatencyTrend,
-  createAiOutcomes,
-  createAiTrafficTrend,
-  type AiFeedItem,
-  type AiKpi
-} from '../mock/ai';
 
 defineOptions({ name: 'ScreenAi' });
 
-const kpis = ref<AiKpi[]>(createAiKpis());
-const heroCore = ref(createAiHeroCore());
-const heroExtras = ref(createAiHeroExtras());
-const intentRanking = ref(createAiIntentRanking());
-const feed = ref<AiFeedItem[]>(createAiFeed());
-const outcomes = ref(createAiOutcomes());
-const trafficTrend = ref(createAiTrafficTrend());
-const latencyTrend = ref(createAiLatencyTrend());
+const emptyHeroCore = (): AiScreenHeroCore => ({
+  resolve: 0,
+  transfer: 0,
+  failRate: 0,
+  inbound: 0,
+  avgConfidence: 0
+});
+
+const emptyHeroExtras = (): AiScreenHeroExtras => ({
+  faqPending: 0,
+  todaySessions: 0,
+  activeAgents: 0
+});
+
+const emptyTrafficTrend = (): AiScreenTrafficPoint[] =>
+  Array.from({ length: 11 }, (_, i) => ({
+    hour: `${String(8 + i).padStart(2, '0')}:00`,
+    ai: 0,
+    human: 0,
+    resolved: 0
+  }));
+
+const emptyLatencyTrend = (): AiScreenLatencyPoint[] =>
+  Array.from({ length: 11 }, (_, i) => ({
+    hour: `${String(8 + i).padStart(2, '0')}:00`,
+    asr: 0,
+    tts: 0
+  }));
+
+const emptyOutcomes = (): AiScreenOutcome[] => [
+  { label: text.outcomeResolved, value: 0, color: '#2ee6a8' },
+  { label: text.outcomeTransfer, value: 0, color: '#ff9a3c' },
+  { label: text.outcomeFail, value: 0, color: '#ff7a7a' }
+];
+
+const emptyKpis = (): AiScreenKpi[] => [
+  { label: '意图识别准确率', value: '0%', extra: '近 1 小时' },
+  { label: '平均置信度', value: '0%', extra: '意图识别' },
+  { label: 'AI 并发会话', value: '0', extra: '暂无会话' },
+  { label: '平均响应', value: '0 ms', extra: '意图识别' }
+];
+
+const kpis = ref<AiScreenKpi[]>(emptyKpis());
+const heroCore = ref(emptyHeroCore());
+const heroExtras = ref(emptyHeroExtras());
+const intentRanking = ref<AiScreenIntentRank[]>([]);
+const feed = ref<AiScreenFeedItem[]>([]);
+const outcomes = ref(emptyOutcomes());
+const trafficTrend = ref(emptyTrafficTrend());
+const latencyTrend = ref(emptyLatencyTrend());
+
+const displayKpis = computed(() => {
+  const base = emptyKpis();
+  const current = kpis.value || [];
+  return base.map((item, index) => ({
+    ...item,
+    ...(current[index] || {})
+  }));
+});
 
 const trafficChartRef = ref<HTMLDivElement>();
 const latencyChartRef = ref<HTMLDivElement>();
@@ -198,8 +270,9 @@ const latencyChartRef = ref<HTMLDivElement>();
 let trafficChart: echarts.ECharts | undefined;
 let latencyChart: echarts.ECharts | undefined;
 let refreshTimer: number | undefined;
-/** true = 正在用接口真实数据；失败时保留上次成功数据或降级 mock */
 const liveDataOk = ref(false);
+const loadFailed = ref(false);
+const isBootstrapping = computed(() => !liveDataOk.value && !loadFailed.value);
 
 const RING_R = 52;
 const ringLength = 2 * Math.PI * RING_R;
@@ -232,79 +305,107 @@ const outcomeBars = computed(() => {
   });
 });
 
+const ensureChart = (el: HTMLDivElement | undefined, chart?: echarts.ECharts) => {
+  if (!el) return undefined;
+  if (chart && !chart.isDisposed()) return chart;
+  return echarts.init(el);
+};
+
 const renderTrafficChart = () => {
-  if (!trafficChartRef.value) return;
-  trafficChart?.dispose();
-  trafficChart = echarts.init(trafficChartRef.value);
-  trafficChart.setOption({
-    color: ['#9b7bff', '#6ec8ff', '#3dd6a5'],
-    tooltip: screenTooltip,
-    legend: screenLegend,
-    grid: screenGrid,
-    xAxis: { type: 'category', boundaryGap: false, data: trafficTrend.value.map((item) => item.hour), ...screenAxisStyle },
-    yAxis: { type: 'value', minInterval: 1, ...screenAxisStyle },
-    series: [
-      {
-        name: text.chartAi,
-        type: 'line',
-        smooth: true,
-        showSymbol: false,
-        lineStyle: { width: 2, shadowColor: 'rgba(155,123,255,0.4)', shadowBlur: 8 },
-        areaStyle: buildAreaStyle('#9b7bff'),
-        data: trafficTrend.value.map((item) => item.ai)
+  trafficChart = ensureChart(trafficChartRef.value, trafficChart);
+  if (!trafficChart) return;
+  const maxVal = Math.max(
+    1,
+    ...trafficTrend.value.flatMap((item) => [item.ai, item.human, item.resolved])
+  );
+  trafficChart.setOption(
+    {
+      animation: false,
+      color: ['#9b7bff', '#6ec8ff', '#3dd6a5'],
+      tooltip: screenTooltip,
+      legend: screenLegend,
+      grid: screenGrid,
+      xAxis: {
+        type: 'category',
+        boundaryGap: false,
+        data: trafficTrend.value.map((item) => item.hour),
+        ...screenAxisStyle
       },
-      {
-        name: text.chartHuman,
-        type: 'line',
-        smooth: true,
-        showSymbol: false,
-        lineStyle: { width: 2 },
-        areaStyle: buildAreaStyle('#6ec8ff'),
-        data: trafficTrend.value.map((item) => item.human)
+      yAxis: {
+        type: 'value',
+        min: 0,
+        max: Math.ceil(maxVal * 1.2) || 5,
+        minInterval: 1,
+        ...screenAxisStyle
       },
-      {
-        name: text.chartResolved,
-        type: 'line',
-        smooth: true,
-        showSymbol: false,
-        lineStyle: { width: 3 },
-        areaStyle: buildAreaStyle('#34d399'),
-        data: trafficTrend.value.map((item) => item.resolved)
-      }
-    ]
-  });
+      series: [
+        {
+          name: text.chartAi,
+          type: 'line',
+          smooth: true,
+          showSymbol: false,
+          lineStyle: { width: 2, shadowColor: 'rgba(155,123,255,0.4)', shadowBlur: 8 },
+          areaStyle: buildAreaStyle('#9b7bff'),
+          data: trafficTrend.value.map((item) => item.ai)
+        },
+        {
+          name: text.chartHuman,
+          type: 'line',
+          smooth: true,
+          showSymbol: false,
+          lineStyle: { width: 2 },
+          areaStyle: buildAreaStyle('#6ec8ff'),
+          data: trafficTrend.value.map((item) => item.human)
+        },
+        {
+          name: text.chartResolved,
+          type: 'line',
+          smooth: true,
+          showSymbol: false,
+          lineStyle: { width: 3 },
+          areaStyle: buildAreaStyle('#34d399'),
+          data: trafficTrend.value.map((item) => item.resolved)
+        }
+      ]
+    },
+    { notMerge: true }
+  );
 };
 
 const renderLatencyChart = () => {
-  if (!latencyChartRef.value) return;
-  latencyChart?.dispose();
-  latencyChart = echarts.init(latencyChartRef.value);
-  latencyChart.setOption({
-    color: ['#9b7bff', '#ff7a6e'],
-    tooltip: screenTooltip,
-    legend: screenLegend,
-    grid: screenGrid,
-    xAxis: { type: 'category', data: latencyTrend.value.map((item) => item.hour), ...screenAxisStyle },
-    yAxis: { type: 'value', ...screenAxisStyle },
-    series: [
-      {
-        name: text.chartAsr,
-        type: 'bar',
-        barWidth: 10,
-        data: latencyTrend.value.map((item) => item.asr),
-        itemStyle: { borderRadius: [6, 6, 0, 0], color: 'rgba(155,123,255,0.78)' }
+  latencyChart = ensureChart(latencyChartRef.value, latencyChart);
+  if (!latencyChart) return;
+  const maxVal = Math.max(1, ...latencyTrend.value.map((item) => item.asr));
+  latencyChart.setOption(
+    {
+      animation: false,
+      color: ['#9b7bff'],
+      tooltip: screenTooltip,
+      legend: screenLegend,
+      grid: screenGrid,
+      xAxis: {
+        type: 'category',
+        data: latencyTrend.value.map((item) => item.hour),
+        ...screenAxisStyle
       },
-      {
-        name: text.chartTts,
-        type: 'line',
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 5,
-        lineStyle: { width: 2 },
-        data: latencyTrend.value.map((item) => item.tts)
-      }
-    ]
-  });
+      yAxis: {
+        type: 'value',
+        min: 0,
+        max: Math.ceil(maxVal * 1.2) || 100,
+        ...screenAxisStyle
+      },
+      series: [
+        {
+          name: text.chartAsr,
+          type: 'bar',
+          barWidth: 10,
+          data: latencyTrend.value.map((item) => item.asr),
+          itemStyle: { borderRadius: [6, 6, 0, 0], color: 'rgba(155,123,255,0.78)' }
+        }
+      ]
+    },
+    { notMerge: true }
+  );
 };
 
 const renderCharts = () => {
@@ -312,31 +413,22 @@ const renderCharts = () => {
   renderLatencyChart();
 };
 
-const applyMock = (randomize = false) => {
-  kpis.value = createAiKpis(randomize);
-  heroCore.value = createAiHeroCore(randomize);
-  heroExtras.value = createAiHeroExtras(randomize);
-  intentRanking.value = createAiIntentRanking(randomize);
-  feed.value = createAiFeed(randomize);
-  outcomes.value = createAiOutcomes(randomize);
-  trafficTrend.value = createAiTrafficTrend(randomize);
-  latencyTrend.value = createAiLatencyTrend(randomize);
-};
-
 const applyDashboard = (data: AiScreenDashboard) => {
-  kpis.value = (data.kpis || []).map((item) => ({
-    label: item.label,
-    value: item.value,
-    extra: item.extra,
-    tone: item.tone === 'is-up' || item.tone === 'is-down' ? item.tone : undefined
-  }));
-  heroCore.value = data.heroCore || createAiHeroCore();
-  heroExtras.value = data.heroExtras || createAiHeroExtras();
-  intentRanking.value = data.intentRanking?.length ? data.intentRanking : createAiIntentRanking();
-  feed.value = data.feed?.length ? data.feed : createAiFeed();
-  outcomes.value = data.outcomes?.length ? data.outcomes : createAiOutcomes();
-  trafficTrend.value = data.trafficTrend?.length ? data.trafficTrend : createAiTrafficTrend();
-  latencyTrend.value = data.latencyTrend?.length ? data.latencyTrend : createAiLatencyTrend();
+  kpis.value = (data.kpis || []).length
+    ? (data.kpis || []).map((item) => ({
+        label: item.label,
+        value: item.value,
+        extra: item.extra,
+        tone: item.tone === 'is-up' || item.tone === 'is-down' ? item.tone : undefined
+      }))
+    : emptyKpis();
+  heroCore.value = data.heroCore || emptyHeroCore();
+  heroExtras.value = data.heroExtras || emptyHeroExtras();
+  intentRanking.value = Array.isArray(data.intentRanking) ? data.intentRanking : [];
+  feed.value = Array.isArray(data.feed) ? data.feed : [];
+  outcomes.value = data.outcomes?.length ? data.outcomes : emptyOutcomes();
+  trafficTrend.value = data.trafficTrend?.length ? data.trafficTrend : emptyTrafficTrend();
+  latencyTrend.value = data.latencyTrend?.length ? data.latencyTrend : emptyLatencyTrend();
 };
 
 const loadDashboard = async () => {
@@ -348,12 +440,19 @@ const loadDashboard = async () => {
     }
     applyDashboard(payload as AiScreenDashboard);
     liveDataOk.value = true;
-    nextTick(renderCharts);
+    loadFailed.value = false;
+    nextTick(() => {
+      renderCharts();
+      requestAnimationFrame(handleResize);
+    });
   } catch {
-    // 接口不可用时：首次降级 mock；已有真数据则保留上次结果，避免闪烁
+    // 轮询失败保留上一帧；首次失败进入异常态，不回填假 0
     if (!liveDataOk.value) {
-      applyMock(false);
-      nextTick(renderCharts);
+      loadFailed.value = true;
+      nextTick(() => {
+        renderCharts();
+        requestAnimationFrame(handleResize);
+      });
     }
   }
 };
@@ -364,10 +463,6 @@ const handleResize = () => {
 };
 
 onMounted(() => {
-  nextTick(() => {
-    renderCharts();
-    requestAnimationFrame(handleResize);
-  });
   window.addEventListener('resize', handleResize);
   loadDashboard();
   refreshTimer = window.setInterval(loadDashboard, 15000);
@@ -427,6 +522,40 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+.ai-panel-top {
+  flex: 1.15;
+}
+
+.ai-panel-bottom {
+  flex: 1;
+}
+
+.ai-page :deep(.screen-chart) {
+  height: 100%;
+  min-height: 120px;
+}
+
+.ai-intent-body,
+.ai-feed-wrap {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+}
+
+.ai-kpis {
+  flex: 0 0 auto;
+  min-height: 64px;
+}
+
+.ai-page :deep(.screen-kpi-value),
+.ai-stat-value,
+.ai-rate-value,
+.ai-extra-value,
+.ai-bar-num,
+.ai-bar-pct {
+  font-variant-numeric: tabular-nums;
+}
+
 .ai-hero-body {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
@@ -453,7 +582,6 @@ onBeforeUnmount(() => {
   max-height: min(100%, 168px);
   aspect-ratio: 1;
   filter: drop-shadow(0 0 12px rgba(61, 214, 165, 0.25));
-  animation: ai-ring-pulse 3.6s ease-in-out infinite;
 }
 
 .ai-rate-svg {
@@ -671,16 +799,6 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-@keyframes ai-ring-pulse {
-  0%,
-  100% {
-    filter: drop-shadow(0 0 12px rgba(61, 214, 165, 0.2));
-  }
-  50% {
-    filter: drop-shadow(0 0 22px rgba(61, 214, 165, 0.38));
-  }
-}
-
 .ai-intent-rank.screen-rank-list {
   display: flex;
   flex: 1;
@@ -740,6 +858,24 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow: auto;
   isolation: isolate;
+}
+
+.ai-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  min-height: 100%;
+  color: rgba(160, 150, 210, 0.55);
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+.ai-empty-line {
+  width: 28px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(155, 123, 255, 0.4), transparent);
 }
 
 @media (max-height: 820px) {
