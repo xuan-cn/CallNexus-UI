@@ -59,6 +59,18 @@ export const constantRoutes: RouteRecordRaw[] = [
     meta: { title: '在线客服' }
   },
   {
+    path: '/screen/home',
+    component: () => import('@/views/screen/home/index.vue'),
+    hidden: true,
+    meta: { title: '首页大屏', noCache: true }
+  },
+  {
+    path: '/screen/ai',
+    component: () => import('@/views/screen/ai/index.vue'),
+    hidden: true,
+    meta: { title: 'AI大屏', noCache: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     component: () => import('@/views/error/404.vue'),
     hidden: true
