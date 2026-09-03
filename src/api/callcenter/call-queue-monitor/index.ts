@@ -11,8 +11,11 @@ import {
 
 export const listCallQueueMonitor = (): AxiosPromise<CallQueueMonitorVO[]> => request({ url: '/api/v1/call-queues/monitor', method: 'get' });
 
-export const getCallQueueMonitorOverview = (): AxiosPromise<CallQueueMonitorOverviewVO> =>
-  request({ url: '/api/v1/call-queues/monitor/overview', method: 'get' });
+export const getCallQueueMonitorOverview = (params?: {
+  beginDate?: string;
+  endDate?: string;
+}): AxiosPromise<CallQueueMonitorOverviewVO> =>
+  request({ url: '/api/v1/call-queues/monitor/overview', method: 'get', params });
 
 export const getCallQueueMonitor = (queueId: string | number): AxiosPromise<CallQueueMonitorVO> =>
   request({ url: `/api/v1/call-queues/${queueId}/monitor`, method: 'get' });

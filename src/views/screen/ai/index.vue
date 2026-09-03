@@ -382,8 +382,8 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="scss">
-@import '../styles/screen-common.scss';
-@import '../styles/screen-themes.scss';
+@use '../styles/screen-common.scss';
+@use '../styles/screen-themes.scss';
 
 .ai-page {
   gap: 6px;
