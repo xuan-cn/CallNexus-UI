@@ -4,12 +4,38 @@
       <div>
         <div class="eyebrow"><span class="live-dot"></span> 系统运行正常</div>
         <h1>呼叫中心运营概览</h1>
-        <p>首页统计已接入真实队列监控数据，队列、坐席和留言状态会随刷新更新。</p>
+        <p>首页支持按日 / 按月 / 今年查看话务汇总；排队、振铃和坐席状态仍为实时数据。</p>
       </div>
       <div class="hero-meta">
         <span>{{ currentDate }}</span>
+        <el-button plain @click="router.push('/screen/home')">首页大屏</el-button>
+        <el-button plain @click="router.push('/screen/ai')">AI 大屏</el-button>
+
         <el-button type="primary" :icon="Refresh" :loading="loading" @click="refreshDashboard">刷新数据</el-button>
-        <el-button type="success" :icon="Phone" @click="simulateIncomingCall">模拟来电</el-button>
+      </div>
+    </section>
+
+    <section class="period-bar">
+      <div class="period-bar-title">
+        <i class="period-bar-mark" aria-hidden="true" />
+        <span>数据概览</span>
+      </div>
+      <div class="period-filter">
+        <el-radio-group v-model="periodMode" @change="handlePeriodModeChange">
+          <el-radio-button value="day">按日</el-radio-button>
+          <el-radio-button value="month">按月</el-radio-button>
+          <el-radio-button value="year">今年</el-radio-button>
+        </el-radio-group>
+        <el-date-picker
+          v-model="dateRange"
+          class="period-range-picker"
+          type="daterange"
+          value-format="YYYY-MM-DD"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          :clearable="false"
+          @change="handleDateRangeChange"
+        />
       </div>
     </section>
 
@@ -30,7 +56,7 @@
       <article class="panel trend-panel">
         <div class="panel-header">
           <div>
-            <span class="panel-kicker">今日队列</span>
+            <span class="panel-kicker">{{ periodKicker }}</span>
             <h2>队列接入概况</h2>
           </div>
           <el-button text type="primary" @click="openQueueMonitor">查看队列监控</el-button>
@@ -43,16 +69,16 @@
             <span>振铃中</span><strong>{{ overview?.currentRingingCount || 0 }}</strong>
           </div>
           <div>
-            <span>今日进入</span><strong>{{ overview?.todayEnteredCount || 0 }}</strong>
+            <span>{{ periodPrefix }}进入</span><strong>{{ overview?.todayEnteredCount || 0 }}</strong>
           </div>
           <div>
-            <span>今日接通</span><strong>{{ overview?.todayAnsweredCount || 0 }}</strong>
+            <span>{{ periodPrefix }}接通</span><strong>{{ overview?.todayAnsweredCount || 0 }}</strong>
           </div>
           <div>
-            <span>今日放弃</span><strong>{{ overview?.todayAbandonedCount || 0 }}</strong>
+            <span>{{ periodPrefix }}放弃</span><strong>{{ overview?.todayAbandonedCount || 0 }}</strong>
           </div>
           <div>
-            <span>今日超时</span><strong>{{ overview?.todayTimeoutCount || 0 }}</strong>
+            <span>{{ periodPrefix }}超时</span><strong>{{ overview?.todayTimeoutCount || 0 }}</strong>
           </div>
         </div>
       </article>
@@ -109,7 +135,7 @@
         <div class="panel-header">
           <div>
             <span class="panel-kicker">需要关注</span>
-            <h2>今日待办</h2>
+            <h2>待办事项</h2>
           </div>
           <el-button text type="primary" @click="openUnhandledVoiceMail">查看未处理</el-button>
         </div>
@@ -168,11 +194,12 @@ import { listVoiceMailMessages } from '@/api/callcenter/voicemail';
 import { getCallQueueMonitorOverview } from '@/api/callcenter/call-queue-monitor';
 import type { CallQueueMonitorOverviewVO } from '@/api/callcenter/call-queue-monitor/types';
 import { ElMessage } from 'element-plus';
-import { computed, inject, onMounted, ref, type Component, type Ref } from 'vue';
+import { computed, onMounted, ref, type Component } from 'vue';
 import { usePermissionStore } from '@/store/modules/permission';
 import type { RouteRecordRaw } from 'vue-router';
 
-const agentToolbarRef = inject<Ref<{ simulateIncomingCall: () => void } | null>>('agentToolbarRef');
+type PeriodMode = 'day' | 'month' | 'year';
+
 const router = useRouter();
 const permissionStore = usePermissionStore();
 
@@ -181,9 +208,69 @@ const overview = ref<CallQueueMonitorOverviewVO>();
 const unhandledVoiceMailCount = ref(0);
 const currentDate = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date());
 
+const pad2 = (value: number) => String(value).padStart(2, '0');
+const formatDate = (date: Date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+
+const today = new Date();
+const todayText = formatDate(today);
+const monthStartText = formatDate(new Date(today.getFullYear(), today.getMonth(), 1));
+const yearStartText = `${today.getFullYear()}-01-01`;
+
+const periodMode = ref<PeriodMode>('day');
+const dateRange = ref<[string, string]>([todayText, todayText]);
+
+const periodRange = computed(() => ({
+  beginDate: dateRange.value?.[0] || todayText,
+  endDate: dateRange.value?.[1] || todayText
+}));
+
+const isSingleToday = computed(
+  () => periodRange.value.beginDate === todayText && periodRange.value.endDate === todayText
+);
+
+const periodPrefix = computed(() => {
+  if (periodMode.value === 'year') return '今年';
+  if (periodMode.value === 'month') return '本月';
+  if (isSingleToday.value) return '今日';
+  return '区间';
+});
+
+const periodKicker = computed(() => {
+  if (periodMode.value === 'year') return '年度队列';
+  if (periodMode.value === 'month') return '月度队列';
+  if (isSingleToday.value) return '今日队列';
+  return '区间队列';
+});
+
+const applyPeriodPreset = (mode: PeriodMode) => {
+  if (mode === 'month') {
+    dateRange.value = [monthStartText, todayText];
+    return;
+  }
+  if (mode === 'year') {
+    dateRange.value = [yearStartText, todayText];
+    return;
+  }
+  dateRange.value = [todayText, todayText];
+};
+
+const syncPeriodModeByRange = () => {
+  const begin = periodRange.value.beginDate;
+  const end = periodRange.value.endDate;
+  if (begin === yearStartText && end === todayText) {
+    periodMode.value = 'year';
+    return;
+  }
+  if (begin === monthStartText && end === todayText) {
+    periodMode.value = 'month';
+    return;
+  }
+  periodMode.value = 'day';
+};
+
 const metrics = computed(() => [
   {
-    label: '今日队列进入',
+    label: `${periodPrefix.value}队列进入`,
     value: overview.value?.todayEnteredCount || 0,
     change: `当前排队 ${overview.value?.currentWaitingCount || 0}`,
     positive: false,
@@ -201,7 +288,7 @@ const metrics = computed(() => [
   {
     label: '接通率',
     value: `${overview.value?.answerRate || 0}%`,
-    change: `今日接通 ${overview.value?.todayAnsweredCount || 0}`,
+    change: `${periodPrefix.value}接通 ${overview.value?.todayAnsweredCount || 0}`,
     positive: true,
     tone: 'green',
     icon: DataAnalysis
@@ -350,8 +437,9 @@ const resolveDashboardPath = (key: DashboardLinkKey) => {
 const loadDashboard = async () => {
   loading.value = true;
   try {
+    const { beginDate, endDate } = periodRange.value;
     const [overviewRes, voiceMailRes] = await Promise.all([
-      getCallQueueMonitorOverview(),
+      getCallQueueMonitorOverview({ beginDate, endDate }),
       listVoiceMailMessages({ pageNum: 1, pageSize: 1, status: 'UNHANDLED' })
     ]);
     overview.value = overviewRes.data;
@@ -361,6 +449,16 @@ const loadDashboard = async () => {
   } finally {
     loading.value = false;
   }
+};
+
+const handlePeriodModeChange = (mode: PeriodMode | string | number | boolean) => {
+  applyPeriodPreset(String(mode || periodMode.value) as PeriodMode);
+  loadDashboard();
+};
+
+const handleDateRangeChange = () => {
+  syncPeriodModeByRange();
+  loadDashboard();
 };
 
 const refreshDashboard = async () => {
@@ -388,14 +486,6 @@ const handleQuickAction = (action: QuickAction) => {
     return;
   }
   ElMessage.info(`${action.label}功能将在对应业务模块开放`);
-};
-
-const simulateIncomingCall = () => {
-  if (agentToolbarRef?.value?.simulateIncomingCall) {
-    agentToolbarRef.value.simulateIncomingCall();
-  } else {
-    ElMessage.warning('坐席工具栏未就绪');
-  }
 };
 
 const formatSeconds = (seconds: number) => {
@@ -498,13 +588,6 @@ onMounted(() => {
   :deep(.el-button--primary:hover) {
     background: rgba(255, 255, 255, 0.2);
   }
-  :deep(.el-button--success) {
-    border: none;
-    color: #06263d;
-    font-weight: 600;
-    background: linear-gradient(90deg, #67e8f9, #38bdf8 46%, #60a5fa);
-    box-shadow: 0 8px 18px rgba(34, 211, 238, 0.28);
-  }
 }
 
 .eyebrow,
@@ -554,6 +637,67 @@ onMounted(() => {
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 999px;
     background: rgba(8, 24, 54, 0.22);
+  }
+}
+
+.period-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  border: 1px solid #e4ecf6;
+  border-radius: 16px;
+  background: linear-gradient(#fff, #fbfdff);
+  box-shadow: 0 8px 22px rgba(28, 48, 78, 0.045);
+}
+
+.period-bar-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #172033;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.period-bar-mark {
+  width: 4px;
+  height: 16px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #7c5cff, #2f6bff);
+}
+
+.period-filter {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 12px;
+
+  :deep(.el-radio-group) {
+    flex-shrink: 0;
+  }
+
+  :deep(.el-radio-button__inner) {
+    border-color: #d9e4f2;
+    background: #fff;
+  }
+
+  :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+    border-color: #2f6bff;
+    background: #2f6bff;
+    box-shadow: -1px 0 0 0 #2f6bff;
+  }
+}
+
+.period-range-picker {
+  width: 280px;
+  flex-shrink: 0;
+
+  :deep(.el-range-editor.el-input__wrapper),
+  :deep(.el-date-editor) {
+    width: 100%;
   }
 }
 
@@ -952,9 +1096,19 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
 
-  .hero-panel {
+  .hero-panel,
+  .period-bar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .period-filter {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .period-range-picker {
+    width: 100%;
   }
 }
 </style>
