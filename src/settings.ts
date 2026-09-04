@@ -66,7 +66,7 @@ const setting: DefaultSettings = {
   /**
    * 默认大小
    */
-  size: 'default',
+  size: 'small',
 
   /**
    * 默认布局
