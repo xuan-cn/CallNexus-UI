@@ -62,11 +62,17 @@
         <div class="property-title">连线配置</div>
         <el-form label-position="top">
           <el-form-item v-if="sourceDefinition.edgeSchema" :label="sourceDefinition.edgeSchema.label">
-            <el-select v-if="sourceDefinition.edgeSchema.component === 'BUSINESS_HOURS_BRANCH'" v-model="selectedEdge.condition" style="width: 100%" @change="updateSelectedEdge">
+            <el-select
+              v-if="sourceDefinition.edgeSchema.component === 'BUSINESS_HOURS_BRANCH'"
+              v-model="selectedEdge.condition"
+              style="width: 100%"
+              @change="updateSelectedEdge"
+            >
               <el-option label="工作时间内" value="IN_HOURS" />
               <el-option label="工作时间外" value="OUT_OF_HOURS" />
             </el-select>
-            <el-input v-else
+            <el-input
+              v-else
               v-model="selectedEdge.condition"
               maxlength="1"
               :placeholder="sourceDefinition.edgeSchema.placeholder"
@@ -95,7 +101,15 @@ import { getIvrNodeDefinition, IvrNodeDefinition, ivrPaletteDefinitions } from '
 import { getIvrPropertyEditor } from './propertyEditors';
 
 const props = withDefaults(
-  defineProps<{ modelValue: IvrGraph; mediaOptions: MediaAssetVO[]; queueOptions?: CallQueueVO[]; businessHoursOptions?: BusinessHoursPlan[]; voicemailOptions?: VoiceMailBoxVO[]; aiAgentOptions?: AiAgentVO[]; readonly?: boolean }>(),
+  defineProps<{
+    modelValue: IvrGraph;
+    mediaOptions: MediaAssetVO[];
+    queueOptions?: CallQueueVO[];
+    businessHoursOptions?: BusinessHoursPlan[];
+    voicemailOptions?: VoiceMailBoxVO[];
+    aiAgentOptions?: AiAgentVO[];
+    readonly?: boolean;
+  }>(),
   {
     queueOptions: () => [],
     businessHoursOptions: () => [],
@@ -161,7 +175,7 @@ const toLogicFlowData = (graph: IvrGraph) => ({
   }),
   edges: graph.edges.map((edge) => ({
     id: edge.id,
-    type: 'polyline',
+    type: 'bezier',
     sourceNodeId: edge.source,
     targetNodeId: edge.target,
     text: edge.condition || '',
@@ -270,7 +284,7 @@ const initialize = async () => {
     snapline: true,
     history: true,
     textEdit: false,
-    edgeType: 'polyline',
+    edgeType: 'bezier',
     stopScrollGraph: false,
     stopZoomGraph: false,
     stopMoveGraph: false
@@ -280,7 +294,7 @@ const initialize = async () => {
   }
   lf.register({ type: 'ivr-card', view: RectNode, model: IvrCardModel });
   lf.setTheme({
-    polyline: { stroke: '#91a4bd', strokeWidth: 2 },
+    bezier: { stroke: '#94a3b8', strokeWidth: 2 },
     anchor: { fill: '#ffffff', stroke: '#053b70', r: 4 },
     nodeText: { color: '#303133', fontSize: 14 },
     edgeText: { color: '#e6a23c', fontSize: 13, textWidth: 80 }

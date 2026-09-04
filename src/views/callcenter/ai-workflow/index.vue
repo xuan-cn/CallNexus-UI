@@ -76,15 +76,22 @@
         </div>
         <div class="designer-actions">
           <el-input v-model="versionName" placeholder="版本说明" style="width: 190px" />
-          <el-button @click="variablesVisible = true">变量</el-button>
+          <el-button @click="openVariables()">变量</el-button>
           <el-button :loading="savingDraft" @click="saveDraft">保存草稿</el-button>
-          <el-button :loading="validating" @click="validateDraft">校验</el-button>
+          <el-button :loading="validating" @click="() => validateDraft()">校验</el-button>
           <el-button v-hasPermi="['callcenter:ai-workflow:test']" type="primary" plain :loading="startingTest" @click="openTest">测试流程</el-button>
           <el-button v-hasPermi="['callcenter:ai-workflow:publish']" type="success" :loading="publishing" @click="publishDraft">发布</el-button>
           <el-button @click="designerVisible = false">关闭</el-button>
         </div>
       </div>
-      <AiWorkflowDesigner v-if="designerReady" v-model="graph" :intent-options="intentOptions" :queue-options="queueOptions" />
+      <AiWorkflowDesigner
+        v-if="designerReady"
+        v-model="graph"
+        :intent-options="intentOptions"
+        :queue-options="queueOptions"
+        :customer-templates="customerTemplates"
+        @manage-variables="openVariables(true)"
+      />
     </el-drawer>
 
     <el-drawer v-model="variablesVisible" title="工作流变量" size="720px" append-to-body>
@@ -161,6 +168,8 @@ import { listAiAgents, listAiIntents } from '@/api/callcenter/ai-knowledge';
 import type { AiAgentVO, AiIntentVO } from '@/api/callcenter/ai-knowledge/types';
 import { listCallQueues } from '@/api/callcenter/call-queue';
 import type { CallQueueVO } from '@/api/callcenter/call-queue/types';
+import { listFormTemplates } from '@/api/callcenter/form-template';
+import type { FormTemplate } from '@/api/callcenter/form-template/types';
 import {
   createAiWorkflow,
   deleteAiWorkflow,
@@ -208,6 +217,7 @@ const versions = ref<AiWorkflowVersionVO[]>([]);
 const validation = ref<AiWorkflowValidationVO>({ valid: false, errors: [], warnings: [] });
 const intentOptions = ref<AiIntentVO[]>([]);
 const queueOptions = ref<CallQueueVO[]>([]);
+const customerTemplates = ref<FormTemplate[]>([]);
 const agentOptions = ref<AiAgentVO[]>([]);
 const sceneOptions: Array<{ label: string; value: AiWorkflowScene }> = [
   { label: '呼入语音', value: 'VOICE_INBOUND' },
@@ -236,10 +246,16 @@ const load = async () => {
   }
 };
 const loadDesignerOptions = async () => {
-  const [intentResult, queueResult, agentResult] = await Promise.all([listAiIntents(), listCallQueues(), listAiAgents()]);
+  const [intentResult, queueResult, agentResult, customerTemplateResult] = await Promise.all([
+    listAiIntents(),
+    listCallQueues(),
+    listAiAgents(),
+    listFormTemplates('CUSTOMER')
+  ]);
   intentOptions.value = intentResult.data || [];
   queueOptions.value = queueResult.data || [];
   agentOptions.value = (agentResult.data || []).filter((item) => item.enabled !== false);
+  customerTemplates.value = (customerTemplateResult.data || []).filter((item) => item.enabled !== false);
 };
 const openForm = (row?: AiWorkflowVO) => {
   formId.value = row?.id;
@@ -270,6 +286,22 @@ const remove = async (row: AiWorkflowVO) => {
   proxy?.$modal.msgSuccess('删除成功');
   await load();
 };
+const createVariableKey = (usedKeys: Set<string>) => {
+  let key = '';
+  do {
+    key = `workflow.custom_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+  } while (usedKeys.has(key));
+  return key;
+};
+const ensureVariableKeys = () => {
+  graph.value.variables ||= [];
+  const usedKeys = new Set(graph.value.variables.map((item) => String(item.key || '').trim()).filter(Boolean));
+  graph.value.variables.forEach((item) => {
+    if (String(item.key || '').trim()) return;
+    item.key = createVariableKey(usedKeys);
+    usedKeys.add(item.key);
+  });
+};
 const openDesigner = async (row: AiWorkflowVO) => {
   currentWorkflow.value = row;
   designerVisible.value = true;
@@ -278,6 +310,7 @@ const openDesigner = async (row: AiWorkflowVO) => {
   draft.value = draftResult.data;
   versionName.value = draft.value.versionName || `v${draft.value.versionNo} 草稿`;
   graph.value = JSON.parse(draft.value.definitionJson);
+  ensureVariableKeys();
   await nextTick();
   designerReady.value = true;
 };
@@ -291,13 +324,13 @@ const saveDraft = async (showMessage = true) => {
     savingDraft.value = false;
   }
 };
-const validateDraft = async () => {
+const validateDraft = async (showResult = true) => {
   if (!currentWorkflow.value) return;
   validating.value = true;
   try {
     await saveDraft(false);
     validation.value = (await validateAiWorkflowDraft(currentWorkflow.value.id)).data;
-    validationVisible.value = true;
+    validationVisible.value = showResult || !validation.value.valid;
     return validation.value;
   } finally {
     validating.value = false;
@@ -305,7 +338,7 @@ const validateDraft = async () => {
 };
 const publishDraft = async () => {
   if (!currentWorkflow.value) return;
-  const result = await validateDraft();
+  const result = await validateDraft(false);
   if (!result?.valid) return;
   await proxy?.$modal.confirm('发布后运行实例将固定使用该版本，确认发布吗？');
   publishing.value = true;
@@ -322,12 +355,8 @@ const openTest = async () => {
   if (!currentWorkflow.value) return;
   startingTest.value = true;
   try {
-    await saveDraft(false);
-    validation.value = (await validateAiWorkflowDraft(currentWorkflow.value.id)).data;
-    if (!validation.value.valid) {
-      validationVisible.value = true;
-      return;
-    }
+    const result = await validateDraft(false);
+    if (!result?.valid) return;
     testVisible.value = true;
   } finally {
     startingTest.value = false;
@@ -337,9 +366,10 @@ const openVersions = async (row: AiWorkflowVO) => {
   versions.value = (await listAiWorkflowVersions(row.id)).data || [];
   versionsVisible.value = true;
 };
-const addVariable = () =>
+const addVariable = () => {
+  const usedKeys = new Set(graph.value.variables.map((item) => String(item.key || '').trim()).filter(Boolean));
   graph.value.variables.push({
-    key: `workflow.custom_${Date.now().toString(36)}`,
+    key: createVariableKey(usedKeys),
     label: '',
     description: '',
     type: 'STRING',
@@ -347,6 +377,12 @@ const addVariable = () =>
     defaultValue: '',
     missingPolicy: 'USE_DEFAULT'
   });
+};
+const openVariables = (createIfEmpty = false) => {
+  ensureVariableKeys();
+  if (createIfEmpty && !graph.value.variables.length) addVariable();
+  variablesVisible.value = true;
+};
 const versionLabel = (status: string) => ({ DRAFT: '草稿', PUBLISHED: '已发布', ARCHIVED: '已归档' })[status] || status;
 const versionTag = (status: string) => (status === 'PUBLISHED' ? 'success' : status === 'DRAFT' ? 'warning' : 'info');
 onMounted(load);
