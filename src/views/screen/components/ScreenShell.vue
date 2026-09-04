@@ -246,43 +246,44 @@ html.screen-route-active #app > * {
   background: repeating-linear-gradient(
     0deg,
     transparent,
-    transparent 2px,
-    rgba(0, 140, 220, 0.012) 2px,
-    rgba(0, 140, 220, 0.012) 3px
+    transparent 3px,
+    rgba(0, 140, 220, 0.008) 3px,
+    rgba(0, 140, 220, 0.008) 4px
   );
-  opacity: 0.7;
+  opacity: 0.35;
 }
 
 .screen-glow {
   position: absolute;
   border-radius: 50%;
-  filter: blur(100px);
+  filter: blur(120px);
   pointer-events: none;
+  opacity: 0.72;
 }
 
 .screen-glow-center {
   top: 18%;
   left: 50%;
-  width: 520px;
-  height: 280px;
-  background: rgba(20, 90, 180, 0.16);
+  width: 480px;
+  height: 240px;
+  background: rgba(20, 90, 180, 0.1);
   transform: translate(-50%, -50%);
 }
 
 .screen-glow-left {
   top: -100px;
   left: -60px;
-  width: 360px;
-  height: 360px;
-  background: rgba(0, 70, 160, 0.22);
+  width: 320px;
+  height: 320px;
+  background: rgba(0, 70, 160, 0.14);
 }
 
 .screen-glow-right {
   right: -80px;
   bottom: -100px;
-  width: 380px;
-  height: 380px;
-  background: rgba(0, 130, 160, 0.14);
+  width: 340px;
+  height: 340px;
+  background: rgba(0, 130, 160, 0.1);
 }
 
 .screen-header {

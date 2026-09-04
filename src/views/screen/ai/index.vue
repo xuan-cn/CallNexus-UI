@@ -236,17 +236,17 @@ const emptyLatencyTrend = (): AiScreenLatencyPoint[] =>
     tts: 0
   }));
 
+const emptyKpis = (): AiScreenKpi[] => [
+  { label: '意图命中率', value: '0%', extra: '近 1 小时' },
+  { label: '平均置信度', value: '0%', extra: '意图识别' },
+  { label: 'AI 并发会话', value: '0', extra: '暂无会话' },
+  { label: '识别耗时', value: '0 ms', extra: '意图识别' }
+];
+
 const emptyOutcomes = (): AiScreenOutcome[] => [
   { label: text.outcomeResolved, value: 0, color: '#2ee6a8' },
   { label: text.outcomeTransfer, value: 0, color: '#ff9a3c' },
   { label: text.outcomeFail, value: 0, color: '#ff7a7a' }
-];
-
-const emptyKpis = (): AiScreenKpi[] => [
-  { label: '意图识别准确率', value: '0%', extra: '近 1 小时' },
-  { label: '平均置信度', value: '0%', extra: '意图识别' },
-  { label: 'AI 并发会话', value: '0', extra: '暂无会话' },
-  { label: '平均响应', value: '0 ms', extra: '意图识别' }
 ];
 
 const kpis = ref<AiScreenKpi[]>(emptyKpis());
