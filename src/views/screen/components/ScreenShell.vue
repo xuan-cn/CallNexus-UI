@@ -1,8 +1,10 @@
 <template>
-  <div ref="shellRef" class="screen-shell">
+  <div ref="shellRef" class="screen-shell" :class="`theme-${theme}`">
     <div class="screen-bg">
       <div class="screen-aurora" />
+      <div class="screen-nebula" />
       <div class="screen-grid" />
+      <div class="screen-horizon" />
       <div class="screen-noise" />
       <div class="screen-vignette" />
       <div class="screen-scanline" />
@@ -66,15 +68,21 @@
 import screenfull from 'screenfull';
 import { useRouter } from 'vue-router';
 
-const props = defineProps<{
-  title: string;
-  subtitle?: string;
-  footerText?: string;
-  badgeText?: string;
-  badgeTone?: 'demo' | 'live' | 'loading';
-  switchTo?: { label: string; path: string };
-  switchLinks?: { label: string; path: string }[];
-}>();
+const props = withDefaults(
+  defineProps<{
+    title: string;
+    subtitle?: string;
+    footerText?: string;
+    badgeText?: string;
+    badgeTone?: 'demo' | 'live' | 'loading';
+    theme?: 'ops' | 'exhibit';
+    switchTo?: { label: string; path: string };
+    switchLinks?: { label: string; path: string }[];
+  }>(),
+  {
+    theme: 'ops'
+  }
+);
 
 const router = useRouter();
 const resolvedSwitches = computed(() => {
@@ -203,10 +211,40 @@ html.screen-route-active #app > * {
   position: absolute;
   inset: -20%;
   background:
-    conic-gradient(from 210deg at 30% 40%, transparent 0deg, rgba(0, 120, 220, 0.07) 40deg, transparent 90deg),
-    conic-gradient(from 40deg at 70% 55%, transparent 0deg, rgba(0, 180, 200, 0.05) 50deg, transparent 110deg);
+    conic-gradient(from 210deg at 30% 40%, transparent 0deg, rgba(0, 120, 220, 0.09) 40deg, transparent 90deg),
+    conic-gradient(from 40deg at 70% 55%, transparent 0deg, rgba(0, 180, 200, 0.07) 50deg, transparent 110deg);
   filter: blur(60px);
   animation: screen-aurora-drift 18s ease-in-out infinite alternate;
+}
+
+.screen-nebula {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 55% 40% at 50% 35%, rgba(40, 110, 200, 0.16), transparent 70%),
+    radial-gradient(ellipse 35% 30% at 18% 60%, rgba(0, 90, 160, 0.12), transparent 65%),
+    radial-gradient(ellipse 30% 28% at 84% 55%, rgba(80, 60, 180, 0.1), transparent 65%);
+  pointer-events: none;
+}
+
+.screen-horizon {
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  bottom: 7%;
+  height: 120px;
+  background:
+    linear-gradient(180deg, transparent, rgba(30, 90, 150, 0.08) 40%, transparent),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent 46px,
+      rgba(80, 170, 230, 0.05) 46px,
+      rgba(80, 170, 230, 0.05) 47px
+    );
+  mask-image: linear-gradient(180deg, transparent, #000 30%, #000 70%, transparent);
+  opacity: 0.7;
+  pointer-events: none;
 }
 
 @keyframes screen-aurora-drift {
@@ -218,11 +256,11 @@ html.screen-route-active #app > * {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(40, 130, 200, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(40, 130, 200, 0.045) 1px, transparent 1px);
+    linear-gradient(rgba(40, 130, 200, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(40, 130, 200, 0.06) 1px, transparent 1px);
   background-size: 48px 48px;
   mask-image: radial-gradient(ellipse 80% 70% at 50% 45%, #000 10%, transparent 78%);
-  opacity: 0.9;
+  opacity: 0.95;
 }
 
 .screen-noise {
@@ -285,6 +323,32 @@ html.screen-route-active #app > * {
   height: 340px;
   background: rgba(0, 130, 160, 0.1);
 }
+
+
+.theme-ops .screen-glow-center {
+  background: rgba(30, 120, 220, 0.16);
+}
+
+.theme-exhibit .screen-glow-center {
+  top: 22%;
+  width: 520px;
+  height: 280px;
+  background: rgba(130, 80, 220, 0.18);
+}
+
+.theme-exhibit .screen-nebula {
+  background:
+    radial-gradient(ellipse 55% 40% at 50% 38%, rgba(120, 70, 200, 0.2), transparent 70%),
+    radial-gradient(ellipse 35% 30% at 18% 60%, rgba(40, 80, 180, 0.1), transparent 65%),
+    radial-gradient(ellipse 30% 28% at 84% 55%, rgba(61, 214, 165, 0.1), transparent 65%);
+}
+
+.theme-exhibit .screen-grid {
+  background-image:
+    linear-gradient(rgba(140, 110, 220, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(140, 110, 220, 0.055) 1px, transparent 1px);
+}
+
 
 .screen-header {
   position: relative;
@@ -515,7 +579,7 @@ html.screen-route-active #app > * {
 
 .screen-body {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   display: flex;
   flex: 1;
   flex-direction: column;

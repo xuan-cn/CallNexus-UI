@@ -58,7 +58,7 @@
                   {{ column.label }}
                 </el-checkbox>
               </el-checkbox-group>
-              <div class="column-setting-tip">自定义字段请在客户表单模板中打开“列表显示”。</div>
+              <div class="column-setting-tip">当前页全空的自定义字段会自动隐藏。要长期显示请在客户表单模板中打开“列表显示”。</div>
             </el-popover>
           </el-col>
           <el-col :span="6" class="table-meta-col">
@@ -125,60 +125,60 @@
             <span v-else class="text-muted">暂无号码</span>
           </template>
         </el-table-column>
-        <el-table-column label="归属" min-width="150" show-overflow-tooltip>
+        <el-table-column label="归属" min-width="132" show-overflow-tooltip>
           <template #default="{ row }">
             <div v-if="isAssigned(row)" class="assign-cell">
               <el-tag v-if="row.skillGroupId" type="success" effect="plain" size="small" round>{{ skillGroupName(row.skillGroupId) }}</el-tag>
               <span v-if="row.agentId" class="agent-text">坐席 {{ row.agentId }}</span>
             </div>
-            <el-tag v-else type="info" effect="plain" size="small" round class="tag-unassigned">未分配</el-tag>
+            <span v-else class="cell-quiet">未分配</span>
           </template>
         </el-table-column>
-        <el-table-column v-if="isFixedColumnVisible('customerType')" label="客户类型" min-width="110" show-overflow-tooltip>
+        <el-table-column v-if="isFixedColumnVisible('customerType')" label="客户类型" min-width="100" show-overflow-tooltip>
           <template #default="{ row }">
-            <span v-if="row.customerType">{{ row.customerType }}</span>
-            <span v-else class="cell-empty">-</span>
+            <span v-if="row.customerType" class="cell-value">{{ row.customerType }}</span>
+            <span v-else class="cell-quiet">—</span>
           </template>
         </el-table-column>
-        <el-table-column v-if="isFixedColumnVisible('tags')" label="标签" min-width="140" show-overflow-tooltip>
+        <el-table-column v-if="isFixedColumnVisible('tags')" label="标签" min-width="128" show-overflow-tooltip>
           <template #default="{ row }">
             <div v-if="tagList(row.tags).length" class="tag-cell">
               <el-tag v-for="tag in tagList(row.tags).slice(0, 2)" :key="tag" size="small" effect="plain" round>{{ tag }}</el-tag>
               <span v-if="tagList(row.tags).length > 2" class="tag-more">+{{ tagList(row.tags).length - 2 }}</span>
             </div>
-            <span v-else class="cell-empty">-</span>
+            <span v-else class="cell-quiet">—</span>
           </template>
         </el-table-column>
-        <el-table-column v-if="isFixedColumnVisible('sourceChannel')" label="来源渠道" min-width="110" show-overflow-tooltip>
+        <el-table-column v-if="isFixedColumnVisible('sourceChannel')" label="来源渠道" min-width="100" show-overflow-tooltip>
           <template #default="{ row }">
-            <span v-if="row.sourceChannel">{{ row.sourceChannel }}</span>
-            <span v-else class="cell-empty">-</span>
+            <span v-if="row.sourceChannel" class="cell-value">{{ row.sourceChannel }}</span>
+            <span v-else class="cell-quiet">—</span>
           </template>
         </el-table-column>
-        <el-table-column v-if="isFixedColumnVisible('sourceCallId')" label="来源通话" min-width="160" show-overflow-tooltip>
+        <el-table-column v-if="isFixedColumnVisible('sourceCallId')" label="来源通话" min-width="140" show-overflow-tooltip>
           <template #default="{ row }">
-            <span v-if="row.sourceCallId">{{ row.sourceCallId }}</span>
-            <span v-else class="cell-empty">-</span>
+            <span v-if="row.sourceCallId" class="cell-value">{{ row.sourceCallId }}</span>
+            <span v-else class="cell-quiet">—</span>
           </template>
         </el-table-column>
         <el-table-column
-          v-for="field in listVisibleCustomerFields"
+          v-for="field in populatedListFields"
           :key="field.fieldCode"
           :label="field.fieldName"
-          min-width="120"
+          min-width="96"
           show-overflow-tooltip
         >
           <template #default="{ row }">
-            <span v-if="hasFormFieldValue(row.formData?.[field.fieldCode])">
+            <span v-if="hasFormFieldValue(row.formData?.[field.fieldCode])" class="cell-value">
               {{ displayFormFieldValue(row.formData?.[field.fieldCode], field) }}
             </span>
-            <span v-else class="cell-empty">-</span>
+            <span v-else class="cell-quiet">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="创建时间" width="168" show-overflow-tooltip>
+        <el-table-column label="创建时间" width="156" show-overflow-tooltip>
           <template #default="{ row }">
             <span v-if="formatCreateTime(row.createTime)" class="time-text">{{ formatCreateTime(row.createTime) }}</span>
-            <span v-else class="cell-empty">-</span>
+            <span v-else class="cell-quiet">—</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="88" align="center" fixed="right">
@@ -624,7 +624,7 @@ const configurableFixedColumns = [
   { key: 'sourceChannel', label: '来源渠道' },
   { key: 'sourceCallId', label: '来源通话' }
 ];
-const visibleFixedColumns = ref<string[]>(['tags']);
+const visibleFixedColumns = ref<string[]>([]);
 const defaultImportForm = (): CustomerImportForm => ({
   duplicateStrategy: 'SKIP',
   defaultCustomerType: '',
@@ -675,6 +675,12 @@ const listVisibleCustomerFields = computed(() =>
     .filter((field) => field.listVisible)
     .filter((field, index, fields) => fields.findIndex((item) => item.fieldCode === field.fieldCode) === index)
     .sort((first, second) => (first.sortOrder || 0) - (second.sortOrder || 0))
+);
+/** 当前页至少有一条有值的自定义列才展示，避免空列铺满拉稀信息密度 */
+const populatedListFields = computed(() =>
+  listVisibleCustomerFields.value.filter((field) =>
+    rows.value.some((row) => hasFormFieldValue(row.formData?.[field.fieldCode]))
+  )
 );
 const templateImportFields = computed(() =>
   (selectedFormTemplate.value?.fields || [])
@@ -1135,6 +1141,11 @@ onBeforeUnmount(stopImportPolling);
   padding-bottom: 12px;
 }
 
+.customer-list-page .table-card :deep(.el-card__body) {
+  padding-top: 10px;
+  padding-bottom: 12px;
+}
+
 .customer-list-page .table-toolbar {
   flex-wrap: wrap;
 }
@@ -1155,11 +1166,12 @@ onBeforeUnmount(stopImportPolling);
   align-items: center;
   height: 24px;
   padding: 0 10px;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid #e2e8f0;
   border-radius: 999px;
-  background: var(--el-fill-color-blank);
-  color: var(--el-text-color-secondary);
+  background: #f8fafc;
+  color: #64748b;
   font-size: 12px;
+  font-weight: 600;
 }
 
 .customer-list-page .meta-chip.is-active {
@@ -1168,22 +1180,57 @@ onBeforeUnmount(stopImportPolling);
   color: var(--el-color-primary);
 }
 
+.customer-list-page .customer-table {
+  --el-table-bg-color: #fff;
+  --el-table-tr-bg-color: #fff;
+  --el-table-header-bg-color: #f1f5f9;
+  --el-table-row-hover-bg-color: #f0f7ff;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
 .customer-list-page .customer-table :deep(th.el-table__cell) {
-  font-weight: 500 !important;
-  color: var(--el-text-color-secondary);
-  background: var(--el-fill-color-lighter) !important;
+  height: 40px;
+  padding: 8px 0 !important;
+  font-weight: 650 !important;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: #475569 !important;
+  background: #f1f5f9 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
 }
 
 .customer-list-page .customer-table :deep(td.el-table__cell) {
-  padding: 9px 0 !important;
+  padding: 8px 0 !important;
+  border-bottom: 1px solid #eef2f7 !important;
 }
 
 .customer-list-page .customer-table :deep(.el-table__body tr.el-table__row--striped td.el-table__cell) {
-  background: #fafbfc;
+  background: #f8fafc;
+}
+
+.customer-list-page .customer-table :deep(.el-table__body tr:hover > td.el-table__cell) {
+  background: #f0f7ff !important;
+}
+
+.customer-list-page .customer-table :deep(.el-table-fixed-column--left),
+.customer-list-page .customer-table :deep(.el-table-fixed-column--right) {
+  background: #fff;
+}
+
+.customer-list-page .customer-table :deep(.el-table__body tr.el-table__row--striped .el-table-fixed-column--left),
+.customer-list-page .customer-table :deep(.el-table__body tr.el-table__row--striped .el-table-fixed-column--right) {
+  background: #f8fafc;
+}
+
+.customer-list-page .customer-table :deep(.el-table__body tr:hover .el-table-fixed-column--left),
+.customer-list-page .customer-table :deep(.el-table__body tr:hover .el-table-fixed-column--right) {
+  background: #f0f7ff !important;
 }
 
 .customer-list-page .customer-table :deep(.el-table-fixed-column--right) {
-  box-shadow: -4px 0 8px rgba(15, 23, 42, 0.04);
+  box-shadow: -6px 0 12px rgba(15, 23, 42, 0.05);
 }
 
 .name-link.el-button.is-link {
@@ -1191,8 +1238,8 @@ onBeforeUnmount(stopImportPolling);
   max-width: 100%;
   padding: 0;
   overflow: hidden;
-  color: #2563eb !important;
-  font-weight: 500;
+  color: #1e40af !important;
+  font-weight: 650;
   text-overflow: ellipsis;
   vertical-align: middle;
   white-space: nowrap;
@@ -1215,13 +1262,14 @@ onBeforeUnmount(stopImportPolling);
   display: inline-flex;
   align-items: center;
   max-width: 100%;
-  padding: 2px 6px 2px 4px;
-  gap: 4px;
+  padding: 1px 6px 1px 3px;
+  gap: 5px;
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #64748b;
+  color: #334155;
   font-size: 13px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease;
@@ -1254,12 +1302,6 @@ onBeforeUnmount(stopImportPolling);
 .phone-link:hover .el-icon {
   background: var(--el-color-primary-light-8);
   color: var(--el-color-primary);
-}
-
-.tag-unassigned {
-  border-color: var(--el-border-color-lighter);
-  background: var(--el-fill-color-light);
-  color: var(--el-text-color-placeholder);
 }
 
 .phone-extra {
@@ -1312,14 +1354,20 @@ onBeforeUnmount(stopImportPolling);
   font-size: 12px;
 }
 
-.cell-empty {
-  color: #e4e7ed;
+.cell-value {
+  color: #334155;
+  font-size: 13px;
+}
+
+.cell-quiet {
+  color: #cbd5e1;
+  font-size: 12px;
   user-select: none;
 }
 
 .time-text {
-  color: var(--el-text-color-regular);
-  font-size: 13px;
+  color: #64748b;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 

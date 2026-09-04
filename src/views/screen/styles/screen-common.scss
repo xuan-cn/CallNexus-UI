@@ -91,7 +91,7 @@
 }
 
 .screen-panel-hero::after {
-  opacity: 1;
+  opacity: 0.9;
 }
 
 .screen-panel-hero::before {
@@ -125,204 +125,61 @@
   }
 }
 
-.screen-stage-floor {
-  position: absolute;
-  left: 12%;
-  right: 12%;
-  bottom: 4%;
-  height: 34%;
-  border-radius: 50%;
-  background: radial-gradient(ellipse at center, rgba(61, 231, 255, 0.28), transparent 68%);
-  filter: blur(4px);
-  transform: perspective(420px) rotateX(58deg) scaleY(0.55);
-  pointer-events: none;
-  animation: screen-floor-pulse 3.6s ease-in-out infinite;
-}
-
-@keyframes screen-floor-pulse {
-  0%,
-  100% {
-    opacity: 0.55;
-  }
-  50% {
-    opacity: 0.95;
-  }
-}
-
-.screen-hero-mega-label {
-  color: rgba(140, 190, 220, 0.9);
-  font-size: 15px;
-  letter-spacing: 4px;
-}
-
-.screen-hero-mega-value {
-  margin-top: 4px;
-  color: #eaf6ff;
-  font-size: clamp(56px, 7vw, 92px);
-  font-weight: 700;
-  line-height: 0.95;
-  letter-spacing: 2px;
-  text-shadow:
-    0 0 40px rgba(61, 231, 255, 0.55),
-    0 0 80px rgba(0, 140, 255, 0.25);
-  font-variant-numeric: tabular-nums;
-  animation: screen-mega-glow 3.2s ease-in-out infinite;
-}
-
-@keyframes screen-mega-glow {
-  0%,
-  100% {
-    text-shadow:
-      0 0 36px rgba(61, 231, 255, 0.45),
-      0 0 70px rgba(0, 140, 255, 0.2);
-  }
-  50% {
-    text-shadow:
-      0 0 52px rgba(61, 231, 255, 0.7),
-      0 0 96px rgba(0, 180, 255, 0.35);
-  }
-}
-
-.screen-hero-mega-extra {
-  margin-top: 8px;
-  color: rgba(110, 160, 195, 0.8);
-  font-size: 13px;
-}
-
-.screen-hero-mega-extra.is-up {
-  color: #2ee6a8;
-}
-
-.screen-hero-mega-extra.is-down {
-  color: #ff7a7a;
-}
-
-.screen-hero-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-  padding: 6px 14px;
-  border: 1px solid rgba(61, 231, 255, 0.35);
-  background: rgba(4, 24, 52, 0.65);
-  color: #9fdfff;
-  font-size: 13px;
-  letter-spacing: 1px;
-  box-shadow: 0 0 18px rgba(61, 231, 255, 0.18);
-}
-
-.screen-hero-chip strong {
-  color: #eaf6ff;
-  font-size: 18px;
-}
-
 /* ---------- Panel: deep glass with soft cyan frame ---------- */
 
 .screen-panel {
-
   position: relative;
-
   display: flex;
-
   flex: 1;
-
   flex-direction: column;
-
   min-height: 0;
-
   overflow: hidden;
-
-  border: 1px solid rgba(56, 160, 220, 0.18);
-
+  border: 1px solid rgba(90, 180, 240, 0.22);
   background:
-    linear-gradient(160deg, rgba(10, 32, 68, 0.92) 0%, rgba(4, 14, 34, 0.96) 48%, rgba(6, 22, 48, 0.94) 100%);
-
-  backdrop-filter: blur(12px) saturate(1.2);
-
+    linear-gradient(160deg, rgba(12, 36, 72, 0.72) 0%, rgba(6, 16, 36, 0.78) 48%, rgba(8, 24, 50, 0.74) 100%);
+  backdrop-filter: blur(14px) saturate(1.25);
   box-shadow:
-
-    inset 0 1px 0 rgba(140, 210, 255, 0.1),
-
-    inset 0 0 60px rgba(0, 50, 120, 0.22),
-
-    0 10px 32px rgba(0, 0, 0, 0.4),
-
-    0 0 20px rgba(61, 231, 255, 0.04);
-
+    inset 0 1px 0 rgba(160, 220, 255, 0.14),
+    inset 0 0 50px rgba(0, 50, 120, 0.16),
+    0 10px 32px rgba(0, 0, 0, 0.36),
+    0 0 22px rgba(61, 231, 255, 0.05);
 }
-
-
 
 .screen-panel::before {
-
   content: '';
-
   position: absolute;
-
   top: 0;
-
   left: 10%;
-
   right: 10%;
-
   height: 1px;
-
   background: linear-gradient(
-
     90deg,
-
     transparent,
-
-    rgba(61, 231, 255, 0.35) 25%,
-
-    rgba(160, 230, 255, 0.75) 50%,
-
-    rgba(61, 231, 255, 0.35) 75%,
-
+    rgba(61, 231, 255, 0.4) 25%,
+    rgba(180, 240, 255, 0.85) 50%,
+    rgba(61, 231, 255, 0.4) 75%,
     transparent
-
   );
-
   z-index: 2;
-
 }
 
-
-
 .screen-panel::after {
-
   content: '';
-
   position: absolute;
-
   inset: 0;
-
   pointer-events: none;
-
   z-index: 2;
-
   background:
-
-    linear-gradient(#5aefff, #5aefff) left top / 18px 2px no-repeat,
-
-    linear-gradient(#5aefff, #5aefff) left top / 2px 18px no-repeat,
-
-    linear-gradient(#5aefff, #5aefff) right top / 18px 2px no-repeat,
-
-    linear-gradient(#5aefff, #5aefff) right top / 2px 18px no-repeat,
-
-    linear-gradient(#1e6fb8, #1e6fb8) left bottom / 14px 1.5px no-repeat,
-
-    linear-gradient(#1e6fb8, #1e6fb8) left bottom / 1.5px 14px no-repeat,
-
-    linear-gradient(#1e6fb8, #1e6fb8) right bottom / 14px 1.5px no-repeat,
-
-    linear-gradient(#1e6fb8, #1e6fb8) right bottom / 1.5px 14px no-repeat;
-
-  opacity: 0.7;
-
-  filter: drop-shadow(0 0 6px rgba(61, 231, 255, 0.4));
-
+    linear-gradient(#7af0ff, #7af0ff) left top / 20px 2px no-repeat,
+    linear-gradient(#7af0ff, #7af0ff) left top / 2px 20px no-repeat,
+    linear-gradient(#7af0ff, #7af0ff) right top / 20px 2px no-repeat,
+    linear-gradient(#7af0ff, #7af0ff) right top / 2px 20px no-repeat,
+    linear-gradient(#3a8fd0, #3a8fd0) left bottom / 16px 1.5px no-repeat,
+    linear-gradient(#3a8fd0, #3a8fd0) left bottom / 1.5px 16px no-repeat,
+    linear-gradient(#3a8fd0, #3a8fd0) right bottom / 16px 1.5px no-repeat,
+    linear-gradient(#3a8fd0, #3a8fd0) right bottom / 1.5px 16px no-repeat;
+  opacity: 0.85;
+  filter: drop-shadow(0 0 8px rgba(61, 231, 255, 0.45));
 }
 
 
@@ -462,16 +319,16 @@
   border: 1px solid rgba(56, 160, 220, 0.2);
 
   background:
-
-    linear-gradient(145deg, rgba(10, 36, 72, 0.85) 0%, rgba(5, 18, 42, 0.9) 55%, rgba(8, 28, 58, 0.75) 100%);
+    linear-gradient(180deg, color-mix(in srgb, var(--kpi-accent) 8%, transparent) 0%, transparent 28%),
+    linear-gradient(145deg, rgba(10, 36, 72, 0.82) 0%, rgba(5, 18, 42, 0.88) 55%, rgba(8, 28, 58, 0.8) 100%);
 
   box-shadow:
 
     inset 0 1px 0 rgba(100, 190, 255, 0.1),
 
-    inset 0 -20px 40px rgba(0, 40, 100, 0.25),
+    inset 0 -20px 40px rgba(0, 40, 100, 0.22),
 
-    0 4px 16px rgba(0, 0, 0, 0.3);
+    0 4px 16px rgba(0, 0, 0, 0.28);
 
 }
 
@@ -1145,37 +1002,17 @@
   100% { background-position: -100% 0; }
 }
 
-%screen-skel-shine {
-  color: transparent !important;
-  background: linear-gradient(
-    90deg,
-    rgba(80, 140, 200, 0.12) 20%,
-    rgba(140, 200, 255, 0.28) 50%,
-    rgba(80, 140, 200, 0.12) 80%
-  ) !important;
-  background-size: 200% 100% !important;
-  animation: screen-skel-shine 1.35s ease-in-out infinite;
-  border-radius: 4px;
-  text-shadow: none !important;
-  box-shadow: none !important;
-  min-width: 2.5em;
-  display: inline-block;
-}
-
 .screen-page.is-bootstrapping {
   .screen-kpi-value,
   .screen-kpi-extra,
-  .home-hero-inbound,
-  .home-rate-value,
   .home-agent-num,
-  .home-hero-extra,
-  .ai-rate-value,
-  .ai-rate-sub,
-  .ai-stat-value,
   .ai-bar-num,
   .ai-bar-pct,
-  .ai-extra-value {
-    @extend %screen-skel-shine;
+  .ai-extra-value,
+  .orb-value,
+  .orb-sat-value {
+    opacity: 0.42;
+    filter: saturate(0.55);
   }
 
   .screen-chart {
@@ -1183,11 +1020,23 @@
     filter: saturate(0.4);
   }
 
-  .home-target-fill,
-  .ai-bar-fill,
-  .ai-rate-progress,
-  .home-rate-progress {
+  .ai-bar-fill {
     opacity: 0.15 !important;
+  }
+}
+
+.screen-page {
+  .screen-kpi-value,
+  .screen-kpi-extra,
+  .home-agent-num,
+  .ai-bar-num,
+  .ai-bar-pct,
+  .ai-extra-value,
+  .orb-value,
+  .orb-sat-value,
+  .screen-chart,
+  .ai-bar-fill {
+    transition: opacity 0.28s ease;
   }
 }
 
@@ -1219,25 +1068,6 @@
 .screen-skel-line.is-mid { width: 68%; }
 .screen-skel-line.is-long { width: 88%; }
 
-.theme-exhibit.screen-page.is-bootstrapping {
-  .screen-kpi-value,
-  .screen-kpi-extra,
-  .ai-rate-value,
-  .ai-rate-sub,
-  .ai-stat-value,
-  .ai-bar-num,
-  .ai-bar-pct,
-  .ai-extra-value {
-    background: linear-gradient(
-      90deg,
-      rgba(120, 100, 200, 0.14) 20%,
-      rgba(180, 160, 255, 0.3) 50%,
-      rgba(120, 100, 200, 0.14) 80%
-    ) !important;
-    background-size: 200% 100% !important;
-  }
-}
-
 .theme-exhibit .screen-skel-line {
   background: linear-gradient(
     90deg,
@@ -1246,50 +1076,4 @@
     rgba(120, 100, 200, 0.12) 80%
   );
   background-size: 200% 100%;
-}
-
-/* ---------- First data reveal ---------- */
-
-@keyframes screen-reveal-up {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes screen-reveal-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.screen-page.is-revealing {
-  .screen-kpi-card {
-    animation: screen-reveal-up 0.42s ease both;
-  }
-
-  .screen-kpi-card:nth-child(1) { animation-delay: 0ms; }
-  .screen-kpi-card:nth-child(2) { animation-delay: 45ms; }
-  .screen-kpi-card:nth-child(3) { animation-delay: 90ms; }
-  .screen-kpi-card:nth-child(4) { animation-delay: 135ms; }
-
-  .screen-cols {
-    animation: screen-reveal-fade 0.48s ease both;
-    animation-delay: 100ms;
-  }
-
-  .screen-kpi-value,
-  .home-hero-inbound,
-  .home-rate-value,
-  .home-agent-num,
-  .ai-rate-value,
-  .ai-stat-value,
-  .ai-extra-value,
-  .ai-bar-num {
-    animation: screen-reveal-fade 0.36s ease both;
-    animation-delay: 160ms;
-  }
 }

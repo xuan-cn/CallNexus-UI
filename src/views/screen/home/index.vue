@@ -1,5 +1,6 @@
 <template>
   <ScreenShell
+    theme="ops"
     :title="text.title"
     subtitle="CALL CENTER OPERATIONS DASHBOARD"
     :footer-text="text.footer"
@@ -8,7 +9,7 @@
   >
     <div
       class="screen-page home-page theme-ops"
-      :class="{ 'is-bootstrapping': isBootstrapping, 'is-revealing': isRevealing }"
+      :class="{ 'is-bootstrapping': isBootstrapping }"
     >
       <section class="home-kpis screen-kpi-grid screen-kpi-grid-compact screen-kpi-grid-4">
         <article v-for="(item, index) in displayKpis" :key="`home-kpi-${index}`" class="screen-kpi-card" :class="`is-tone-${index}`">
@@ -58,44 +59,14 @@
           <article class="screen-panel screen-panel-side home-hero">
             <div class="home-hero-body">
               <div class="home-hero-main">
-                <div class="home-hero-glow" aria-hidden="true" />
-                <div class="home-hero-floor" aria-hidden="true" />
-                <div class="home-rate-stage">
-                  <div class="home-orbit" aria-hidden="true"><i /><i /></div>
-                  <div class="home-rate-wrap">
-                    <svg class="home-rate-svg" viewBox="0 0 120 120" aria-hidden="true">
-                      <circle class="home-rate-track" cx="60" cy="60" r="52" />
-                      <circle
-                        class="home-rate-progress"
-                        cx="60"
-                        cy="60"
-                        r="52"
-                        transform="rotate(-90 60 60)"
-                        :stroke-dasharray="ringLength"
-                        :stroke-dashoffset="ringOffset"
-                      />
-                    </svg>
-                    <div class="home-rate-hole">
-                      <div class="home-rate-value">{{ isBootstrapping ? '00' : displayAnswerRate }}%</div>
-                      <div class="home-rate-label">{{ text.heroRate }}</div>
-                    </div>
-                  </div>
-                </div>
-                <div class="home-hero-copy">
-                  <div class="home-hero-kicker">{{ text.heroInbound }}</div>
-                  <div class="home-hero-inbound">{{ isBootstrapping ? '00' : heroCore.inbound }}</div>
-                  <div v-if="!isBootstrapping && heroCore.inboundExtra" class="home-hero-extra" :class="heroCore.inboundTone">
-                    {{ heroCore.inboundExtra }}
-                  </div>
-                  <div v-else-if="isBootstrapping" class="home-hero-extra">----</div>
-                  <div class="home-target-row">
-                    <span>{{ text.heroTarget }}</span>
-                    <div class="home-target-track">
-                      <span class="home-target-fill" :style="{ width: `${Math.min(displayAnswerRate, 100)}%` }" />
-                      <i class="home-target-mark" />
-                    </div>
-                  </div>
-                </div>
+                <ScreenHeroOrb
+                  theme="ops"
+                  :percent="displayAnswerRate"
+                  :value-text="`${isBootstrapping ? '00' : displayAnswerRate}%`"
+                  :label="text.heroRate"
+                  :sub="isBootstrapping ? '----' : text.heroRateSub"
+                  :satellites="heroSatellites"
+                />
               </div>
 
               <div class="home-agent-strip">
@@ -205,6 +176,7 @@ import {
   type HomeScreenTrendPoint
 } from '@/api/screen/home';
 import ScreenShell from '../components/ScreenShell.vue';
+import ScreenHeroOrb from '../components/ScreenHeroOrb.vue';
 import { homeText as text } from '../constants/text';
 import { buildAreaStyle, screenAxisStyle, screenGrid, screenLegend, screenTooltip } from '../utils/chart-theme';
 
@@ -267,15 +239,29 @@ let skillChart: echarts.ECharts | undefined;
 let refreshTimer: number | undefined;
 const liveDataOk = ref(false);
 const loadFailed = ref(false);
-const hasRevealed = ref(false);
-const isRevealing = ref(false);
+const chartsReady = ref(false);
 const isBootstrapping = computed(() => !liveDataOk.value && !loadFailed.value);
-let revealTimer: number | undefined;
 
-const RING_R = 52;
-const ringLength = 2 * Math.PI * RING_R;
 const displayAnswerRate = computed(() => Math.round(Number(heroCore.value.answerRate) || 0));
-const ringOffset = computed(() => ringLength * (1 - Math.min(100, Math.max(0, displayAnswerRate.value)) / 100));
+
+const heroSatellites = computed(() => [
+  {
+    label: text.heroInbound,
+    value: isBootstrapping.value ? '00' : String(heroCore.value.inbound || '0')
+  },
+  {
+    label: text.heroOnline,
+    value: isBootstrapping.value ? '00' : String(displayKpis.value[0]?.value ?? '0')
+  },
+  {
+    label: text.heroQueue,
+    value: isBootstrapping.value ? '00' : String(displayKpis.value[1]?.value ?? '0')
+  },
+  {
+    label: text.heroTarget,
+    value: '85%'
+  }
+]);
 
 const agentBars = computed(() => {
   const items = agentSummary.value.items || [];
@@ -296,7 +282,7 @@ const ensureChart = (el: HTMLDivElement | undefined, chart?: echarts.ECharts) =>
   return echarts.init(el);
 };
 
-const renderTrendChart = (withAnimation = false) => {
+const renderTrendChart = () => {
   trendChart = ensureChart(trendChartRef.value, trendChart);
   if (!trendChart) return;
 
@@ -312,9 +298,7 @@ const renderTrendChart = (withAnimation = false) => {
 
   trendChart.setOption(
     {
-      animation: withAnimation,
-      animationDuration: withAnimation ? 650 : 0,
-      animationEasing: 'cubicOut',
+      animation: false,
       color: ['#2ecbff', '#9b7bff', '#3dd6a5'],
       tooltip: screenTooltip,
       legend: screenLegend,
@@ -365,11 +349,11 @@ const renderTrendChart = (withAnimation = false) => {
         }
       ]
     },
-    { notMerge: true }
+    { lazyUpdate: true }
   );
 };
 
-const renderSkillChart = (withAnimation = false) => {
+const renderSkillChart = () => {
   skillChart = ensureChart(skillChartRef.value, skillChart);
   if (!skillChart) return;
   if (!skillGroups.value.length) {
@@ -382,9 +366,7 @@ const renderSkillChart = (withAnimation = false) => {
 
   skillChart.setOption(
     {
-      animation: withAnimation,
-      animationDuration: withAnimation ? 550 : 0,
-      animationEasing: 'cubicOut',
+      animation: false,
       color: ['#2ecbff'],
       tooltip: {
         trigger: 'axis',
@@ -430,24 +412,13 @@ const renderSkillChart = (withAnimation = false) => {
         }
       ]
     },
-    { notMerge: true }
+    { lazyUpdate: true }
   );
 };
 
-const renderCharts = (withAnimation = false) => {
-  renderTrendChart(withAnimation);
-  renderSkillChart(withAnimation);
-};
-
-const triggerFirstReveal = () => {
-  if (hasRevealed.value) return false;
-  hasRevealed.value = true;
-  isRevealing.value = true;
-  if (revealTimer) window.clearTimeout(revealTimer);
-  revealTimer = window.setTimeout(() => {
-    isRevealing.value = false;
-  }, 700);
-  return true;
+const renderCharts = () => {
+  renderTrendChart();
+  renderSkillChart();
 };
 
 const applyDashboard = (data: HomeScreenDashboard) => {
@@ -488,21 +459,26 @@ const loadDashboard = async () => {
     if (!payload || typeof payload !== 'object') {
       throw new Error('empty dashboard');
     }
-    const firstReveal = triggerFirstReveal();
     applyDashboard(payload as HomeScreenDashboard);
     liveDataOk.value = true;
     loadFailed.value = false;
     nextTick(() => {
-      renderCharts(firstReveal);
-      requestAnimationFrame(handleResize);
+      renderCharts();
+      if (!chartsReady.value) {
+        chartsReady.value = true;
+        requestAnimationFrame(handleResize);
+      }
     });
   } catch {
     // 轮询失败时保留上一帧；仅首次失败进入异常态，不清成误导性的 0
     if (!liveDataOk.value) {
       loadFailed.value = true;
       nextTick(() => {
-        renderCharts(false);
-        requestAnimationFrame(handleResize);
+        renderCharts();
+        if (!chartsReady.value) {
+          chartsReady.value = true;
+          requestAnimationFrame(handleResize);
+        }
       });
     }
   }
@@ -522,7 +498,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize);
   if (refreshTimer) window.clearInterval(refreshTimer);
-  if (revealTimer) window.clearTimeout(revealTimer);
   trendChart?.dispose();
   skillChart?.dispose();
 });
@@ -538,13 +513,11 @@ onBeforeUnmount(() => {
 
 .home-kpis {
   flex: 0 0 auto;
-  min-height: 68px;
+  min-height: 56px;
 }
 
 .home-page :deep(.screen-kpi-value),
-.home-agent-num,
-.home-hero-inbound,
-.home-rate-value {
+.home-agent-num {
   font-variant-numeric: tabular-nums;
 }
 
@@ -571,8 +544,8 @@ onBeforeUnmount(() => {
 
 .home-cols {
   flex: 1;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.16fr) minmax(0, 0.92fr);
+  gap: 8px;
   align-items: stretch;
 }
 
@@ -607,10 +580,6 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  border-color: rgba(46, 203, 255, 0.3);
-  background:
-    radial-gradient(ellipse 78% 58% at 50% 36%, rgba(0, 150, 220, 0.18), transparent 64%),
-    linear-gradient(180deg, rgba(4, 36, 72, 0.92) 0%, rgba(2, 14, 34, 0.98) 100%);
 }
 
 .home-hero-body {
@@ -618,219 +587,24 @@ onBeforeUnmount(() => {
   grid-template-rows: minmax(0, 1fr) auto;
   height: 100%;
   min-height: 0;
-  padding: 12px 16px 14px !important;
+  padding: 4px 6px 8px !important;
   box-sizing: border-box;
-  gap: 12px;
+  gap: 4px;
 }
 
 .home-hero-main {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: clamp(16px, 2.4vw, 28px);
   min-height: 0;
   overflow: hidden;
-}
-
-.home-hero-glow {
-  position: absolute;
-  left: 50%;
-  top: 46%;
-  width: min(92%, 420px);
-  height: min(76%, 240px);
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  background:
-    radial-gradient(ellipse at center, rgba(46, 203, 255, 0.16), transparent 68%),
-    radial-gradient(ellipse at 50% 80%, rgba(0, 80, 160, 0.2), transparent 70%);
-  pointer-events: none;
-}
-
-.home-hero-floor {
-  position: absolute;
-  left: 50%;
-  bottom: 6%;
-  width: min(78%, 340px);
-  height: 24px;
-  transform: translateX(-50%);
-  border-radius: 50%;
-  background: radial-gradient(ellipse at center, rgba(46, 203, 255, 0.2), transparent 72%);
-  filter: blur(1px);
-  pointer-events: none;
-}
-
-.home-rate-stage {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  width: clamp(140px, 34%, 200px);
-  aspect-ratio: 1;
-}
-
-.home-orbit {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-
-  i {
-    position: absolute;
-    inset: 0;
-    border: 1px solid rgba(46, 203, 255, 0.14);
-    border-radius: 50%;
-  }
-
-  i:nth-child(1) {
-    inset: 2%;
-    border-style: dashed;
-    animation: home-orbit-spin 18s linear infinite;
-  }
-
-  i:nth-child(2) {
-    inset: -6%;
-    opacity: 0.55;
-    border-color: rgba(46, 203, 255, 0.1);
-  }
-}
-
-.home-rate-wrap {
-  position: relative;
-  z-index: 1;
-  width: 78%;
-  aspect-ratio: 1;
-  filter: drop-shadow(0 0 16px rgba(46, 203, 255, 0.32));
-  animation: home-ring-pulse 3.6s ease-in-out infinite;
-}
-
-.home-rate-svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.home-rate-track,
-.home-rate-progress {
-  fill: none;
-  stroke-width: 9;
-  stroke-linecap: round;
-}
-
-.home-rate-track {
-  stroke: rgba(46, 203, 255, 0.16);
-}
-
-.home-rate-progress {
-  stroke: #2ecbff;
-  transition: stroke-dashoffset 0.8s ease;
-}
-
-.home-rate-hole {
-  position: absolute;
-  inset: 18%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: radial-gradient(circle at 50% 40%, rgba(20, 60, 100, 0.55), rgba(4, 16, 36, 0.92));
-  text-align: center;
-}
-
-.home-rate-value {
-  color: #eaf6ff;
-  font-size: clamp(28px, 3vw, 40px);
-  font-weight: 700;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-
-.home-rate-label {
-  margin-top: 6px;
-  color: rgba(140, 190, 220, 0.78);
-  font-size: 12px;
-  letter-spacing: 1px;
-}
-
-.home-hero-copy {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-  max-width: 240px;
-}
-
-.home-hero-kicker {
-  color: rgba(140, 190, 220, 0.82);
-  font-size: 13px;
-  letter-spacing: 1px;
-}
-
-.home-hero-inbound {
-  color: #eaf6ff;
-  font-size: clamp(48px, 5.6vw, 76px);
-  font-weight: 700;
-  line-height: 0.95;
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 24px rgba(46, 203, 255, 0.28);
-}
-
-.home-hero-extra {
-  color: rgba(140, 190, 220, 0.78);
-  font-size: 13px;
-
-  &.is-up {
-    color: #3dd6a5;
-  }
-
-  &.is-down {
-    color: #ff7a6e;
-  }
-}
-
-.home-target-row {
-  display: grid;
-  gap: 6px;
-  margin-top: 6px;
-  color: rgba(120, 170, 200, 0.72);
-  font-size: 11px;
-  letter-spacing: 0.5px;
-}
-
-.home-target-track {
-  position: relative;
-  height: 6px;
-  overflow: hidden;
-  border: 1px solid rgba(46, 203, 255, 0.2);
-  background: rgba(4, 24, 52, 0.65);
-}
-
-.home-target-fill {
-  display: block;
-  height: 100%;
-  background: linear-gradient(90deg, #0d6a9a, #2ecbff);
-  transition: width 0.8s ease;
-}
-
-.home-target-mark {
-  position: absolute;
-  top: -3px;
-  bottom: -3px;
-  left: 85%;
-  width: 2px;
-  background: rgba(255, 184, 77, 0.9);
-  box-shadow: 0 0 8px rgba(255, 184, 77, 0.55);
 }
 
 .home-agent-strip {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   flex-shrink: 0;
-  padding-top: 4px;
-  border-top: 1px solid rgba(46, 203, 255, 0.14);
+  padding: 6px 2px 0;
+  border-top: 1px solid rgba(46, 203, 255, 0.16);
 }
 
 .home-agent-head {
@@ -851,16 +625,18 @@ onBeforeUnmount(() => {
 .home-agent-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  border: 1px solid rgba(46, 203, 255, 0.16);
-  background: linear-gradient(180deg, rgba(8, 36, 68, 0.5), rgba(4, 18, 40, 0.4));
+  border: 1px solid rgba(46, 203, 255, 0.2);
+  background:
+    linear-gradient(180deg, rgba(12, 42, 76, 0.55), rgba(4, 18, 40, 0.45));
+  box-shadow: inset 0 1px 0 rgba(140, 220, 255, 0.06);
 }
 
 .home-agent-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   min-width: 0;
-  padding: 14px 16px;
+  padding: 5px 10px;
 
   &:not(:last-child) {
     border-right: 1px solid rgba(46, 203, 255, 0.12);
@@ -869,22 +645,22 @@ onBeforeUnmount(() => {
 
 .home-agent-dot {
   flex-shrink: 0;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   box-shadow: 0 0 8px currentColor;
 }
 
 .home-agent-name {
   color: rgba(140, 180, 210, 0.85);
-  font-size: 13px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
 .home-agent-num {
   margin-left: auto;
   color: #eaf6ff;
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -941,34 +717,7 @@ onBeforeUnmount(() => {
   background: linear-gradient(90deg, transparent, rgba(46, 203, 255, 0.35), transparent);
 }
 
-@keyframes home-ring-pulse {
-  0%,
-  100% {
-    filter: drop-shadow(0 0 10px rgba(46, 203, 255, 0.2));
-  }
-  50% {
-    filter: drop-shadow(0 0 18px rgba(46, 203, 255, 0.42));
-  }
-}
-
-@keyframes home-orbit-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 @media (max-width: 1360px) {
-  .home-hero-main {
-    gap: 14px;
-  }
-
-  .home-rate-stage {
-    width: clamp(140px, 36%, 180px);
-  }
-
   .home-agent-item {
     padding: 12px 12px;
   }

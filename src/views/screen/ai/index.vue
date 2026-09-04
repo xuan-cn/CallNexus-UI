@@ -1,5 +1,6 @@
 <template>
   <ScreenShell
+    theme="exhibit"
     :title="text.title"
     subtitle="AI VOICEBOT OPERATIONS DASHBOARD"
     :footer-text="text.footer"
@@ -8,7 +9,7 @@
   >
     <div
       class="screen-page ai-page theme-exhibit"
-      :class="{ 'is-bootstrapping': isBootstrapping, 'is-revealing': isRevealing }"
+      :class="{ 'is-bootstrapping': isBootstrapping }"
     >
       <section class="ai-kpis screen-kpi-grid screen-kpi-grid-compact screen-kpi-grid-4">
         <article v-for="(item, index) in displayKpis" :key="`ai-kpi-${index}`" class="screen-kpi-card" :class="`is-tone-${index}`">
@@ -46,39 +47,15 @@
 
         <div class="screen-col ai-col-center">
           <article class="screen-panel screen-col-grow screen-panel-hero ai-panel-top ai-hero">
-            <div class="screen-panel-head">
-              <div>
-                <div class="screen-panel-title">{{ text.heroResolve }}</div>
-                <div class="screen-panel-sub">{{ text.heroResolveSub }}</div>
-              </div>
-            </div>
             <div class="screen-panel-body ai-hero-body">
-              <div class="ai-hero-rate">
-                <div class="ai-rate-wrap">
-                  <svg class="ai-rate-svg" viewBox="0 0 120 120" aria-hidden="true">
-                    <circle class="ai-rate-track" cx="60" cy="60" r="52" />
-                    <circle
-                      class="ai-rate-progress"
-                      cx="60"
-                      cy="60"
-                      r="52"
-                      transform="rotate(-90 60 60)"
-                      :stroke-dasharray="ringLength"
-                      :stroke-dashoffset="ringOffset"
-                    />
-                  </svg>
-                  <div class="ai-rate-hole">
-                    <div class="ai-rate-value">{{ isBootstrapping ? '00' : heroCore.resolve }}%</div>
-                    <div class="ai-rate-sub">{{ text.funnelInbound }} {{ isBootstrapping ? '00' : heroCore.inbound }}</div>
-                  </div>
-                </div>
-              </div>
-              <div class="ai-hero-stats">
-                <div v-for="item in focusMetrics" :key="item.label" class="ai-stat-chip">
-                  <span class="ai-stat-label">{{ item.label }}</span>
-                  <strong class="ai-stat-value" :style="{ color: item.color }">{{ item.value }}</strong>
-                </div>
-              </div>
+              <ScreenHeroOrb
+                theme="exhibit"
+                :percent="heroCore.resolve"
+                :value-text="`${isBootstrapping ? '00' : heroCore.resolve}%`"
+                :label="text.heroResolve"
+                :sub="isBootstrapping ? '----' : `${text.funnelInbound} ${heroCore.inbound}`"
+                :satellites="aiSatellites"
+              />
             </div>
           </article>
           <article class="screen-panel screen-col-grow screen-panel-side ai-panel-bottom ai-panel-funnel">
@@ -202,6 +179,7 @@ import {
   type AiScreenTrafficPoint
 } from '@/api/screen/ai';
 import ScreenShell from '../components/ScreenShell.vue';
+import ScreenHeroOrb from '../components/ScreenHeroOrb.vue';
 import { aiText as text } from '../constants/text';
 import { buildAreaStyle, screenAxisStyle, screenGrid, screenLegend, screenTooltip } from '../utils/chart-theme';
 
@@ -275,19 +253,29 @@ let latencyChart: echarts.ECharts | undefined;
 let refreshTimer: number | undefined;
 const liveDataOk = ref(false);
 const loadFailed = ref(false);
-const hasRevealed = ref(false);
-const isRevealing = ref(false);
+const chartsReady = ref(false);
 const isBootstrapping = computed(() => !liveDataOk.value && !loadFailed.value);
-let revealTimer: number | undefined;
 
-const RING_R = 52;
-const ringLength = 2 * Math.PI * RING_R;
-const ringOffset = computed(() => ringLength * (1 - heroCore.value.resolve / 100));
-
-const focusMetrics = computed(() => [
-  { label: text.heroTransfer, value: `${heroCore.value.transfer}%`, color: '#ff9a3c' },
-  { label: text.heroFailRate, value: `${heroCore.value.failRate}%`, color: '#ff7a7a' },
-  { label: text.heroAvgConf, value: `${Math.round(heroCore.value.avgConfidence * 100)}%`, color: '#6ec8ff' }
+const aiSatellites = computed(() => [
+  {
+    label: text.heroTransfer,
+    value: isBootstrapping.value ? '00%' : `${heroCore.value.transfer}%`,
+    color: '#ff9a3c'
+  },
+  {
+    label: text.heroFailRate,
+    value: isBootstrapping.value ? '00%' : `${heroCore.value.failRate}%`,
+    color: '#ff7a7a'
+  },
+  {
+    label: text.heroAvgConf,
+    value: isBootstrapping.value ? '00%' : `${Math.round(heroCore.value.avgConfidence * 100)}%`,
+    color: '#6ec8ff'
+  },
+  {
+    label: text.heroTodaySessions,
+    value: isBootstrapping.value ? '00' : `${heroExtras.value.todaySessions}`
+  }
 ]);
 
 const heroExtraCards = computed(() => [
@@ -317,7 +305,7 @@ const ensureChart = (el: HTMLDivElement | undefined, chart?: echarts.ECharts) =>
   return echarts.init(el);
 };
 
-const renderTrafficChart = (withAnimation = false) => {
+const renderTrafficChart = () => {
   trafficChart = ensureChart(trafficChartRef.value, trafficChart);
   if (!trafficChart) return;
   const maxVal = Math.max(
@@ -326,9 +314,7 @@ const renderTrafficChart = (withAnimation = false) => {
   );
   trafficChart.setOption(
     {
-      animation: withAnimation,
-      animationDuration: withAnimation ? 650 : 0,
-      animationEasing: 'cubicOut',
+      animation: false,
       color: ['#9b7bff', '#6ec8ff', '#3dd6a5'],
       tooltip: screenTooltip,
       legend: screenLegend,
@@ -376,19 +362,17 @@ const renderTrafficChart = (withAnimation = false) => {
         }
       ]
     },
-    { notMerge: true }
+    { lazyUpdate: true }
   );
 };
 
-const renderLatencyChart = (withAnimation = false) => {
+const renderLatencyChart = () => {
   latencyChart = ensureChart(latencyChartRef.value, latencyChart);
   if (!latencyChart) return;
   const maxVal = Math.max(1, ...latencyTrend.value.map((item) => item.asr));
   latencyChart.setOption(
     {
-      animation: withAnimation,
-      animationDuration: withAnimation ? 550 : 0,
-      animationEasing: 'cubicOut',
+      animation: false,
       color: ['#9b7bff'],
       tooltip: screenTooltip,
       legend: screenLegend,
@@ -414,24 +398,13 @@ const renderLatencyChart = (withAnimation = false) => {
         }
       ]
     },
-    { notMerge: true }
+    { lazyUpdate: true }
   );
 };
 
-const renderCharts = (withAnimation = false) => {
-  renderTrafficChart(withAnimation);
-  renderLatencyChart(withAnimation);
-};
-
-const triggerFirstReveal = () => {
-  if (hasRevealed.value) return false;
-  hasRevealed.value = true;
-  isRevealing.value = true;
-  if (revealTimer) window.clearTimeout(revealTimer);
-  revealTimer = window.setTimeout(() => {
-    isRevealing.value = false;
-  }, 700);
-  return true;
+const renderCharts = () => {
+  renderTrafficChart();
+  renderLatencyChart();
 };
 
 const applyDashboard = (data: AiScreenDashboard) => {
@@ -459,21 +432,26 @@ const loadDashboard = async () => {
     if (!payload || typeof payload !== 'object') {
       throw new Error('empty dashboard');
     }
-    const firstReveal = triggerFirstReveal();
     applyDashboard(payload as AiScreenDashboard);
     liveDataOk.value = true;
     loadFailed.value = false;
     nextTick(() => {
-      renderCharts(firstReveal);
-      requestAnimationFrame(handleResize);
+      renderCharts();
+      if (!chartsReady.value) {
+        chartsReady.value = true;
+        requestAnimationFrame(handleResize);
+      }
     });
   } catch {
     // 轮询失败保留上一帧；首次失败进入异常态，不回填假 0
     if (!liveDataOk.value) {
       loadFailed.value = true;
       nextTick(() => {
-        renderCharts(false);
-        requestAnimationFrame(handleResize);
+        renderCharts();
+        if (!chartsReady.value) {
+          chartsReady.value = true;
+          requestAnimationFrame(handleResize);
+        }
       });
     }
   }
@@ -493,7 +471,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize);
   if (refreshTimer) window.clearInterval(refreshTimer);
-  if (revealTimer) window.clearTimeout(revealTimer);
   trafficChart?.dispose();
   latencyChart?.dispose();
 });
@@ -525,7 +502,7 @@ onBeforeUnmount(() => {
 
 .ai-cols {
   flex: 1;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.2fr) minmax(0, 0.9fr);
   gap: 6px;
   align-items: stretch;
 }
@@ -567,137 +544,31 @@ onBeforeUnmount(() => {
 
 .ai-kpis {
   flex: 0 0 auto;
-  min-height: 64px;
+  min-height: 52px;
 }
 
 .ai-page :deep(.screen-kpi-value),
-.ai-stat-value,
-.ai-rate-value,
 .ai-extra-value,
 .ai-bar-num,
 .ai-bar-pct {
   font-variant-numeric: tabular-nums;
 }
 
+.ai-hero {
+  flex: 2.4 !important;
+  overflow: hidden;
+}
+
 .ai-hero-body {
-  display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  align-items: center;
-  gap: 12px;
   height: 100%;
   min-height: 0;
-  padding: 8px 8px 10px;
+  padding: 4px 6px !important;
   box-sizing: border-box;
   overflow: hidden;
 }
 
-.ai-hero-rate {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.ai-rate-wrap {
-  position: relative;
-  width: clamp(112px, 70%, 168px);
-  max-height: min(100%, 168px);
-  aspect-ratio: 1;
-  filter: drop-shadow(0 0 12px rgba(61, 214, 165, 0.25));
-}
-
-.ai-rate-svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.ai-rate-track,
-.ai-rate-progress {
-  fill: none;
-  stroke-width: 10;
-  stroke-linecap: round;
-}
-
-.ai-rate-track {
-  stroke: rgba(148, 163, 184, 0.2);
-}
-
-.ai-rate-progress {
-  stroke: #3dd6a5;
-  transition: stroke-dashoffset 0.6s ease;
-}
-
-.ai-rate-hole {
-  position: absolute;
-  inset: 18%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 40% 35%, rgba(48, 28, 96, 0.72), rgba(8, 6, 24, 0.98) 72%);
-  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.55);
-  text-align: center;
-  pointer-events: none;
-}
-
-.ai-rate-value {
-  color: #f6f2ff;
-  font-size: clamp(20px, 1.8vw, 28px);
-  font-weight: 700;
-  line-height: 1;
-  text-shadow: 0 0 18px rgba(61, 214, 165, 0.4);
-  font-variant-numeric: tabular-nums;
-}
-
-.ai-rate-sub {
-  margin-top: 3px;
-  color: rgba(170, 160, 220, 0.75);
-  font-size: 10px;
-  white-space: nowrap;
-}
-
-.ai-hero-stats {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 8px;
-  min-width: 0;
-  min-height: 0;
-  max-height: 100%;
-  overflow: hidden;
-}
-
-.ai-stat-chip {
-  display: grid;
-  flex: 0 0 auto;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  padding: 8px 10px;
-  border: 1px solid rgba(155, 123, 255, 0.22);
-  border-radius: 8px;
-  background: linear-gradient(120deg, rgba(60, 36, 110, 0.42), rgba(18, 14, 42, 0.55));
-}
-
-.ai-stat-label {
-  color: rgba(200, 185, 240, 0.82);
-  font-size: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ai-stat-value {
-  font-size: 16px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  white-space: nowrap;
+.ai-panel-funnel {
+  flex: 0.72 !important;
 }
 
 .ai-funnel-body {
@@ -902,19 +773,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-height: 820px) {
-  .ai-rate-wrap {
-    width: clamp(96px, 58%, 132px);
-  }
-
-  .ai-stat-chip {
-    min-height: 28px;
-    padding: 5px 8px;
-  }
-
-  .ai-stat-value {
-    font-size: 14px;
-  }
-
   .ai-funnel-bars {
     gap: 6px;
   }
