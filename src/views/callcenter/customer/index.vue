@@ -591,6 +591,7 @@ const total = ref(0);
 const createVisible = ref(false);
 const customerDialogPhone = ref('');
 const router = useRouter();
+const route = useRoute();
 const query = reactive<CustomerQuery>({ pageNum: 1, pageSize: 10, assignmentState: '' });
 const selectedCustomers = ref<CustomerVO[]>([]);
 const defaultAssignmentForm = (): CustomerAssignmentForm => ({
@@ -714,11 +715,7 @@ const isAssigned = (row: CustomerVO) => !!(row.skillGroupId || row.agentId || ro
 const assignmentText = (row: CustomerVO) => {
   const parts: string[] = [];
   if (row.skillGroupId) parts.push(skillGroupName(row.skillGroupId));
-<<<<<<< Updated upstream
-  if (row.agentId) parts.push(`坐席 ${row.agentId}`);
-=======
   if (row.agentId) parts.push(row.agentName || `#${row.agentId}`);
->>>>>>> Stashed changes
   if (parts.length) return parts.join(' · ');
   return row.assignmentId ? '已分配' : '未分配';
 };
@@ -1106,6 +1103,10 @@ const isImportRunning = (status?: CustomerImportBatchStatus) => status === 'PEND
 const isImportFinished = (status?: CustomerImportBatchStatus) => status === 'SUCCESS' || status === 'PARTIAL_SUCCESS';
 
 onMounted(() => {
+  const assignmentState = String(route.query.assignmentState || '');
+  if (assignmentState) {
+    query.assignmentState = assignmentState;
+  }
   load();
   loadSkillGroups();
   loadCustomerFormTemplates();

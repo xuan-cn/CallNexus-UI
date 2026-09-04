@@ -181,14 +181,11 @@ import {
 import { getHomeBusinessOverview, type HomeBusinessOverview } from '@/api/callcenter/home-overview';
 import { ElMessage } from 'element-plus';
 import { computed, onMounted, ref, type Component } from 'vue';
-import { usePermissionStore } from '@/store/modules/permission';
-import type { RouteRecordRaw } from 'vue-router';
-import { getNormalPath } from '@/utils/callnexus';
+import type { RouteRecordNormalized } from 'vue-router';
 
 type PeriodMode = 'day' | 'month' | 'year';
 
 const router = useRouter();
-const permissionStore = usePermissionStore();
 
 const loading = ref(false);
 const overview = ref<HomeBusinessOverview>();
@@ -263,15 +260,21 @@ const ticketPending = computed(
   () => Number(overview.value?.ticketOpen || 0) + Number(overview.value?.ticketProcessing || 0)
 );
 
-const openCustomer = () => router.push(resolveDashboardPath('customer'));
-const openTicket = () => router.push(resolveDashboardPath('ticket'));
-const openCallRecord = () => router.push(resolveDashboardPath('callRecord'));
-const openOutboundTask = () => router.push(resolveDashboardPath('outboundTask'));
-const openUnassignedCustomer = () => {
-  router.push({ path: resolveDashboardPath('customer'), query: { assignmentState: 'UNASSIGNED' } });
+const navigateDashboard = (key: DashboardLinkKey, query?: Record<string, string>) => {
+  const path = resolveDashboardPath(key);
+  if (!path || !isNavigablePath(path)) {
+    ElMessage.warning('未找到对应页面，请从左侧菜单进入');
+    return;
+  }
+  void router.push(query ? { path, query } : path);
 };
-const openVoicemail = () =>
-  router.push({ path: resolveDashboardPath('voicemail'), query: { status: 'UNHANDLED' } });
+
+const openCustomer = () => navigateDashboard('customer');
+const openTicket = () => navigateDashboard('ticket');
+const openCallRecord = () => navigateDashboard('callRecord');
+const openOutboundTask = () => navigateDashboard('outboundTask');
+const openUnassignedCustomer = () => navigateDashboard('customer', { assignmentState: 'UNASSIGNED' });
+const openVoicemail = () => navigateDashboard('voicemail', { status: 'UNHANDLED' });
 
 const customerAssigned = computed(() =>
   Math.max(0, Number(overview.value?.customerTotal || 0) - Number(overview.value?.customerUnassigned || 0))
@@ -448,24 +451,24 @@ const dashboardRouteTargets: Record<DashboardLinkKey, DashboardRouteTarget> = {
     titles: ['客户列表', '客户', '客户管理'],
     names: ['Customer', 'customer'],
     pathEnds: ['/customer/customer', '/biz-center/customer', '/callcenter/customer', '/customer'],
-    fallbacks: ['/customer/customer', '/biz-center/customer', '/callcenter/customer', '/customer']
+    fallbacks: ['/customer/customer', '/biz-center/customer', '/callcenter/customer']
   },
   ticket: {
     titles: ['工单列表', '工单', '工单管理'],
     names: ['Ticket', 'ticket'],
     pathEnds: ['/ticket/ticket', '/biz-center/ticket', '/callcenter/ticket', '/ticket'],
-    fallbacks: ['/ticket/ticket', '/biz-center/ticket', '/callcenter/ticket', '/ticket']
+    fallbacks: ['/ticket/ticket', '/biz-center/ticket', '/callcenter/ticket']
   },
   callRecord: {
     titles: ['通话记录'],
     names: ['call-record', 'CallRecord'],
-    pathEnds: ['/call-record'],
+    pathEnds: ['/call-record', '/callcenter/call-record'],
     fallbacks: ['/call-record', '/callcenter/call-record']
   },
   outboundTask: {
     titles: ['外呼任务'],
     names: ['outbound-task', 'OutboundTask'],
-    pathEnds: ['/outbound-task'],
+    pathEnds: ['/outbound-task', '/callcenter/outbound-task'],
     fallbacks: ['/outbound-task', '/callcenter/outbound-task']
   },
   screenHome: {
@@ -477,7 +480,7 @@ const dashboardRouteTargets: Record<DashboardLinkKey, DashboardRouteTarget> = {
   voicemail: {
     titles: ['语音留言'],
     names: ['voicemail', 'Voicemail'],
-    pathEnds: ['/voicemail'],
+    pathEnds: ['/voicemail', '/callcenter/voicemail'],
     fallbacks: ['/voicemail', '/callcenter/voicemail']
   }
 };
@@ -491,71 +494,75 @@ const quickActions: QuickAction[] = [
   { label: '未分配客户', desc: '待分配线索', tone: 'red', icon: UserFilled, routeKey: 'customer' }
 ];
 
-const joinRoutePath = (parentPath: string, routePath?: string) => {
-  if (!routePath) return parentPath || '/';
-  // 绝对路径直接用；相对路径拼到父级，避免 child=`customer` + parent=`/customer` 被误判成 `/customer`
-  if (routePath.startsWith('/')) return getNormalPath(routePath);
-  const base = parentPath === '/' ? '' : parentPath;
-  return getNormalPath(`${base}/${routePath}`);
-};
+const EXCLUDED_DASHBOARD_ROUTE_NAMES = new Set(['TicketWorkflowForm', 'CustomerDetailWorkspace']);
 
-const flattenRoutes = (routes: RouteRecordRaw[], parentPath = ''): Array<RouteRecordRaw & { resolvedPath: string }> =>
-  routes.flatMap((route) => {
-    const resolvedPath = joinRoutePath(parentPath, route.path);
-    const current = { ...route, resolvedPath };
-    const nextParent = resolvedPath === '/' ? '' : resolvedPath;
-    return [current, ...flattenRoutes((route.children || []) as RouteRecordRaw[], nextParent)];
-  });
-
-const isLeafPage = (route: RouteRecordRaw & { resolvedPath: string }) => {
-  if (route.children && route.children.length) return false;
-  const path = route.resolvedPath || '';
-  if (!path || path.includes('pathMatch') || path.includes('legacy')) return false;
+const isDashboardPageRoute = (route: RouteRecordNormalized) => {
+  const path = route.path || '';
+  if (!path || path.includes('pathMatch') || path.includes('legacy') || path.includes(':')) return false;
+  if (route.children?.length) return false;
+  if (!route.components?.default) return false;
+  if (route.meta?.hidden) return false;
   const name = String(route.name || '');
-  // 隐藏的办理页/详情页，不能当成列表入口
-  if (name === 'TicketWorkflowForm' || name === 'CustomerDetailWorkspace') return false;
-  if (route.hidden) return false;
-  // 目录菜单通常没有可渲染页面组件
-  return typeof route.component === 'function' || typeof route.component === 'object';
+  if (!name || EXCLUDED_DASHBOARD_ROUTE_NAMES.has(name)) return false;
+  return true;
 };
 
 const isNavigablePath = (path: string) => {
   try {
     const resolved = router.resolve(path);
     if (!resolved.matched.length) return false;
-    return resolved.matched.every((m) => !String(m.path || '').includes('pathMatch'));
+    if (resolved.matched.some((m) => String(m.path || '').includes('pathMatch'))) return false;
+    // 目录路由 redirect=noRedirect 时也能 match，必须落到真正有页面组件的叶子
+    const leaf = resolved.matched[resolved.matched.length - 1];
+    return !!leaf?.components?.default && !(leaf.children && leaf.children.length);
   } catch {
     return false;
   }
 };
 
+const pickBestPath = (paths: string[]) => {
+  const matched = paths
+    .filter((path) => !!path && isNavigablePath(path))
+    .sort((a, b) => b.length - a.length);
+  return matched[0];
+};
+
 const resolveDashboardPath = (key: DashboardLinkKey) => {
   const target = dashboardRouteTargets[key];
-  const routes = flattenRoutes([
-    ...permissionStore.getSidebarRoutes(),
-    ...permissionStore.getRoutes()
-  ]);
-  const pages = routes.filter(isLeafPage);
-
-  // 优先更长路径，避免 `/customer` 误匹配目录而漏掉 `/customer/customer`
+  const pages = router.getRoutes().filter(isDashboardPageRoute);
   const sortedEnds = [...target.pathEnds].sort((a, b) => b.length - a.length);
 
-  const byExactPath = sortedEnds
-    .map((end) => pages.find((route) => route.resolvedPath === end))
-    .find((route) => route?.resolvedPath);
-  if (byExactPath?.resolvedPath) return byExactPath.resolvedPath;
+  const byExact = pickBestPath(
+    sortedEnds.filter((end) => pages.some((route) => route.path === end))
+  );
+  if (byExact) return byExact;
 
-  const byPath = pages.find((route) => sortedEnds.some((end) => route.resolvedPath.endsWith(end)));
-  if (byPath?.resolvedPath) return byPath.resolvedPath;
+  const byPath = pickBestPath(
+    pages
+      .filter((route) => sortedEnds.some((end) => route.path === end || route.path.endsWith(end)))
+      .map((route) => route.path)
+  );
+  if (byPath) return byPath;
 
-  const byName = pages.find((route) => target.names.includes(String(route.name || '')));
-  if (byName?.resolvedPath) return byName.resolvedPath;
+  const byName = pickBestPath(
+    pages
+      .filter((route) => {
+        const name = String(route.name || '');
+        // 后端路由名是 capitalize(path)+menuId，如 Customer9004；避免误匹配 Customer-assignment*
+        return target.names.some((item) => name === item || (name.startsWith(item) && /^\d+$/.test(name.slice(item.length))));
+      })
+      .map((route) => route.path)
+  );
+  if (byName) return byName;
 
-  const byTitle = pages.find((route) => target.titles.includes(String(route.meta?.title || '')));
-  if (byTitle?.resolvedPath) return byTitle.resolvedPath;
+  const byTitle = pickBestPath(
+    pages
+      .filter((route) => target.titles.includes(String(route.meta?.title || '')))
+      .map((route) => route.path)
+  );
+  if (byTitle) return byTitle;
 
-  const fallback = target.fallbacks.find((path) => isNavigablePath(path));
-  return fallback || target.fallbacks[0];
+  return pickBestPath(target.fallbacks) || '';
 };
 
 const loadDashboard = async () => {
@@ -599,12 +606,7 @@ const handleQuickAction = (action: QuickAction) => {
     openUnassignedCustomer();
     return;
   }
-  const path = resolveDashboardPath(action.routeKey);
-  if (path) {
-    router.push(path);
-    return;
-  }
-  ElMessage.info(`${action.label}功能将在对应业务模块开放`);
+  navigateDashboard(action.routeKey);
 };
 
 onMounted(() => {
