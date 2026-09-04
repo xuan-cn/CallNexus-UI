@@ -79,8 +79,8 @@
         stripe
         @selection-change="handleSelectionChange"
       >
-        <el-table-column type="selection" width="48" fixed="left" />
-        <el-table-column label="客户姓名" min-width="132" fixed="left" show-overflow-tooltip>
+        <el-table-column type="selection" width="40" fixed="left" />
+        <el-table-column label="客户姓名" min-width="132" fixed="left" show-overflow-tooltip class-name="customer-name-column">
           <template #default="{ row }">
             <el-button link type="primary" class="name-link" @click="showDetail(row)">
               {{ row.customerName || '未命名客户' }}
@@ -127,11 +127,17 @@
         </el-table-column>
         <el-table-column label="归属" min-width="132" show-overflow-tooltip>
           <template #default="{ row }">
+<<<<<<< Updated upstream
             <div v-if="isAssigned(row)" class="assign-cell">
               <el-tag v-if="row.skillGroupId" type="success" effect="plain" size="small" round>{{ skillGroupName(row.skillGroupId) }}</el-tag>
               <span v-if="row.agentId" class="agent-text">坐席 {{ row.agentId }}</span>
             </div>
             <span v-else class="cell-quiet">未分配</span>
+=======
+            <span :class="['assignment-text', { 'is-unassigned': !isAssigned(row) }]">
+              {{ assignmentText(row) }}
+            </span>
+>>>>>>> Stashed changes
           </template>
         </el-table-column>
         <el-table-column v-if="isFixedColumnVisible('customerType')" label="客户类型" min-width="100" show-overflow-tooltip>
@@ -724,6 +730,14 @@ const skillGroupName = (skillGroupId?: string | number) => {
 const isFixedColumnVisible = (key: string) => visibleFixedColumns.value.includes(key);
 
 const isAssigned = (row: CustomerVO) => !!(row.skillGroupId || row.agentId || row.assignmentId);
+
+const assignmentText = (row: CustomerVO) => {
+  const parts: string[] = [];
+  if (row.skillGroupId) parts.push(skillGroupName(row.skillGroupId));
+  if (row.agentId) parts.push(`#${row.agentId}`);
+  if (parts.length) return parts.join(' · ');
+  return row.assignmentId ? '已分配' : '未分配';
+};
 
 const tagList = (tags?: string) =>
   (tags || '')
@@ -1330,16 +1344,14 @@ onBeforeUnmount(stopImportPolling);
   font-size: 13px;
 }
 
-.assign-cell {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
+.assignment-text {
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  white-space: nowrap;
 }
 
-.agent-text {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
+.assignment-text.is-unassigned {
+  color: var(--el-text-color-placeholder);
 }
 
 .tag-cell {
@@ -1402,6 +1414,10 @@ onBeforeUnmount(stopImportPolling);
 .customer-list-page .customer-table :deep(.el-table__cell .cell) {
   color: var(--el-text-color-regular);
   font-size: 13px;
+}
+
+.customer-list-page .customer-table :deep(.customer-name-column .cell) {
+  padding-left: 4px;
 }
 
 .column-setting-title {

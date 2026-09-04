@@ -338,6 +338,8 @@ export interface AiIntentUtterance {
 }
 export interface AiIntentVO {
   id: Id;
+  groupId?: Id;
+  groupName?: string;
   intentCode: string;
   intentName: string;
   intentType: AiIntentType;
@@ -356,6 +358,27 @@ export interface AiIntentVO {
 }
 export interface AiIntentForm extends Omit<AiIntentVO, 'id' | 'agentNames'> {
   id?: Id;
+}
+export interface AiIntentGroupVO {
+  id: Id;
+  groupCode: string;
+  groupName: string;
+  description?: string;
+  sortOrder: number;
+  enabled: boolean;
+  intentCount: number;
+  version?: number;
+}
+export interface AiIntentGroupForm extends Omit<AiIntentGroupVO, 'id' | 'intentCount'> {
+  id?: Id;
+}
+export interface AiIntentPageQuery extends PageQuery {
+  keyword?: string;
+  groupId?: Id;
+  ungrouped?: boolean;
+  intentType?: AiIntentType;
+  enabled?: boolean;
+  agentId?: Id;
 }
 export interface AiIntentRecognitionVO {
   matched: boolean;

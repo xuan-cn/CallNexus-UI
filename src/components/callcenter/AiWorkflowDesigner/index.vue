@@ -53,6 +53,13 @@
           :closable="false"
           :title="outboundWritebackHint"
         />
+        <el-alert
+          v-if="selectedNode.type === 'CUSTOMER_UPDATE'"
+          class="property-alert"
+          type="warning"
+          :closable="false"
+          title="只会写回这里勾选的字段。手机号和附件不允许由 AI 自动修改。"
+        />
         <el-form label-position="top">
           <el-form-item label="节点名称"><el-input v-model="selectedNode.name" @input="updateSelectedNode" /></el-form-item>
           <el-form-item
@@ -132,6 +139,16 @@
                 ><span v-if="item.description" class="option-extra">{{ item.description }}</span>
               </el-option>
             </el-select>
+            <el-button
+              v-if="property.type === 'CUSTOM_VARIABLE_SELECT'"
+              class="variable-manage-button"
+              link
+              type="primary"
+              icon="Plus"
+              @click="emit('manageVariables')"
+            >
+              {{ customVariableOptions.length ? '管理记录内容' : '新建记录内容' }}
+            </el-button>
             <template v-else-if="property.type === 'FLOW_VALUE'">
               <el-select
                 v-if="selectedCustomVariable?.type === 'BOOLEAN'"
@@ -181,6 +198,32 @@
                 <span>{{ item.intentName }}</span
                 ><span class="option-extra">{{ item.intentCode }}</span>
               </el-option>
+            </el-select>
+            <el-select
+              v-else-if="property.type === 'SLOT_TARGET_MULTI_SELECT'"
+              :model-value="structuredFieldKeys(selectedNode.config[property.key])"
+              multiple
+              filterable
+              collapse-tags
+              collapse-tags-tooltip
+              placeholder="请选择要从客户回答中提取的字段"
+              style="width: 100%"
+              @update:model-value="updateStructuredFields(property.key, $event, slotTargetOptions)"
+            >
+              <el-option v-for="item in slotTargetOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+            <el-select
+              v-else-if="property.type === 'CUSTOMER_FIELD_MULTI_SELECT'"
+              :model-value="structuredFieldKeys(selectedNode.config[property.key])"
+              multiple
+              filterable
+              collapse-tags
+              collapse-tags-tooltip
+              placeholder="请选择本节点允许写回的客户字段"
+              style="width: 100%"
+              @update:model-value="updateStructuredFields(property.key, $event, customerFieldOptions)"
+            >
+              <el-option v-for="item in customerFieldOptions" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
             <el-select
               v-else-if="property.type === 'QUEUE_SELECT'"
@@ -256,14 +299,27 @@ import LogicFlow, { RectNode, RectNodeModel } from '@logicflow/core';
 import '@logicflow/core/lib/index.css';
 import type { AiIntentVO } from '@/api/callcenter/ai-knowledge/types';
 import type { CallQueueVO } from '@/api/callcenter/call-queue/types';
+import type { FormTemplate } from '@/api/callcenter/form-template/types';
 import type { AiWorkflowDefinition, AiWorkflowEdge, AiWorkflowNode } from '@/api/callcenter/ai-workflow/types';
 import { aiWorkflowPaletteDefinitions, getAiWorkflowNodeDefinition, type AiWorkflowNodeDefinition } from './nodeRegistry';
 
-const props = withDefaults(defineProps<{ modelValue: AiWorkflowDefinition; intentOptions?: AiIntentVO[]; queueOptions?: CallQueueVO[] }>(), {
+const props = withDefaults(
+  defineProps<{
+    modelValue: AiWorkflowDefinition;
+    intentOptions?: AiIntentVO[];
+    queueOptions?: CallQueueVO[];
+    customerTemplates?: FormTemplate[];
+  }>(),
+  {
   intentOptions: () => [],
-  queueOptions: () => []
-});
-const emit = defineEmits<{ (e: 'update:modelValue', value: AiWorkflowDefinition): void }>();
+  queueOptions: () => [],
+  customerTemplates: () => []
+  }
+);
+const emit = defineEmits<{
+  (e: 'update:modelValue', value: AiWorkflowDefinition): void;
+  (e: 'manageVariables'): void;
+}>();
 const containerRef = ref<HTMLElement>();
 const selectedNode = ref<AiWorkflowNode>();
 const selectedEdge = ref<AiWorkflowEdge>();
@@ -292,15 +348,28 @@ class WorkflowCardModel extends RectNodeModel {
 const selectedDefinition = computed(() => getAiWorkflowNodeDefinition(selectedNode.value?.type || 'START'));
 const builtInVariableOptions = [
   { label: '客户姓名', value: 'customer.name' },
-  { label: '客户称呼', value: 'customer.salutation' },
+  { label: '客户称呼（自动生成张先生/女士）', value: 'customer.salutation' },
   { label: '客户手机号', value: 'customer.phone' },
-  { label: '客户性别', value: 'customer.gender' },
+  { label: '客户性别（男/女）', value: 'customer.gender' },
+  { label: '是否查询到客户', value: 'customer.found' },
+  { label: '是否提取到信息', value: 'slot.extracted' },
+  { label: '本次提取字段数', value: 'slot.extractedCount' },
+  { label: '是否已更新客户', value: 'customer.updated' },
   { label: '当前客户回答', value: 'conversation.currentInput' },
   { label: '当前识别意图', value: 'conversation.intentCode' },
   { label: '外呼任务名称', value: 'task.name' },
   { label: '企业名称', value: 'task.companyName' },
   { label: '产品名称', value: 'task.productName' },
-  { label: '已澄清次数', value: 'workflow.clarifyCount' }
+  { label: '连续未命中次数', value: 'workflow.clarifyCount' },
+  { label: '知识库是否命中', value: 'knowledge.hit' },
+  { label: '是否使用模型兜底', value: 'knowledge.fallback' },
+  { label: '知识库回答来源', value: 'knowledge.source' },
+  { label: '知识库命中数量', value: 'knowledge.hitCount' },
+  { label: '知识库命中分数', value: 'knowledge.score' },
+  { label: '知识库命中阈值', value: 'knowledge.threshold' },
+  { label: '知识库未命中原因', value: 'knowledge.reason' },
+  { label: 'FAQ 最高分', value: 'knowledge.bestFaqScore' },
+  { label: '文档最高分', value: 'knowledge.bestDocumentScore' }
 ];
 const operatorOptions = [
   { label: '等于', value: 'EQ' },
@@ -325,8 +394,9 @@ const outboundResultOptions = [
   { label: '待人工确认', value: 'PENDING_REVIEW' },
   { label: '编排执行失败', value: 'WORKFLOW_FAILED' }
 ];
-const commonPaletteDefinitions = aiWorkflowPaletteDefinitions.filter((item) => item.type !== 'SET_VARIABLE');
-const advancedPaletteDefinitions = aiWorkflowPaletteDefinitions.filter((item) => item.type === 'SET_VARIABLE');
+const advancedNodeTypes = ['SET_VARIABLE', 'CUSTOMER_QUERY', 'SLOT_EXTRACT', 'CUSTOMER_UPDATE'];
+const commonPaletteDefinitions = aiWorkflowPaletteDefinitions.filter((item) => !advancedNodeTypes.includes(item.type));
+const advancedPaletteDefinitions = aiWorkflowPaletteDefinitions.filter((item) => advancedNodeTypes.includes(item.type));
 const customVariableOptions = computed(() =>
   (props.modelValue.variables || [])
     .filter((item) => item.key)
@@ -343,9 +413,47 @@ const variableOptions = computed(() => {
     .map((item) => ({ label: item.label ? `${item.label}（自定义）` : `${item.key}（自定义）`, value: String(item.key) }));
   return [...builtInVariableOptions, ...custom.filter((item) => !builtInVariableOptions.some((builtIn) => builtIn.value === item.value))];
 });
+interface StructuredFieldOption {
+  label: string;
+  value: string;
+  type: string;
+}
+const customerFieldOptions = computed<StructuredFieldOption[]>(() => {
+  const result: StructuredFieldOption[] = [{ label: '客户姓名', value: 'customer.name', type: 'STRING' }];
+  const used = new Set(result.map((item) => item.value));
+  props.customerTemplates.forEach((template) =>
+    (template.fields || [])
+      .filter((field) => field.fieldType !== 'FILE')
+      .forEach((field) => {
+        const value = `customer.custom.${field.fieldCode}`;
+        if (used.has(value)) return;
+        used.add(value);
+        result.push({ label: `${template.templateName} / ${field.fieldName}`, value, type: field.fieldType === 'NUMBER' ? 'NUMBER' : 'STRING' });
+      })
+  );
+  return result;
+});
+const slotTargetOptions = computed<StructuredFieldOption[]>(() => {
+  const workflowVariables = customVariableOptions.value.map((item) => ({ label: `流程信息 / ${item.label}`, value: item.value, type: item.type }));
+  return [
+    ...workflowVariables,
+    ...customerFieldOptions.value,
+    { label: '客户性别', value: 'customer.gender', type: 'STRING' }
+  ];
+});
 const enabledIntentOptions = computed(() => props.intentOptions.filter((item) => item.enabled !== false));
 const comparisonOptions = computed(() => {
   const variable = selectedNode.value?.config?.variable;
+  const customVariable = customVariableOptions.value.find((item) => item.value === variable);
+  if (
+    customVariable?.type === 'BOOLEAN' ||
+    ['knowledge.hit', 'knowledge.fallback', 'customer.found', 'slot.extracted', 'customer.updated'].includes(String(variable))
+  ) {
+    return [
+      { label: '是', value: 'true' },
+      { label: '否', value: 'false' }
+    ];
+  }
   if (variable === 'customer.gender') {
     return [
       { label: '男', value: 'MALE' },
@@ -391,6 +499,18 @@ const normalizedIntentCodes = (value: unknown): string[] => {
       .filter(Boolean);
   return [];
 };
+const structuredFieldKeys = (value: unknown): string[] =>
+  Array.isArray(value) ? value.map((item) => (typeof item === 'string' ? item : String(item?.key || ''))).filter(Boolean) : [];
+const updateStructuredFields = (key: string, values: string[], options: StructuredFieldOption[]) => {
+  const optionMap = new Map(options.map((item) => [item.value, item]));
+  updateNodeProperty(
+    key,
+    values.map((value) => {
+      const option = optionMap.get(value);
+      return { key: value, label: option?.label || value, type: option?.type || 'STRING' };
+    })
+  );
+};
 const branchLabel = (sourceId: string, condition?: string) => {
   if (!condition) return '';
   const source = props.modelValue.nodes.find((node) => node.id === sourceId) || readGraph().nodes.find((node) => node.id === sourceId);
@@ -415,7 +535,7 @@ const toLogicFlowData = (graph: AiWorkflowDefinition) => ({
   }),
   edges: graph.edges.map((edge) => ({
     id: edge.id,
-    type: 'polyline',
+    type: 'bezier',
     sourceNodeId: edge.source,
     targetNodeId: edge.target,
     text: branchLabel(edge.source, edge.condition),
@@ -516,11 +636,11 @@ const initialize = async () => {
     snapline: true,
     history: true,
     textEdit: false,
-    edgeType: 'polyline'
+    edgeType: 'bezier'
   });
   lf.register({ type: 'ai-workflow-card', view: RectNode, model: WorkflowCardModel });
   lf.setTheme({
-    polyline: { stroke: '#94a3b8', strokeWidth: 2 },
+    bezier: { stroke: '#94a3b8', strokeWidth: 2 },
     anchor: { fill: '#fff', stroke: '#0f4c81', r: 4 },
     edgeText: { color: '#d97706', fontSize: 12, textWidth: 120 }
   });
@@ -641,6 +761,10 @@ onBeforeUnmount(() => lf?.destroy());
   gap: 4px;
   margin-top: 6px;
   color: #8492a6;
+  font-size: 12px;
+}
+.variable-manage-button {
+  margin-top: 6px;
   font-size: 12px;
 }
 .option-extra {

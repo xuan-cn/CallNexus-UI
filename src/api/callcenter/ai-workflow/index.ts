@@ -1,4 +1,5 @@
 import request from '@/utils/request';
+import type { AxiosPromise } from 'axios';
 import type {
   AiAgentWorkflowBindingForm,
   AiAgentWorkflowBindingVO,

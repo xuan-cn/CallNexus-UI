@@ -1,0 +1,27 @@
+/**
+ * 业务页面统一字重。
+ *
+ * 页面层级通过字号、颜色和间距表达，避免各模块自行使用 600/700
+ * 造成视觉过重。该文件必须在 Element Plus 样式之后加载。
+ */
+:root {
+  --app-font-weight-regular: 400;
+  --app-font-weight-emphasis: 500;
+}
+
+body {
+  font-weight: var(--app-font-weight-regular);
+}
+
+.app-main *,
+.el-overlay *,
+.el-popper *,
+.el-message *,
+.el-notification * {
+  font-weight: var(--app-font-weight-regular) !important;
+}
+
+/** 少量关键数字或当前状态需要强调时显式使用，不作为页面标题默认样式。 */
+.app-font-emphasis {
+  font-weight: var(--app-font-weight-emphasis) !important;
+}

@@ -9,6 +9,8 @@ export type AiWorkflowPropertyType =
   | 'FLOW_VALUE'
   | 'OPERATOR_SELECT'
   | 'INTENT_MULTI_SELECT'
+  | 'SLOT_TARGET_MULTI_SELECT'
+  | 'CUSTOMER_FIELD_MULTI_SELECT'
   | 'QUEUE_SELECT'
   | 'RESULT_SELECT';
 
@@ -77,6 +79,30 @@ export const aiWorkflowNodeDefinitions: AiWorkflowNodeDefinition[] = [
     ]
   },
   {
+    type: 'CUSTOMER_QUERY',
+    label: '查询客户',
+    color: '#0369a1',
+    description: '按当前通话号码查询客户，并加载客户资料变量',
+    properties: [{ key: 'phoneTemplate', label: '查询号码', type: 'TEMPLATE', defaultValue: '{{customer.phone}}' }]
+  },
+  {
+    type: 'SLOT_EXTRACT',
+    label: '提取信息',
+    color: '#7e22ce',
+    description: '从客户当前回答中提取选定字段，不推测未提及内容',
+    properties: [
+      { key: 'sourceTemplate', label: '提取来源', type: 'TEMPLATE', defaultValue: '{{conversation.currentInput}}' },
+      { key: 'fields', label: '需要提取的字段', type: 'SLOT_TARGET_MULTI_SELECT', defaultValue: [] }
+    ]
+  },
+  {
+    type: 'CUSTOMER_UPDATE',
+    label: '更新客户',
+    color: '#be123c',
+    description: '仅把明确勾选的字段写回已查询到的客户',
+    properties: [{ key: 'fields', label: '允许更新的字段', type: 'CUSTOMER_FIELD_MULTI_SELECT', defaultValue: [] }]
+  },
+  {
     type: 'KNOWLEDGE_QUERY',
     label: '知识库回答',
     color: '#16a34a',
@@ -114,6 +140,22 @@ export const aiWorkflowNodeDefinitions: AiWorkflowNodeDefinition[] = [
     description: '转入指定技能组或队列',
     terminal: true,
     properties: [{ key: 'queueCode', label: '目标队列', type: 'QUEUE_SELECT' }]
+  },
+  {
+    type: 'TRANSFER_EXTENSION',
+    label: '转分机',
+    color: '#4d7c0f',
+    description: '将当前客户通话转给指定分机',
+    terminal: true,
+    properties: [{ key: 'extension', label: '目标分机', type: 'INPUT', placeholder: '例如：1001' }]
+  },
+  {
+    type: 'TRANSFER_IVR',
+    label: '转 IVR',
+    color: '#3f6212',
+    description: '将当前客户通话转入指定 IVR 流程',
+    terminal: true,
+    properties: [{ key: 'ivrFlowId', label: 'IVR 流程 ID', type: 'INPUT', placeholder: '请输入已发布的 IVR 流程 ID' }]
   },
   { type: 'HANGUP', label: '挂断', color: '#dc2626', description: '结束当前通话', terminal: true, properties: [] },
   { type: 'END', label: '结束', color: '#64748b', description: '正常结束当前编排', terminal: true, properties: [] }

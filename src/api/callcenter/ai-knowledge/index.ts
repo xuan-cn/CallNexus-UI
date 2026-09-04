@@ -93,8 +93,10 @@ export const getAiTicketPrompt = (agentId: T.Id): AxiosPromise<T.AiTicketPromptV
   request({ url: `${aiTicketRoot(agentId)}/prompt`, method: 'get' });
 export const saveAiTicketPromptDraft = (agentId: T.Id, data: { promptContent: string; versionName?: string }) =>
   request({ url: `${aiTicketRoot(agentId)}/prompt/draft`, method: 'put', data });
-export const validateAiTicketPrompt = (agentId: T.Id, data: { promptContent: string; versionName?: string }): AxiosPromise<T.AiTicketPromptValidationVO> =>
-  request({ url: `${aiTicketRoot(agentId)}/prompt/validate`, method: 'post', data });
+export const validateAiTicketPrompt = (
+  agentId: T.Id,
+  data: { promptContent: string; versionName?: string }
+): AxiosPromise<T.AiTicketPromptValidationVO> => request({ url: `${aiTicketRoot(agentId)}/prompt/validate`, method: 'post', data });
 export const publishAiTicketPrompt = (agentId: T.Id) => request({ url: `${aiTicketRoot(agentId)}/prompt/publish`, method: 'post' });
 export const restoreDefaultAiTicketPrompt = (agentId: T.Id) => request({ url: `${aiTicketRoot(agentId)}/prompt/restore-default`, method: 'post' });
 export const listAiTicketPromptVersions = (agentId: T.Id): AxiosPromise<T.AiTicketPromptVersionVO[]> =>
@@ -142,12 +144,24 @@ export const streamAiChat = async (
 };
 
 export const listAiIntents = (): AxiosPromise<T.AiIntentVO[]> => request({ url: `${root}/intents`, method: 'get' });
+export const pageAiIntents = (params: T.AiIntentPageQuery) =>
+  request<{ rows: T.AiIntentVO[]; total: number }>({ url: `${root}/intents/page`, method: 'get', params });
 export const getAiIntent = (id: T.Id): AxiosPromise<T.AiIntentVO> => request({ url: `${root}/intents/${id}`, method: 'get' });
 export const createAiIntent = (data: T.AiIntentForm) => request({ url: `${root}/intents`, method: 'post', data });
 export const updateAiIntent = (id: T.Id, data: T.AiIntentForm) => request({ url: `${root}/intents/${id}`, method: 'put', data });
 export const deleteAiIntent = (id: T.Id) => request({ url: `${root}/intents/${id}`, method: 'delete' });
-export const recognizeAiIntent = (data: { agentId: T.Id; text: string }): AxiosPromise<T.AiIntentRecognitionVO> =>
-  request({ url: `${root}/intents/recognize-test`, method: 'post', data, timeout: 120000 });
+export const batchUpdateAiIntents = (data: { intentIds: T.Id[]; groupId?: T.Id; clearGroup?: boolean; enabled?: boolean }) =>
+  request({ url: `${root}/intents/batch`, method: 'put', data });
+export const listAiIntentGroups = (): AxiosPromise<T.AiIntentGroupVO[]> => request({ url: `${root}/intent-groups`, method: 'get' });
+export const createAiIntentGroup = (data: T.AiIntentGroupForm) => request({ url: `${root}/intent-groups`, method: 'post', data });
+export const updateAiIntentGroup = (id: T.Id, data: T.AiIntentGroupForm) => request({ url: `${root}/intent-groups/${id}`, method: 'put', data });
+export const deleteAiIntentGroup = (id: T.Id) => request({ url: `${root}/intent-groups/${id}`, method: 'delete' });
+export const recognizeAiIntent = (data: {
+  agentId: T.Id;
+  text: string;
+  intentCodes?: string[];
+  groupIds?: T.Id[];
+}): AxiosPromise<T.AiIntentRecognitionVO> => request({ url: `${root}/intents/recognize-test`, method: 'post', data, timeout: 120000 });
 
 const faqLearningRoot = `${root}/faq-learning-candidates`;
 export const pageFaqLearningCandidates = (params: T.PageQuery & { status?: string; knowledgeBaseId?: T.Id; agentId?: T.Id; keyword?: string }) =>
@@ -156,8 +170,10 @@ export const getFaqLearningCandidate = (id: T.Id): AxiosPromise<T.FaqLearningCan
   request({ url: `${faqLearningRoot}/${id}`, method: 'get' });
 export const getFaqLearningStatistics = (): AxiosPromise<T.FaqLearningStatisticsVO> =>
   request({ url: `${faqLearningRoot}/statistics`, method: 'get' });
-export const approveFaqLearningCandidate = (id: T.Id, data: Pick<T.FaqLearningCandidateVO, 'faqCode' | 'faqName' | 'standardQuestion' | 'standardAnswer' | 'aliases' | 'answerMode'>) =>
-  request({ url: `${faqLearningRoot}/${id}/approve`, method: 'post', data });
+export const approveFaqLearningCandidate = (
+  id: T.Id,
+  data: Pick<T.FaqLearningCandidateVO, 'faqCode' | 'faqName' | 'standardQuestion' | 'standardAnswer' | 'aliases' | 'answerMode'>
+) => request({ url: `${faqLearningRoot}/${id}/approve`, method: 'post', data });
 export const mergeFaqLearningCandidate = (id: T.Id, targetFaqId: T.Id) =>
   request({ url: `${faqLearningRoot}/${id}/merge`, method: 'post', data: { targetFaqId } });
 export const rejectFaqLearningCandidate = (id: T.Id, reason: string) =>
