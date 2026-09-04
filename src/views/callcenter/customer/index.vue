@@ -130,14 +130,9 @@
         </el-table-column>
         <el-table-column label="归属" min-width="132" show-overflow-tooltip>
           <template #default="{ row }">
-            <div v-if="isAssigned(row)" class="assign-cell">
-              <el-tag v-if="row.skillGroupId" type="success" effect="plain" size="small" round>
-                {{ skillGroupName(row.skillGroupId) }}
-              </el-tag>
-              <span v-if="row.agentId">坐席 {{ row.agentId }}</span>
-              <span v-if="!row.skillGroupId && !row.agentId">{{ assignmentText(row) }}</span>
-            </div>
-            <span v-else>{{ assignmentText(row) }}</span>
+            <span :class="['assignment-text', { 'is-unassigned': !isAssigned(row) }]">
+              {{ assignmentText(row) }}
+            </span>
           </template>
         </el-table-column>
         <el-table-column v-if="isFixedColumnVisible('customerType')" label="客户类型" min-width="100" show-overflow-tooltip>
@@ -719,7 +714,11 @@ const isAssigned = (row: CustomerVO) => !!(row.skillGroupId || row.agentId || ro
 const assignmentText = (row: CustomerVO) => {
   const parts: string[] = [];
   if (row.skillGroupId) parts.push(skillGroupName(row.skillGroupId));
+<<<<<<< Updated upstream
   if (row.agentId) parts.push(`坐席 ${row.agentId}`);
+=======
+  if (row.agentId) parts.push(row.agentName || `#${row.agentId}`);
+>>>>>>> Stashed changes
   if (parts.length) return parts.join(' · ');
   return row.assignmentId ? '已分配' : '未分配';
 };

@@ -12,7 +12,12 @@ export const useAppStore = defineStore('app', () => {
     hide: false
   });
   const device = ref<string>('desktop');
-  const size = useStorage<'large' | 'default' | 'small'>('size', 'default');
+  const size = useStorage<'large' | 'default' | 'small'>('size', 'small');
+  const compactSizeMigrated = useStorage('compactSizeV1', '0');
+  if (compactSizeMigrated.value !== '1') {
+    size.value = 'small';
+    compactSizeMigrated.value = '1';
+  }
 
   // 语言
   const language = useStorage('language', 'zh_CN');

@@ -57,6 +57,7 @@ export interface CustomerVO {
   tags?: string;
   skillGroupId?: string | number;
   agentId?: string | number;
+  agentName?: string;
   assignmentSource?: string;
   importBatchId?: string | number;
   importTaskId?: string | number;
