@@ -32,23 +32,37 @@
               <div ref="trendChartRef" class="screen-chart" />
             </div>
           </article>
-          <article class="screen-panel screen-panel-side home-panel-skill">
+          <article class="screen-panel screen-panel-side home-panel-ticket">
             <div class="screen-panel-head">
               <div>
-                <div class="screen-panel-title">{{ text.skillTitle }}</div>
-                <div class="screen-panel-sub">{{ text.skillSub }}</div>
+                <div class="screen-panel-title">{{ text.ticketTitle }}</div>
+                <div class="screen-panel-sub">{{ text.ticketSub }}</div>
               </div>
+              <strong v-if="!isBootstrapping && hasTicketData" class="home-panel-meta">
+                {{ text.ticketPending }} {{ ticketPendingTotal }}
+              </strong>
             </div>
-            <div class="screen-panel-body home-skill-body">
-              <div ref="skillChartRef" class="screen-chart" :class="{ 'is-hidden': isBootstrapping || !skillGroups.length }" />
+            <div class="screen-panel-body">
               <div v-if="isBootstrapping" class="screen-skel-panel">
                 <span class="screen-skel-line is-long" />
                 <span class="screen-skel-line is-mid" />
                 <span class="screen-skel-line is-short" />
               </div>
-              <div v-else-if="!skillGroups.length" class="home-empty">
+              <div v-else-if="hasTicketData" class="home-ticket-list">
+                <div v-for="item in ticketBars" :key="item.key" class="home-ticket-row">
+                  <div class="home-ticket-head">
+                    <span class="home-ticket-dot" :style="{ background: item.color }" />
+                    <span class="home-ticket-name">{{ item.label }}</span>
+                    <strong class="home-ticket-num">{{ item.value }}</strong>
+                  </div>
+                  <div class="home-ticket-track">
+                    <span :style="{ width: item.barWidth, background: item.color }" />
+                  </div>
+                </div>
+              </div>
+              <div v-else class="home-empty">
                 <span class="home-empty-line" />
-                <span>{{ text.emptySkill }}</span>
+                <span>{{ text.emptyTicket }}</span>
                 <span class="home-empty-line" />
               </div>
             </div>
@@ -87,31 +101,42 @@
         </div>
 
         <div class="screen-col home-col-side">
-          <article class="screen-panel screen-panel-side home-panel-queue">
+          <article class="screen-panel screen-panel-side home-panel-customer">
             <div class="screen-panel-head">
               <div>
-                <div class="screen-panel-title">{{ text.queueTitle }}</div>
-                <div class="screen-panel-sub">{{ text.queueSub }}</div>
+                <div class="screen-panel-title">{{ text.customerTitle }}</div>
+                <div class="screen-panel-sub">{{ text.customerSub }}</div>
               </div>
             </div>
-            <div class="screen-panel-body">
+            <div class="screen-panel-body home-customer-body">
               <div v-if="isBootstrapping" class="screen-skel-panel">
                 <span class="screen-skel-line is-long" />
                 <span class="screen-skel-line is-mid" />
                 <span class="screen-skel-line is-long" />
                 <span class="screen-skel-line is-short" />
               </div>
-              <div v-else-if="queueRanking.length" class="screen-rank-list">
-                <div v-for="(item, index) in queueRanking" :key="item.name" class="screen-rank-item" :class="{ 'is-top': index < 3 }">
-                  <span class="screen-rank-no">{{ index + 1 }}</span>
-                  <span class="screen-rank-name">{{ item.name }}</span>
-                  <span class="screen-rank-value">{{ item.waiting }} {{ text.ren }}</span>
-                  <div class="screen-rank-bar"><span :style="{ width: `${item.percent}%` }" /></div>
+              <template v-else-if="hasCustomerData">
+                <div class="home-customer-stats">
+                  <div v-for="item in customerStatCards" :key="item.label" class="home-customer-stat">
+                    <span class="home-customer-stat-label">{{ item.label }}</span>
+                    <strong class="home-customer-stat-value">{{ item.value }}</strong>
+                  </div>
                 </div>
-              </div>
+                <div v-if="customerRecent.length" class="home-customer-recent">
+                  <div class="home-customer-recent-title">{{ text.customerRecent }}</div>
+                  <div class="screen-rank-list home-customer-list">
+                    <div v-for="(item, index) in customerRecent" :key="item.id" class="screen-rank-item" :class="{ 'is-top': index < 3 }">
+                      <span class="screen-rank-no">{{ index + 1 }}</span>
+                      <span class="screen-rank-name" :title="item.name">{{ item.name || '-' }}</span>
+                      <span class="screen-rank-value home-customer-phone">{{ item.phone || '-' }}</span>
+                      <span class="home-customer-time">{{ item.time || '-' }}</span>
+                    </div>
+                  </div>
+                </div>
+              </template>
               <div v-else class="home-empty">
                 <span class="home-empty-line" />
-                <span>{{ text.emptyQueue }}</span>
+                <span>{{ text.emptyCustomer }}</span>
                 <span class="home-empty-line" />
               </div>
             </div>
@@ -167,12 +192,13 @@
 import * as echarts from 'echarts';
 import {
   getHomeScreenDashboard,
+  type HomeScreenCustomerRecent,
+  type HomeScreenCustomerSummary,
   type HomeScreenDashboard,
   type HomeScreenFeedItem,
   type HomeScreenHeroCore,
   type HomeScreenKpi,
-  type HomeScreenQueueRank,
-  type HomeScreenSkillRate,
+  type HomeScreenTicketSummary,
   type HomeScreenTrendPoint
 } from '@/api/screen/home';
 import ScreenShell from '../components/ScreenShell.vue';
@@ -214,13 +240,29 @@ const emptyAgentSummary = () => ({
   ]
 });
 
+const emptyTicketSummary = (): HomeScreenTicketSummary => ({
+  open: 0,
+  processing: 0,
+  resolved: 0,
+  closed: 0
+});
+
+const emptyCustomerSummary = (): HomeScreenCustomerSummary => ({
+  todayNew: 0,
+  total: 0,
+  unassigned: 0,
+  recent: []
+});
+
 const kpis = ref<HomeScreenKpi[]>(emptyKpis());
 const heroCore = ref(emptyHeroCore());
-const queueRanking = ref<HomeScreenQueueRank[]>([]);
 const liveFeed = ref<HomeScreenFeedItem[]>([]);
 const agentSummary = ref(emptyAgentSummary());
 const trendHours = ref(emptyTrendHours());
-const skillGroups = ref<HomeScreenSkillRate[]>([]);
+const ticketSummary = ref<HomeScreenTicketSummary>(emptyTicketSummary());
+const customerSummary = ref<HomeScreenCustomerSummary>(emptyCustomerSummary());
+const ticketSummaryReady = ref(false);
+const customerSummaryReady = ref(false);
 
 const displayKpis = computed(() => {
   const base = emptyKpis();
@@ -232,10 +274,8 @@ const displayKpis = computed(() => {
 });
 
 const trendChartRef = ref<HTMLDivElement>();
-const skillChartRef = ref<HTMLDivElement>();
 
 let trendChart: echarts.ECharts | undefined;
-let skillChart: echarts.ECharts | undefined;
 let refreshTimer: number | undefined;
 const liveDataOk = ref(false);
 const loadFailed = ref(false);
@@ -275,6 +315,39 @@ const agentBars = computed(() => {
     { label: text.agentOffline, value: away, color: '#fbbf24' }
   ];
 });
+
+const ticketPendingTotal = computed(
+  () => Number(ticketSummary.value.open || 0) + Number(ticketSummary.value.processing || 0)
+);
+
+const hasTicketData = computed(() => ticketSummaryReady.value);
+
+const ticketBars = computed(() => {
+  const open = Math.max(0, Math.round(Number(ticketSummary.value.open) || 0));
+  const processing = Math.max(0, Math.round(Number(ticketSummary.value.processing) || 0));
+  const resolved = Math.max(0, Math.round(Number(ticketSummary.value.resolved) || 0));
+  const closed = Math.max(0, Math.round(Number(ticketSummary.value.closed) || 0));
+  const maxVal = Math.max(1, open, processing, resolved, closed);
+  const toWidth = (value: number) => `${Math.max(value > 0 ? 8 : 0, Math.round((value / maxVal) * 100))}%`;
+  return [
+    { key: 'open', label: text.ticketOpen, value: open, color: '#ffb84d', barWidth: toWidth(open) },
+    { key: 'processing', label: text.ticketProcessing, value: processing, color: '#2ecbff', barWidth: toWidth(processing) },
+    { key: 'resolved', label: text.ticketResolved, value: resolved, color: '#3dd6a5', barWidth: toWidth(resolved) },
+    { key: 'closed', label: text.ticketClosed, value: closed, color: '#6aa8ff', barWidth: toWidth(closed) }
+  ];
+});
+
+const hasCustomerData = computed(() => customerSummaryReady.value);
+
+const customerStatCards = computed(() => [
+  { label: text.customerTodayNew, value: Math.max(0, Math.round(Number(customerSummary.value.todayNew) || 0)) },
+  { label: text.customerTotal, value: Math.max(0, Math.round(Number(customerSummary.value.total) || 0)) },
+  { label: text.customerUnassigned, value: Math.max(0, Math.round(Number(customerSummary.value.unassigned) || 0)) }
+]);
+
+const customerRecent = computed((): HomeScreenCustomerRecent[] =>
+  Array.isArray(customerSummary.value.recent) ? customerSummary.value.recent.slice(0, 6) : []
+);
 
 const ensureChart = (el: HTMLDivElement | undefined, chart?: echarts.ECharts) => {
   if (!el) return undefined;
@@ -353,72 +426,36 @@ const renderTrendChart = () => {
   );
 };
 
-const renderSkillChart = () => {
-  skillChart = ensureChart(skillChartRef.value, skillChart);
-  if (!skillChart) return;
-  if (!skillGroups.value.length) {
-    skillChart.clear();
-    return;
-  }
-
-  const names = skillGroups.value.map((item) => item.name);
-  const rates = skillGroups.value.map((item) => Math.round(Number(item.rate) || 0));
-
-  skillChart.setOption(
-    {
-      animation: false,
-      color: ['#2ecbff'],
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'shadow' },
-        ...screenTooltip
-      },
-      grid: { ...screenGrid, top: 8, right: 44 },
-      xAxis: {
-        type: 'value',
-        max: 100,
-        axisLabel: { formatter: '{value}%', color: 'rgba(110,160,195,0.72)', fontSize: 11 },
-        splitLine: { lineStyle: { color: 'rgba(40, 100, 160, 0.1)', type: 'dashed' } },
-        axisLine: { show: false }
-      },
-      yAxis: {
-        type: 'category',
-        data: names,
-        axisLabel: { color: '#9ec0d8', fontSize: 11 },
-        axisTick: { show: false },
-        axisLine: { show: false }
-      },
-      series: [
-        {
-          type: 'bar',
-          barWidth: 11,
-          data: rates,
-          itemStyle: {
-            borderRadius: [0, 0, 0, 0],
-            color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-              { offset: 0, color: '#0d4a9a' },
-              { offset: 1, color: '#2ecbff' }
-            ]),
-            shadowColor: 'rgba(46, 203, 255, 0.3)',
-            shadowBlur: 8
-          },
-          label: {
-            show: true,
-            position: 'right',
-            color: '#c8e4f5',
-            fontSize: 11,
-            formatter: (params: { value: number }) => `${params.value}%`
-          }
-        }
-      ]
-    },
-    { lazyUpdate: true }
-  );
-};
-
 const renderCharts = () => {
   renderTrendChart();
-  renderSkillChart();
+};
+
+const normalizeTicketSummary = (raw?: HomeScreenTicketSummary | null): HomeScreenTicketSummary | null => {
+  if (!raw || typeof raw !== 'object') return null;
+  return {
+    open: Math.max(0, Math.round(Number(raw.open) || 0)),
+    processing: Math.max(0, Math.round(Number(raw.processing) || 0)),
+    resolved: Math.max(0, Math.round(Number(raw.resolved) || 0)),
+    closed: Math.max(0, Math.round(Number(raw.closed) || 0))
+  };
+};
+
+const normalizeCustomerSummary = (raw?: HomeScreenCustomerSummary | null): HomeScreenCustomerSummary | null => {
+  if (!raw || typeof raw !== 'object') return null;
+  const recent = Array.isArray(raw.recent)
+    ? raw.recent.map((item, index) => ({
+        id: String(item?.id ?? `customer-${index}`),
+        name: String(item?.name ?? ''),
+        phone: String(item?.phone ?? ''),
+        time: String(item?.time ?? '')
+      }))
+    : [];
+  return {
+    todayNew: Math.max(0, Math.round(Number(raw.todayNew) || 0)),
+    total: Math.max(0, Math.round(Number(raw.total) || 0)),
+    unassigned: Math.max(0, Math.round(Number(raw.unassigned) || 0)),
+    recent
+  };
 };
 
 const applyDashboard = (data: HomeScreenDashboard) => {
@@ -443,13 +480,16 @@ const applyDashboard = (data: HomeScreenDashboard) => {
         items: data.agentSummary.items
       }
     : emptyAgentSummary();
-  queueRanking.value = Array.isArray(data.queueRanking) ? data.queueRanking : [];
-  skillGroups.value = (data.skillGroups || []).map((item) => ({
-    name: item.name,
-    rate: Math.round(Number(item.rate) || 0)
-  }));
   trendHours.value = data.trendHours?.length ? data.trendHours : emptyTrendHours();
   liveFeed.value = Array.isArray(data.liveFeed) ? data.liveFeed : [];
+
+  const tickets = normalizeTicketSummary(data.ticketSummary);
+  ticketSummaryReady.value = !!tickets;
+  ticketSummary.value = tickets || emptyTicketSummary();
+
+  const customers = normalizeCustomerSummary(data.customerSummary);
+  customerSummaryReady.value = !!customers;
+  customerSummary.value = customers || emptyCustomerSummary();
 };
 
 const loadDashboard = async () => {
@@ -486,7 +526,6 @@ const loadDashboard = async () => {
 
 const handleResize = () => {
   trendChart?.resize();
-  skillChart?.resize();
 };
 
 onMounted(() => {
@@ -499,7 +538,6 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize);
   if (refreshTimer) window.clearInterval(refreshTimer);
   trendChart?.dispose();
-  skillChart?.dispose();
 });
 </script>
 
@@ -517,21 +555,10 @@ onBeforeUnmount(() => {
 }
 
 .home-page :deep(.screen-kpi-value),
-.home-agent-num {
+.home-agent-num,
+.home-ticket-num,
+.home-customer-stat-value {
   font-variant-numeric: tabular-nums;
-}
-
-.home-skill-body {
-  position: relative;
-  height: 100%;
-  min-height: 0;
-}
-
-.home-skill-body .screen-chart.is-hidden {
-  position: absolute;
-  inset: 0;
-  visibility: hidden;
-  pointer-events: none;
 }
 
 .home-page :deep(.screen-panel-sub) {
@@ -539,7 +566,20 @@ onBeforeUnmount(() => {
 }
 
 .home-page :deep(.screen-panel-head) {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
   padding-bottom: 4px;
+}
+
+.home-panel-meta {
+  flex-shrink: 0;
+  color: rgba(200, 230, 250, 0.88);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
 }
 
 .home-cols {
@@ -557,8 +597,8 @@ onBeforeUnmount(() => {
 }
 
 .home-panel-trend,
-.home-panel-skill,
-.home-panel-queue,
+.home-panel-ticket,
+.home-panel-customer,
 .home-panel-feed {
   flex: 1 1 0;
   min-height: 0;
@@ -567,13 +607,158 @@ onBeforeUnmount(() => {
 
 /* 左右上下块比例对齐，避免一边上头大下头小、另一边相反 */
 .home-panel-trend,
-.home-panel-queue {
+.home-panel-customer {
   flex: 1.55;
 }
 
-.home-panel-skill,
+.home-panel-ticket,
 .home-panel-feed {
   flex: 1;
+}
+
+.home-ticket-list {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+  padding: 4px 2px;
+  box-sizing: border-box;
+}
+
+.home-ticket-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.home-ticket-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.home-ticket-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.home-ticket-name {
+  color: rgba(140, 180, 210, 0.88);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.home-ticket-num {
+  margin-left: auto;
+  color: #eaf6ff;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.home-ticket-track {
+  height: 4px;
+  overflow: hidden;
+  background: rgba(0, 50, 100, 0.45);
+  border-radius: 2px;
+
+  span {
+    display: block;
+    height: 100%;
+    border-radius: 2px;
+    box-shadow: 0 0 10px rgba(0, 210, 255, 0.35);
+    transition: width 0.45s ease;
+  }
+}
+
+.home-customer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.home-customer-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid rgba(46, 203, 255, 0.2);
+  background:
+    linear-gradient(180deg, rgba(12, 42, 76, 0.55), rgba(4, 18, 40, 0.45));
+  box-shadow: inset 0 1px 0 rgba(140, 220, 255, 0.06);
+  flex-shrink: 0;
+}
+
+.home-customer-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 10px;
+
+  &:not(:last-child) {
+    border-right: 1px solid rgba(46, 203, 255, 0.12);
+  }
+}
+
+.home-customer-stat-label {
+  color: rgba(140, 180, 210, 0.78);
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+
+.home-customer-stat-value {
+  color: #eaf6ff;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.home-customer-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  flex: 1;
+}
+
+.home-customer-recent-title {
+  color: rgba(140, 190, 220, 0.75);
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  flex-shrink: 0;
+}
+
+.home-customer-list {
+  min-height: 0;
+  overflow: auto;
+}
+
+.home-customer-list .screen-rank-item {
+  grid-template-columns: 22px minmax(0, 1fr) auto auto;
+  gap: 6px 8px;
+}
+
+.home-customer-list .screen-rank-bar {
+  display: none;
+}
+
+.home-customer-phone {
+  color: rgba(160, 210, 235, 0.85) !important;
+  font-weight: 500 !important;
+}
+
+.home-customer-time {
+  color: rgba(110, 160, 195, 0.72);
+  font-size: 11px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .home-hero {

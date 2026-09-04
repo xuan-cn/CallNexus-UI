@@ -8,6 +8,7 @@ declare module 'vue-router' {
     activeMenu?: string;
     icon?: string;
     breadcrumb?: boolean;
+    screenPath?: string;
   }
 
   interface _RouteRecordBase {

@@ -94,6 +94,28 @@ export const constantRoutes: RouteRecordRaw[] = [
     ]
   },
   {
+    path: '/data-screen',
+    component: Layout,
+    redirect: 'noRedirect',
+    name: 'DataScreen',
+    alwaysShow: true,
+    meta: { title: '数据大屏', icon: 'chart' },
+    children: [
+      {
+        path: 'home',
+        component: () => import('@/views/screen/ScreenLaunch.vue'),
+        name: 'ScreenHomeMenu',
+        meta: { title: '首页大屏', icon: 'dashboard', screenPath: '/screen/home' }
+      },
+      {
+        path: 'ai',
+        component: () => import('@/views/screen/ScreenLaunch.vue'),
+        name: 'ScreenAiMenu',
+        meta: { title: 'AI 大屏', icon: 'monitor', screenPath: '/screen/ai' }
+      }
+    ]
+  },
+  {
     path: '/user',
     component: Layout,
     hidden: true,

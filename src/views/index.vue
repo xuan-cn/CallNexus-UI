@@ -1,171 +1,164 @@
 <template>
   <div class="dashboard">
-    <section class="hero-panel">
-      <div>
-        <div class="eyebrow"><span class="live-dot"></span> 系统运行正常</div>
-        <h1>呼叫中心运营概览</h1>
-        <p>首页支持按日 / 按月 / 今年查看话务汇总；排队、振铃和坐席状态仍为实时数据。</p>
+    <section class="page-head">
+      <div class="page-head-copy">
+        <div class="eyebrow"><span class="live-dot"></span>{{ periodKicker }}</div>
+        <h1>呼叫中心业务看板</h1>
+        <p>盯住待办、客户沉淀与话务结果；现场实时请看数据大屏。</p>
       </div>
-      <div class="hero-meta">
-        <span>{{ currentDate }}</span>
-        <el-button plain @click="router.push('/screen/home')">首页大屏</el-button>
-        <el-button plain @click="router.push('/screen/ai')">AI 大屏</el-button>
-
-        <el-button type="primary" :icon="Refresh" :loading="loading" @click="refreshDashboard">刷新数据</el-button>
-      </div>
-    </section>
-
-    <section class="period-bar">
-      <div class="period-bar-title">
-        <i class="period-bar-mark" aria-hidden="true" />
-        <span>数据概览</span>
-      </div>
-      <div class="period-filter">
-        <el-radio-group v-model="periodMode" @change="handlePeriodModeChange">
-          <el-radio-button value="day">按日</el-radio-button>
-          <el-radio-button value="month">按月</el-radio-button>
-          <el-radio-button value="year">今年</el-radio-button>
-        </el-radio-group>
-        <el-date-picker
-          v-model="dateRange"
-          class="period-range-picker"
-          type="daterange"
-          value-format="YYYY-MM-DD"
-          start-placeholder="开始日期"
-          end-placeholder="结束日期"
-          :clearable="false"
-          @change="handleDateRangeChange"
-        />
+      <div class="page-head-aside">
+        <div class="page-head-meta">
+          <span class="date-chip">{{ currentDate }}</span>
+          <el-button type="primary" size="small" :icon="Refresh" :loading="loading" @click="refreshDashboard">
+            刷新
+          </el-button>
+        </div>
+        <div class="period-filter">
+          <el-radio-group v-model="periodMode" size="small" @change="handlePeriodModeChange">
+            <el-radio-button value="day">按日</el-radio-button>
+            <el-radio-button value="month">按月</el-radio-button>
+            <el-radio-button value="year">今年</el-radio-button>
+          </el-radio-group>
+          <el-date-picker
+            v-model="dateRange"
+            class="period-range-picker"
+            type="daterange"
+            size="small"
+            value-format="YYYY-MM-DD"
+            start-placeholder="开始"
+            end-placeholder="结束"
+            :clearable="false"
+            @change="handleDateRangeChange"
+          />
+        </div>
       </div>
     </section>
 
     <section class="metric-grid">
-      <article v-for="item in metrics" :key="item.label" class="metric-card">
+      <article
+        v-for="item in metrics"
+        :key="item.label"
+        class="metric-card"
+        :class="[`is-${item.tone}`, { 'is-alert': item.alert }]"
+        @click="item.onClick && item.onClick()"
+      >
         <div class="metric-icon" :class="item.tone">
           <el-icon><component :is="item.icon" /></el-icon>
         </div>
         <div class="metric-content">
           <span>{{ item.label }}</span>
           <strong>{{ item.value }}</strong>
-          <small :class="{ positive: item.positive }">{{ item.change }}</small>
+          <small :class="{ positive: item.positive, warn: item.alert }">{{ item.change }}</small>
         </div>
       </article>
     </section>
 
     <section class="main-grid">
-      <article class="panel trend-panel">
+      <article class="panel">
         <div class="panel-header">
-          <div>
-            <span class="panel-kicker">{{ periodKicker }}</span>
-            <h2>队列接入概况</h2>
+          <div class="panel-title">
+            <h2>工单概况</h2>
           </div>
-          <el-button text type="primary" @click="openQueueMonitor">查看队列监控</el-button>
+          <el-button text type="primary" @click="openTicket">查看工单</el-button>
         </div>
-        <div class="queue-overview-grid">
-          <div>
-            <span>当前排队</span><strong>{{ overview?.currentWaitingCount || 0 }}</strong>
-          </div>
-          <div>
-            <span>振铃中</span><strong>{{ overview?.currentRingingCount || 0 }}</strong>
-          </div>
-          <div>
-            <span>{{ periodPrefix }}进入</span><strong>{{ overview?.todayEnteredCount || 0 }}</strong>
-          </div>
-          <div>
-            <span>{{ periodPrefix }}接通</span><strong>{{ overview?.todayAnsweredCount || 0 }}</strong>
-          </div>
-          <div>
-            <span>{{ periodPrefix }}放弃</span><strong>{{ overview?.todayAbandonedCount || 0 }}</strong>
-          </div>
-          <div>
-            <span>{{ periodPrefix }}超时</span><strong>{{ overview?.todayTimeoutCount || 0 }}</strong>
+        <div class="stat-grid">
+          <div v-for="item in ticketBars" :key="item.label" class="stat-cell">
+            <span class="stat-label">
+              <i class="stat-dot" :style="{ background: item.color }" />
+              {{ item.label }}
+            </span>
+            <strong>{{ item.value }}</strong>
           </div>
         </div>
       </article>
 
-      <article class="panel agent-panel">
+      <article class="panel">
         <div class="panel-header">
-          <div>
-            <span class="panel-kicker">实时状态</span>
-            <h2>坐席概况</h2>
+          <div class="panel-title">
+            <h2>客户概况</h2>
           </div>
-          <span class="total-agents">共 {{ overview?.totalAgentCount || 0 }} 人</span>
+          <el-button text type="primary" @click="openCustomer">查看客户</el-button>
         </div>
-        <div class="agent-ring">
-          <div class="ring-center">
-            <strong>{{ overview?.onlineAgentCount || 0 }}</strong
-            ><span>在线坐席</span>
-          </div>
-        </div>
-        <div class="agent-status-list">
-          <div v-for="status in agentStatuses" :key="status.label">
-            <span><i :style="{ background: status.color }"></i>{{ status.label }}</span>
-            <strong>{{ status.value }}</strong>
+        <div class="stat-grid">
+          <div
+            v-for="item in customerStats"
+            :key="item.label"
+            class="stat-cell"
+            :class="{ 'is-click': item.clickable }"
+            :role="item.clickable ? 'button' : undefined"
+            :tabindex="item.clickable ? 0 : undefined"
+            @click="item.clickable && openUnassignedCustomer()"
+            @keydown.enter="item.clickable && openUnassignedCustomer()"
+          >
+            <span class="stat-label">
+              <i class="stat-dot" :style="{ background: item.color }" />
+              {{ item.label }}
+            </span>
+            <strong :class="{ 'is-warn': item.warn }">{{ item.value }}</strong>
           </div>
         </div>
       </article>
     </section>
 
-    <section class="bottom-grid">
-      <article class="panel">
-        <div class="panel-header">
-          <div>
-            <span class="panel-kicker">基础设施</span>
-            <h2>服务健康</h2>
-          </div>
-          <el-tag :type="(overview?.abnormalQueueCount || 0) > 0 ? 'danger' : 'success'" effect="light" round>
-            {{ (overview?.abnormalQueueCount || 0) > 0 ? '存在异常队列' : '队列正常' }}
-          </el-tag>
+    <section class="panel traffic-panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <h2>话务与任务</h2>
         </div>
-        <div class="service-list">
-          <div v-for="service in services" :key="service.name" class="service-item">
-            <span class="service-mark" :class="service.tone">
-              <el-icon><component :is="service.icon" /></el-icon>
-            </span>
-            <div>
-              <strong>{{ service.name }}</strong>
-              <small>{{ service.description }}</small>
-            </div>
-            <span class="service-state"><i></i>{{ service.state }}</span>
-          </div>
+        <el-button text type="primary" @click="openCallRecord">通话记录</el-button>
+      </div>
+      <div class="traffic-strip">
+        <div
+          v-for="item in trafficStats"
+          :key="item.label"
+          class="traffic-item"
+          :class="{ 'is-click': item.clickable }"
+          @click="item.clickable && openVoicemail()"
+        >
+          <span>{{ item.label }}</span>
+          <strong :class="{ 'is-warn': item.warn }">{{ item.value }}</strong>
         </div>
-      </article>
+      </div>
+    </section>
 
-      <article class="panel">
+    <section class="bottom-grid">
+      <article class="panel panel-fill">
         <div class="panel-header">
-          <div>
-            <span class="panel-kicker">需要关注</span>
-            <h2>待办事项</h2>
+          <div class="panel-title">
+            <h2>待办提醒</h2>
           </div>
-          <el-button text type="primary" @click="openUnhandledVoiceMail">查看未处理</el-button>
         </div>
         <div class="todo-list">
-          <div v-for="todo in todos" :key="todo.title" class="todo-item" :class="{ 'is-action': todo.action }" @click="handleTodo(todo)">
-            <span class="todo-icon" :class="todo.tone">
-              <el-icon><component :is="todo.icon" /></el-icon>
-            </span>
+          <div
+            v-for="todo in todos"
+            :key="todo.title"
+            class="todo-item is-action"
+            @click="handleTodo(todo)"
+          >
+            <span class="todo-icon" :class="todo.tone"><el-icon><component :is="todo.icon" /></el-icon></span>
             <div>
               <strong>{{ todo.title }}</strong>
               <small>{{ todo.description }}</small>
             </div>
-            <el-tag :type="todo.tagType" effect="plain" round>{{ todo.count }}</el-tag>
+            <el-tag size="small" :type="todo.tagType" effect="plain" round>{{ todo.count }}</el-tag>
           </div>
         </div>
       </article>
 
-      <article class="panel">
+      <article class="panel panel-fill">
         <div class="panel-header">
-          <div>
-            <span class="panel-kicker">常用操作</span>
+          <div class="panel-title">
             <h2>快捷入口</h2>
           </div>
         </div>
         <div class="quick-grid">
           <button v-for="action in quickActions" :key="action.label" type="button" @click="handleQuickAction(action)">
-            <span :class="action.tone">
-              <el-icon><component :is="action.icon" /></el-icon>
-            </span>
-            {{ action.label }}
+            <span class="quick-icon" :class="action.tone"><el-icon><component :is="action.icon" /></el-icon></span>
+            <div class="quick-copy">
+              <strong>{{ action.label }}</strong>
+              <small>{{ action.desc }}</small>
+            </div>
+            <el-icon class="quick-arrow"><ArrowRight /></el-icon>
           </button>
         </div>
       </article>
@@ -175,28 +168,22 @@
 
 <script setup name="Index" lang="ts">
 import {
+  ArrowRight,
   Bell,
-  Connection,
   DataAnalysis,
   Document,
-  Headset,
   Phone,
-  Plus,
   Refresh,
-  Setting,
-  SwitchButton,
-  Timer,
+  Tickets,
   User,
-  UserFilled,
-  Warning
+  UserFilled
 } from '@element-plus/icons-vue';
-import { listVoiceMailMessages } from '@/api/callcenter/voicemail';
-import { getCallQueueMonitorOverview } from '@/api/callcenter/call-queue-monitor';
-import type { CallQueueMonitorOverviewVO } from '@/api/callcenter/call-queue-monitor/types';
+import { getHomeBusinessOverview, type HomeBusinessOverview } from '@/api/callcenter/home-overview';
 import { ElMessage } from 'element-plus';
 import { computed, onMounted, ref, type Component } from 'vue';
 import { usePermissionStore } from '@/store/modules/permission';
 import type { RouteRecordRaw } from 'vue-router';
+import { getNormalPath } from '@/utils/callnexus';
 
 type PeriodMode = 'day' | 'month' | 'year';
 
@@ -204,9 +191,13 @@ const router = useRouter();
 const permissionStore = usePermissionStore();
 
 const loading = ref(false);
-const overview = ref<CallQueueMonitorOverviewVO>();
-const unhandledVoiceMailCount = ref(0);
-const currentDate = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date());
+const overview = ref<HomeBusinessOverview>();
+const currentDate = new Intl.DateTimeFormat('zh-CN', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+  weekday: 'long'
+}).format(new Date());
 
 const pad2 = (value: number) => String(value).padStart(2, '0');
 const formatDate = (date: Date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
@@ -236,10 +227,10 @@ const periodPrefix = computed(() => {
 });
 
 const periodKicker = computed(() => {
-  if (periodMode.value === 'year') return '年度队列';
-  if (periodMode.value === 'month') return '月度队列';
-  if (isSingleToday.value) return '今日队列';
-  return '区间队列';
+  if (periodMode.value === 'year') return '年度业务';
+  if (periodMode.value === 'month') return '月度业务';
+  if (isSingleToday.value) return '今日业务';
+  return '区间业务';
 });
 
 const applyPeriodPreset = (mode: PeriodMode) => {
@@ -268,67 +259,125 @@ const syncPeriodModeByRange = () => {
   periodMode.value = 'day';
 };
 
+const ticketPending = computed(
+  () => Number(overview.value?.ticketOpen || 0) + Number(overview.value?.ticketProcessing || 0)
+);
+
+const openCustomer = () => router.push(resolveDashboardPath('customer'));
+const openTicket = () => router.push(resolveDashboardPath('ticket'));
+const openCallRecord = () => router.push(resolveDashboardPath('callRecord'));
+const openOutboundTask = () => router.push(resolveDashboardPath('outboundTask'));
+const openUnassignedCustomer = () => {
+  router.push({ path: resolveDashboardPath('customer'), query: { assignmentState: 'UNASSIGNED' } });
+};
+const openVoicemail = () =>
+  router.push({ path: resolveDashboardPath('voicemail'), query: { status: 'UNHANDLED' } });
+
+const customerAssigned = computed(() =>
+  Math.max(0, Number(overview.value?.customerTotal || 0) - Number(overview.value?.customerUnassigned || 0))
+);
+
 const metrics = computed(() => [
   {
-    label: `${periodPrefix.value}队列进入`,
-    value: overview.value?.todayEnteredCount || 0,
-    change: `当前排队 ${overview.value?.currentWaitingCount || 0}`,
-    positive: false,
-    tone: 'blue',
-    icon: Phone
-  },
-  {
-    label: '当前振铃',
-    value: overview.value?.currentRingingCount || 0,
-    change: `最长等待 ${formatSeconds(overview.value?.longestWaitSeconds || 0)}`,
-    positive: false,
-    tone: 'cyan',
-    icon: Headset
-  },
-  {
-    label: '接通率',
-    value: `${overview.value?.answerRate || 0}%`,
-    change: `${periodPrefix.value}接通 ${overview.value?.todayAnsweredCount || 0}`,
-    positive: true,
-    tone: 'green',
-    icon: DataAnalysis
-  },
-  {
-    label: '平均等待',
-    value: formatSeconds(overview.value?.averageWaitSeconds || 0),
-    change: `放弃率 ${overview.value?.abandonRate || 0}%`,
-    positive: (overview.value?.abandonRate || 0) <= 20,
+    label: '待办工单',
+    value: ticketPending.value,
+    change: `总量 ${overview.value?.ticketTotal || 0}`,
+    positive: ticketPending.value === 0,
+    alert: ticketPending.value > 0,
     tone: 'orange',
-    icon: Timer
-  }
-]);
-
-const agentStatuses = computed(() => [
-  { label: '通话/整理', value: overview.value?.busyAgentCount || 0, color: '#2f6bff' },
-  { label: '空闲', value: overview.value?.idleAgentCount || 0, color: '#18b78c' },
-  { label: '在线', value: overview.value?.onlineAgentCount || 0, color: '#f59e0b' },
-  { label: '离线', value: Math.max(0, (overview.value?.totalAgentCount || 0) - (overview.value?.onlineAgentCount || 0)), color: '#d8dee9' }
-]);
-
-const services = computed(() => [
-  { name: 'FreeSWITCH 队列', description: '队列同步与运行状态', state: `${overview.value?.queueCount || 0} 个队列`, tone: 'blue', icon: Phone },
-  {
-    name: '坐席状态',
-    description: '签入签出、忙闲和话后整理',
-    state: `${overview.value?.onlineAgentCount || 0} 人在线`,
-    tone: 'green',
-    icon: Connection
+    icon: Tickets,
+    onClick: openTicket
   },
   {
-    name: '队列监控',
-    description: '统计排队、接通、放弃和超时',
-    state: `${overview.value?.abnormalQueueCount || 0} 个异常`,
+    label: '未分配客户',
+    value: overview.value?.customerUnassigned || 0,
+    change: `总量 ${overview.value?.customerTotal || 0}`,
+    positive: (overview.value?.customerUnassigned || 0) === 0,
+    alert: (overview.value?.customerUnassigned || 0) > 0,
     tone: 'purple',
-    icon: SwitchButton
+    icon: UserFilled,
+    onClick: openUnassignedCustomer
+  },
+  {
+    label: `${periodPrefix.value}新增客户`,
+    value: overview.value?.customerPeriodNew || 0,
+    change: `客户池 ${overview.value?.customerTotal || 0}`,
+    positive: (overview.value?.customerPeriodNew || 0) > 0,
+    alert: false,
+    tone: 'blue',
+    icon: User,
+    onClick: openCustomer
+  },
+  {
+    label: `${periodPrefix.value}接通率`,
+    value: `${overview.value?.answerRate || 0}%`,
+    change: `呼入 ${overview.value?.inboundCount || 0} · 呼出 ${overview.value?.outboundCount || 0}`,
+    positive: (overview.value?.answerRate || 0) >= 80,
+    alert: false,
+    tone: 'green',
+    icon: Phone,
+    onClick: openCallRecord
   }
 ]);
 
-type TodoAction = 'UNHANDLED_VOICEMAIL' | 'QUEUE_MONITOR';
+const ticketBars = computed(() => [
+  { label: '待处理', value: Number(overview.value?.ticketOpen || 0), color: '#f59e0b' },
+  { label: '处理中', value: Number(overview.value?.ticketProcessing || 0), color: '#3b82f6' },
+  { label: '已解决', value: Number(overview.value?.ticketResolved || 0), color: '#10b981' },
+  { label: '已关闭', value: Number(overview.value?.ticketClosed || 0), color: '#94a3b8' }
+]);
+
+const customerStats = computed(() => [
+  {
+    label: '客户总量',
+    value: Number(overview.value?.customerTotal || 0),
+    color: '#64748b',
+    warn: false,
+    clickable: false
+  },
+  {
+    label: `${periodPrefix.value}新增`,
+    value: Number(overview.value?.customerPeriodNew || 0),
+    color: '#3b82f6',
+    warn: false,
+    clickable: false
+  },
+  {
+    label: '未分配',
+    value: Number(overview.value?.customerUnassigned || 0),
+    color: '#f59e0b',
+    warn: Number(overview.value?.customerUnassigned || 0) > 0,
+    clickable: true
+  },
+  {
+    label: '已分配',
+    value: customerAssigned.value,
+    color: '#10b981',
+    warn: false,
+    clickable: false
+  }
+]);
+
+const trafficStats = computed(() => [
+  { label: `${periodPrefix.value}呼入`, value: overview.value?.inboundCount || 0, warn: false, clickable: false },
+  { label: `${periodPrefix.value}呼出`, value: overview.value?.outboundCount || 0, warn: false, clickable: false },
+  { label: `${periodPrefix.value}接通`, value: overview.value?.answeredCount || 0, warn: false, clickable: false },
+  { label: '接通率', value: `${overview.value?.answerRate || 0}%`, warn: false, clickable: false },
+  {
+    label: '外呼完成率',
+    value: `${overview.value?.outboundCompletionRate || 0}%`,
+    warn: false,
+    clickable: false
+  },
+  {
+    label: '未处理留言',
+    value: overview.value?.voicemailPending || 0,
+    warn: Number(overview.value?.voicemailPending || 0) > 0,
+    clickable: true
+  }
+]);
+
+type TodoAction = 'TICKET' | 'CUSTOMER' | 'CALL' | 'VOICEMAIL' | 'OUTBOUND';
 type TodoItem = {
   title: string;
   description: string;
@@ -341,76 +390,105 @@ type TodoItem = {
 
 const todos = computed<TodoItem[]>(() => [
   {
-    title: '队列异常待处理',
-    description: (overview.value?.abnormalQueueCount || 0) > 0 ? '存在同步失败或排队异常队列' : '暂无异常队列',
-    count: `${overview.value?.abnormalQueueCount || 0} 个`,
-    tone: 'red',
-    tagType: (overview.value?.abnormalQueueCount || 0) > 0 ? 'danger' : 'info',
-    icon: Warning,
-    action: 'QUEUE_MONITOR'
-  },
-  {
-    title: '未处理语音留言',
-    description: unhandledVoiceMailCount.value > 0 ? '客户留言需要跟进处理' : '暂无待处理留言',
-    count: `${unhandledVoiceMailCount.value} 条`,
-    tone: 'purple',
-    tagType: unhandledVoiceMailCount.value > 0 ? 'warning' : 'info',
-    icon: Bell,
-    action: 'UNHANDLED_VOICEMAIL'
-  },
-  {
-    title: '当前排队客户',
-    description: '需要关注长时间等待客户',
-    count: `${overview.value?.currentWaitingCount || 0} 人`,
+    title: '待办工单',
+    description: ticketPending.value > 0 ? '有工单等待处理或跟进' : '暂无待办工单',
+    count: `${ticketPending.value} 单`,
     tone: 'orange',
-    tagType: (overview.value?.currentWaitingCount || 0) > 0 ? 'warning' : 'info',
-    icon: User
+    tagType: ticketPending.value > 0 ? 'warning' : 'info',
+    icon: Tickets,
+    action: 'TICKET'
+  },
+  {
+    title: '未分配客户',
+    description: (overview.value?.customerUnassigned || 0) > 0 ? '客户资料待分配跟进' : '客户均已分配',
+    count: `${overview.value?.customerUnassigned || 0} 位`,
+    tone: 'purple',
+    tagType: (overview.value?.customerUnassigned || 0) > 0 ? 'warning' : 'info',
+    icon: UserFilled,
+    action: 'CUSTOMER'
+  },
+  {
+    title: '未处理留言',
+    description: (overview.value?.voicemailPending || 0) > 0 ? '客户留言需要回访' : '暂无待处理留言',
+    count: `${overview.value?.voicemailPending || 0} 条`,
+    tone: 'red',
+    tagType: (overview.value?.voicemailPending || 0) > 0 ? 'danger' : 'info',
+    icon: Bell,
+    action: 'VOICEMAIL'
+  },
+  {
+    title: `${periodPrefix.value}呼入 / 呼出`,
+    description: `接通率 ${overview.value?.answerRate || 0}%`,
+    count: `${overview.value?.inboundCount || 0} / ${overview.value?.outboundCount || 0}`,
+    tone: 'cyan',
+    tagType: 'info',
+    icon: Phone,
+    action: 'CALL'
   }
 ]);
 
-type DashboardLinkKey = 'agent' | 'queueMonitor' | 'callRecord' | 'callcenterConfig' | 'voicemail';
+type DashboardLinkKey = 'customer' | 'ticket' | 'callRecord' | 'outboundTask' | 'screenHome' | 'voicemail';
 type QuickAction = {
   label: string;
+  desc: string;
   tone: string;
   icon: Component;
   routeKey: DashboardLinkKey;
 };
 
-const dashboardRouteTargets: Record<DashboardLinkKey, { titles: string[]; names: string[]; fallbacks: string[] }> = {
-  agent: {
-    titles: ['坐席管理'],
-    names: ['agent'],
-    fallbacks: ['/callcenter/agent']
+type DashboardRouteTarget = {
+  titles: string[];
+  names: string[];
+  pathEnds: string[];
+  fallbacks: string[];
+};
+
+const dashboardRouteTargets: Record<DashboardLinkKey, DashboardRouteTarget> = {
+  customer: {
+    titles: ['客户列表', '客户', '客户管理'],
+    names: ['Customer', 'customer'],
+    pathEnds: ['/customer'],
+    fallbacks: ['/customer', '/biz-center/customer', '/callcenter/customer']
   },
-  queueMonitor: {
-    titles: ['队列监控'],
-    names: ['call-queue-monitor'],
-    fallbacks: ['/callcenter/call-queue-monitor']
+  ticket: {
+    titles: ['工单列表', '工单', '工单管理'],
+    names: ['Ticket', 'ticket'],
+    pathEnds: ['/ticket'],
+    fallbacks: ['/ticket', '/biz-center/ticket', '/callcenter/ticket']
   },
   callRecord: {
     titles: ['通话记录'],
-    names: ['call-record'],
-    fallbacks: ['/callcenter/call-record']
+    names: ['call-record', 'CallRecord'],
+    pathEnds: ['/call-record'],
+    fallbacks: ['/call-record', '/callcenter/call-record']
   },
-  callcenterConfig: {
-    titles: ['配置中心', '系统配置'],
-    names: ['callcenter-config'],
-    fallbacks: ['/callcenter/callcenter-config']
+  outboundTask: {
+    titles: ['外呼任务'],
+    names: ['outbound-task', 'OutboundTask'],
+    pathEnds: ['/outbound-task'],
+    fallbacks: ['/outbound-task', '/callcenter/outbound-task']
+  },
+  screenHome: {
+    titles: ['首页大屏'],
+    names: ['ScreenHomeMenu', 'ScreenHome'],
+    pathEnds: ['/screen/home', '/data-screen/home'],
+    fallbacks: ['/screen/home', '/data-screen/home']
   },
   voicemail: {
     titles: ['语音留言'],
-    names: ['voicemail'],
-    fallbacks: ['/callcenter/voicemail']
+    names: ['voicemail', 'Voicemail'],
+    pathEnds: ['/voicemail'],
+    fallbacks: ['/voicemail', '/callcenter/voicemail']
   }
 };
 
 const quickActions: QuickAction[] = [
-  { label: '新建坐席', tone: 'blue', icon: Plus, routeKey: 'agent' },
-  { label: '队列监控', tone: 'cyan', icon: UserFilled, routeKey: 'queueMonitor' },
-  { label: '通话记录', tone: 'purple', icon: Document, routeKey: 'callRecord' },
-  { label: '系统配置', tone: 'orange', icon: Setting, routeKey: 'callcenterConfig' },
-  { label: '语音留言', tone: 'red', icon: Bell, routeKey: 'voicemail' },
-  { label: '运营报表', tone: 'green', icon: DataAnalysis, routeKey: 'queueMonitor' }
+  { label: '客户管理', desc: '客户资料与跟进', tone: 'blue', icon: User, routeKey: 'customer' },
+  { label: '工单管理', desc: '服务闭环处理', tone: 'orange', icon: Tickets, routeKey: 'ticket' },
+  { label: '通话记录', desc: '呼入呼出明细', tone: 'cyan', icon: Document, routeKey: 'callRecord' },
+  { label: '外呼任务', desc: '任务进度跟踪', tone: 'green', icon: Phone, routeKey: 'outboundTask' },
+  { label: '首页大屏', desc: '现场实时监控', tone: 'purple', icon: DataAnalysis, routeKey: 'screenHome' },
+  { label: '未分配客户', desc: '待分配线索', tone: 'red', icon: UserFilled, routeKey: 'customer' }
 ];
 
 const normalizePath = (path?: string) => {
@@ -421,29 +499,67 @@ const normalizePath = (path?: string) => {
 const flattenRoutes = (routes: RouteRecordRaw[], parentPath = ''): Array<RouteRecordRaw & { resolvedPath: string }> =>
   routes.flatMap((route) => {
     const currentPath = normalizePath(route.path);
-    const resolvedPath = currentPath.startsWith(parentPath) || currentPath === '/' ? currentPath : `${parentPath}${currentPath}`;
-    const current = { ...route, resolvedPath };
-    return [current, ...flattenRoutes((route.children || []) as RouteRecordRaw[], resolvedPath === '/' ? '' : resolvedPath)];
+    const resolvedPath =
+      currentPath.startsWith(parentPath) || currentPath === '/' ? currentPath : `${parentPath}${currentPath}`;
+    const current = { ...route, resolvedPath: getNormalPath(resolvedPath) };
+    const nextParent = resolvedPath === '/' ? '' : resolvedPath;
+    return [current, ...flattenRoutes((route.children || []) as RouteRecordRaw[], nextParent)];
   });
+
+const isLeafPage = (route: RouteRecordRaw & { resolvedPath: string }) => {
+  if (route.children && route.children.length) return false;
+  const path = route.resolvedPath || '';
+  if (!path || path.includes('pathMatch') || path.includes('legacy')) return false;
+  const name = String(route.name || '');
+  // 隐藏的办理页/详情页，不能当成列表入口
+  if (name === 'TicketWorkflowForm' || name === 'CustomerDetailWorkspace') return false;
+  if (route.hidden) return false;
+  // 目录菜单通常没有可渲染页面组件
+  return typeof route.component === 'function' || typeof route.component === 'object';
+};
+
+const isNavigablePath = (path: string) => {
+  try {
+    const resolved = router.resolve(path);
+    if (!resolved.matched.length) return false;
+    return resolved.matched.every((m) => !String(m.path || '').includes('pathMatch'));
+  } catch {
+    return false;
+  }
+};
 
 const resolveDashboardPath = (key: DashboardLinkKey) => {
   const target = dashboardRouteTargets[key];
-  const routes = flattenRoutes(permissionStore.getRoutes());
-  const matchedRoute = routes.find((route) => target.names.includes(String(route.name || '')))
-    || routes.find((route) => target.titles.includes(String(route.meta?.title || '')));
-  return matchedRoute?.resolvedPath || target.fallbacks[0];
+  const routes = flattenRoutes([
+    ...permissionStore.getSidebarRoutes(),
+    ...permissionStore.getRoutes()
+  ]);
+  const pages = routes.filter(isLeafPage);
+
+  const byExactPath = pages.find((route) => target.pathEnds.includes(route.resolvedPath));
+  if (byExactPath?.resolvedPath) return byExactPath.resolvedPath;
+
+  const byPath = pages.find((route) =>
+    target.pathEnds.some((end) => route.resolvedPath.endsWith(end))
+  );
+  if (byPath?.resolvedPath) return byPath.resolvedPath;
+
+  const byName = pages.find((route) => target.names.includes(String(route.name || '')));
+  if (byName?.resolvedPath) return byName.resolvedPath;
+
+  const byTitle = pages.find((route) => target.titles.includes(String(route.meta?.title || '')));
+  if (byTitle?.resolvedPath) return byTitle.resolvedPath;
+
+  const fallback = target.fallbacks.find((path) => isNavigablePath(path));
+  return fallback || target.fallbacks[0];
 };
 
 const loadDashboard = async () => {
   loading.value = true;
   try {
     const { beginDate, endDate } = periodRange.value;
-    const [overviewRes, voiceMailRes] = await Promise.all([
-      getCallQueueMonitorOverview({ beginDate, endDate }),
-      listVoiceMailMessages({ pageNum: 1, pageSize: 1, status: 'UNHANDLED' })
-    ]);
-    overview.value = overviewRes.data;
-    unhandledVoiceMailCount.value = voiceMailRes.total || 0;
+    const res = await getHomeBusinessOverview({ beginDate, endDate });
+    overview.value = (res as any)?.data ?? res;
   } catch (error) {
     console.warn('加载首页统计失败', error);
   } finally {
@@ -466,31 +582,25 @@ const refreshDashboard = async () => {
   ElMessage.success('首页数据已刷新');
 };
 
-const openQueueMonitor = () => {
-  router.push(resolveDashboardPath('queueMonitor'));
-};
-
-const openUnhandledVoiceMail = () => {
-  router.push({ path: resolveDashboardPath('voicemail'), query: { status: 'UNHANDLED' } });
-};
-
 const handleTodo = (todo: TodoItem) => {
-  if (todo.action === 'UNHANDLED_VOICEMAIL') openUnhandledVoiceMail();
-  if (todo.action === 'QUEUE_MONITOR') openQueueMonitor();
+  if (todo.action === 'TICKET') openTicket();
+  if (todo.action === 'CUSTOMER') openUnassignedCustomer();
+  if (todo.action === 'CALL') openCallRecord();
+  if (todo.action === 'VOICEMAIL') openVoicemail();
+  if (todo.action === 'OUTBOUND') openOutboundTask();
 };
 
 const handleQuickAction = (action: QuickAction) => {
+  if (action.label === '未分配客户') {
+    openUnassignedCustomer();
+    return;
+  }
   const path = resolveDashboardPath(action.routeKey);
   if (path) {
     router.push(path);
     return;
   }
   ElMessage.info(`${action.label}功能将在对应业务模块开放`);
-};
-
-const formatSeconds = (seconds: number) => {
-  if (seconds < 60) return `${seconds}秒`;
-  return `${Math.floor(seconds / 60)}分${seconds % 60}秒`;
 };
 
 onMounted(() => {
@@ -500,615 +610,575 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .dashboard {
+  --ink: #0f172a;
+  --muted: #64748b;
+  --line: #e7ecf3;
+  --soft: #f7f8fa;
+  --cell: #ffffff;
+  --cell-line: #e9eef5;
+  --card: #ffffff;
+  --accent: #2563eb;
+  --hover: #f5f8fc;
   min-height: calc(100vh - 84px);
-  padding: 22px;
-  color: #172033;
-  background:
-    radial-gradient(circle at 12% 0%, rgba(56, 189, 248, 0.12), transparent 28%),
-    radial-gradient(circle at 88% 8%, rgba(59, 130, 246, 0.1), transparent 26%),
-    linear-gradient(#f5f8fc, #eef3f9);
-}
-
-.hero-panel {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 28px 32px;
-  margin-bottom: 18px;
-  overflow: hidden;
-  color: #fff;
-  border: 1px solid rgba(125, 211, 252, 0.18);
-  border-radius: 18px;
-  background:
-    radial-gradient(circle at 82% -40%, rgba(34, 211, 238, 0.42), transparent 38%),
-    radial-gradient(circle at 8% 120%, rgba(59, 130, 246, 0.35), transparent 42%),
-    linear-gradient(118deg, #0b1f46 0%, #16408c 58%, #1d6bb8 100%);
-  box-shadow:
-    0 18px 40px rgba(16, 52, 120, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
-
-  &::before {
-    position: absolute;
-    inset: 0;
-    content: '';
-    pointer-events: none;
-    background-image:
-      linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
-    background-size: 28px 28px;
-    mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
-    opacity: 0.55;
-  }
-
-  &::after {
-    position: absolute;
-    right: -48px;
-    top: -64px;
-    width: 220px;
-    height: 220px;
-    content: '';
-    pointer-events: none;
-    border: 1px solid rgba(125, 211, 252, 0.18);
-    border-radius: 50%;
-    box-shadow: 0 0 0 28px rgba(56, 189, 248, 0.05);
-  }
-
-  > * {
-    position: relative;
-    z-index: 1;
-  }
-
-  h1 {
-    margin: 8px 0 7px;
-    font-size: 26px;
-    font-weight: 700;
-    letter-spacing: 0.3px;
-  }
-
-  p {
-    margin: 0;
-    max-width: 560px;
-    color: rgba(226, 239, 255, 0.72);
-    font-size: 13px;
-    line-height: 1.6;
-  }
-
-  :deep(.el-button) {
-    height: 36px;
-    border-radius: 10px;
-  }
-  :deep(.el-button--primary) {
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    color: #fff;
-    background: rgba(255, 255, 255, 0.12);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  }
-  :deep(.el-button--primary:hover) {
-    background: rgba(255, 255, 255, 0.2);
-  }
-}
-
-.eyebrow,
-.hero-meta,
-.panel-header,
-.service-item,
-.todo-item {
-  display: flex;
-  align-items: center;
-}
-
-.eyebrow {
-  gap: 8px;
-  color: #9ff0de;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.4px;
-}
-
-.live-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #5eead4;
-  box-shadow: 0 0 8px rgba(94, 234, 212, 0.75);
-  animation: live-pulse 1.6s ease-out infinite;
-}
-
-@keyframes live-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(94, 234, 212, 0.5);
-  }
-  70% {
-    box-shadow: 0 0 0 7px rgba(94, 234, 212, 0);
-  }
-}
-
-.hero-meta {
-  gap: 16px;
-  white-space: nowrap;
-  color: rgba(226, 239, 255, 0.78);
-  font-size: 13px;
-
-  span {
-    padding: 7px 12px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 999px;
-    background: rgba(8, 24, 54, 0.22);
-  }
-}
-
-.period-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 18px;
-  margin-bottom: 16px;
-  border: 1px solid #e4ecf6;
-  border-radius: 16px;
-  background: linear-gradient(#fff, #fbfdff);
-  box-shadow: 0 8px 22px rgba(28, 48, 78, 0.045);
-}
-
-.period-bar-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #172033;
-  font-size: 16px;
-  font-weight: 650;
-}
-
-.period-bar-mark {
-  width: 4px;
-  height: 16px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #7c5cff, #2f6bff);
-}
-
-.period-filter {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 12px;
-
-  :deep(.el-radio-group) {
-    flex-shrink: 0;
-  }
-
-  :deep(.el-radio-button__inner) {
-    border-color: #d9e4f2;
-    background: #fff;
-  }
-
-  :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
-    border-color: #2f6bff;
-    background: #2f6bff;
-    box-shadow: -1px 0 0 0 #2f6bff;
-  }
-}
-
-.period-range-picker {
-  width: 280px;
-  flex-shrink: 0;
-
-  :deep(.el-range-editor.el-input__wrapper),
-  :deep(.el-date-editor) {
-    width: 100%;
-  }
-}
-
-.metric-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 16px;
+  padding: 16px 18px 22px;
+  color: var(--ink);
+  background: #f5f6f8;
 }
 
 .metric-card,
 .panel {
-  border: 1px solid #e4ecf6;
-  border-radius: 16px;
-  background: linear-gradient(#fff, #fbfdff);
-  box-shadow: 0 8px 22px rgba(28, 48, 78, 0.045);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 8px 24px rgba(15, 23, 42, 0.03);
+}
+
+.page-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 18px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  color: #fff;
+  border: 1px solid rgba(147, 197, 253, 0.45);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 92% -28%, rgba(186, 230, 253, 0.28), transparent 42%),
+    linear-gradient(118deg, #3b82f6 0%, #4f8ef8 58%, #5b9cf0 100%);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.12);
+}
+
+.page-head-copy {
+  min-width: 0;
+  flex: 1;
+
+  h1 {
+    margin: 4px 0 2px;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  p {
+    margin: 0;
+    max-width: 480px;
+    color: rgba(226, 239, 255, 0.72);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+}
+
+.page-head-aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.page-head-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  :deep(.el-button--primary) {
+    height: 30px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    color: #fff;
+    background: rgba(255, 255, 255, 0.14);
+  }
+
+  :deep(.el-button--primary:hover) {
+    background: rgba(255, 255, 255, 0.22);
+  }
+}
+
+.date-chip {
+  padding: 5px 10px;
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 12px;
+  white-space: nowrap;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #9ff0de;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #5eead4;
+  box-shadow: 0 0 0 0 rgba(94, 234, 212, 0.45);
+  animation: live-pulse 1.8s ease-out infinite;
+}
+
+@keyframes live-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(94, 234, 212, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(94, 234, 212, 0); }
+}
+
+.period-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+
+  :deep(.el-radio-button__inner) {
+    min-width: 52px;
+    padding: 7px 12px;
+    color: rgba(255, 255, 255, 0.95);
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.28);
+    box-shadow: none;
+  }
+
+  :deep(.el-radio-button:first-child .el-radio-button__inner) {
+    border-left-color: rgba(255, 255, 255, 0.28);
+  }
+
+  :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+    color: #1d4ed8;
+    background: #fff;
+    border-color: #fff;
+    box-shadow: none;
+  }
+
+  :deep(.el-range-editor.el-input__wrapper) {
+    height: 30px;
+    padding: 0 10px;
+    background: rgba(255, 255, 255, 0.16);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.28) inset;
+  }
+
+  :deep(.el-range-input) {
+    color: rgba(255, 255, 255, 0.95);
+    background: transparent;
+  }
+
+  :deep(.el-range-separator),
+  :deep(.el-range__icon) {
+    color: rgba(255, 255, 255, 0.75);
+  }
+}
+
+.period-range-picker {
+  width: 240px;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .metric-card {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+  padding: 15px 16px;
   overflow: hidden;
-  padding: 20px 21px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 
   &::before {
     position: absolute;
     left: 0;
-    top: 18px;
-    bottom: 18px;
+    top: 14px;
+    bottom: 14px;
     width: 3px;
     content: '';
-    border-radius: 0 4px 4px 0;
-    background: linear-gradient(#38bdf8, #2563eb);
-    opacity: 0.55;
+    border-radius: 0 3px 3px 0;
+    background: #cbd5e1;
   }
-}
-.metric-card:hover {
-  transform: translateY(-3px);
-  border-color: #d3e4fb;
-  box-shadow: 0 16px 28px rgba(28, 73, 158, 0.09);
-}
 
-.metric-icon,
-.service-mark,
-.todo-icon,
-.quick-grid span {
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  border-radius: 12px;
+  &.is-orange::before { background: #f59e0b; }
+  &.is-purple::before { background: #8b5cf6; }
+  &.is-blue::before { background: #3b82f6; }
+  &.is-green::before { background: #10b981; }
+  &.is-cyan::before { background: #06b6d4; }
+
+  &:hover {
+    border-color: #d5e4f7;
+    box-shadow: 0 10px 22px rgba(37, 99, 235, 0.07);
+    transform: translateY(-1px);
+  }
 }
 
 .metric-icon {
-  width: 48px;
-  height: 48px;
-  font-size: 22px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  font-size: 17px;
 }
 
 .metric-content {
   display: grid;
-  gap: 3px;
+  gap: 2px;
+  min-width: 0;
 
   span {
-    color: #778196;
+    color: var(--muted);
     font-size: 12px;
   }
 
   strong {
-    color: #12203a;
-    font-size: 24px;
+    color: var(--ink);
+    font-size: 22px;
     line-height: 1.1;
     font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
   }
 
   small {
-    color: #8993a6;
+    color: #94a3b8;
     font-size: 11px;
   }
 
-  small.positive {
-    color: #0f9f78;
-  }
+  small.positive { color: #059669; }
+  small.warn { color: #d97706; }
 }
 
-.blue {
-  color: #2563eb;
-  background: #eaf1ff;
-}
-.cyan {
-  color: #0789a9;
-  background: #e6f8fb;
-}
-.green {
-  color: #07956f;
-  background: #e6f8f1;
-}
-.orange {
-  color: #d98406;
-  background: #fff4df;
-}
-.purple {
-  color: #7950c6;
-  background: #f1ebff;
-}
-.red {
-  color: #d94b59;
-  background: #ffebed;
+.blue { color: #2563eb; background: #eff6ff; }
+.cyan { color: #0891b2; background: #ecfeff; }
+.green { color: #059669; background: #ecfdf5; }
+.orange { color: #d97706; background: #fffbeb; }
+.purple { color: #7c3aed; background: #f5f3ff; }
+.red { color: #dc2626; background: #fef2f2; }
+
+.main-grid,
+.bottom-grid {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .main-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 2.1fr) minmax(280px, 0.9fr);
-  gap: 16px;
-  margin-bottom: 16px;
+  grid-template-columns: 1fr 1fr;
 }
 
 .bottom-grid {
-  display: grid;
-  grid-template-columns: 1.05fr 1.05fr 0.9fr;
-  gap: 16px;
+  grid-template-columns: 1.1fr 1fr;
+  align-items: stretch;
+  margin-bottom: 0;
 }
 
 .panel {
-  padding: 21px;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 18px;
+  min-height: 0;
 }
-.panel:hover {
-  border-color: #d5e4f8;
-  box-shadow: 0 14px 28px rgba(28, 48, 78, 0.07);
+
+.panel-fill {
+  height: 100%;
 }
 
 .panel-header {
-  align-items: flex-start;
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  &::before {
+    width: 3px;
+    height: 14px;
+    content: '';
+    border-radius: 99px;
+    background: linear-gradient(180deg, #38bdf8, #2563eb);
+  }
 
   h2 {
-    margin: 4px 0 0;
-    color: #15233d;
-    font-size: 16px;
+    margin: 0;
+    color: #1e3a5f;
+    font-size: 15px;
     font-weight: 700;
   }
 }
 
-.panel-kicker {
-  color: #5b8fd4;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 1.4px;
-}
-
-.queue-overview-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-
-  div {
-    padding: 16px 18px;
-    border-radius: 12px;
-    background: linear-gradient(#f7fbff, #f3f8fd);
-    border: 1px solid #e7edf6;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-  }
-  div:hover {
-    transform: translateY(-1px);
-    border-color: #c5dbf6;
-    box-shadow: 0 8px 16px rgba(28, 73, 158, 0.07);
-  }
-
-  span {
-    display: block;
-    color: #7b8798;
-    font-size: 12px;
-  }
-
-  strong {
-    display: block;
-    margin-top: 8px;
-    color: #053b70;
-    font-size: 28px;
-    font-variant-numeric: tabular-nums;
-  }
-}
-
-.total-agents {
-  padding: 4px 10px;
-  color: #5f7190;
-  font-size: 11px;
-  border-radius: 999px;
-  background: #f3f7fc;
-  border: 1px solid #e6eef8;
-}
-
-.agent-ring {
-  display: grid;
-  place-items: center;
-  width: 150px;
-  height: 150px;
-  margin: 8px auto 22px;
-  border-radius: 50%;
-  background: conic-gradient(#2f6bff 0 43%, #18b78c 43% 65%, #f59e0b 65% 74%, #e8edf5 74% 100%);
-  position: relative;
-  box-shadow:
-    0 0 0 10px rgba(47, 107, 255, 0.06),
-    0 12px 28px rgba(36, 89, 184, 0.12);
-}
-
-.agent-ring::after {
-  position: absolute;
-  width: 112px;
-  height: 112px;
-  content: '';
-  border-radius: 50%;
-  background: radial-gradient(circle at 50% 40%, #fff, #f7fbff);
-  box-shadow: inset 0 0 0 1px #eef3f9;
-}
-
-.ring-center {
-  z-index: 1;
-  display: grid;
-  text-align: center;
-
-  strong {
-    color: #12203a;
-    font-size: 29px;
-    font-variant-numeric: tabular-nums;
-  }
-
-  span {
-    color: #8b95a7;
-    font-size: 11px;
-  }
-}
-
-.agent-status-list {
+.stat-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px 22px;
-
-  div {
-    display: flex;
-    justify-content: space-between;
-    padding: 6px 2px;
-    color: #6f7b90;
-    font-size: 11px;
-  }
-
-  strong {
-    color: #273248;
-    font-variant-numeric: tabular-nums;
-  }
-
-  i {
-    display: inline-block;
-    width: 7px;
-    height: 7px;
-    margin-right: 7px;
-    border-radius: 50%;
-    box-shadow: 0 0 0 3px rgba(47, 107, 255, 0.08);
-  }
-}
-
-.service-list,
-.todo-list {
-  display: grid;
-  gap: 11px;
-}
-
-.service-item,
-.todo-item {
-  gap: 11px;
-  min-height: 50px;
-  padding-bottom: 11px;
-  border-bottom: 1px solid #eef2f7;
-}
-
-.todo-item.is-action {
-  cursor: pointer;
-  border-radius: 12px;
-  margin: 0 -8px;
-  padding: 8px 8px 11px;
-  transition: background 0.2s ease, box-shadow 0.2s ease;
-}
-.todo-item.is-action:hover {
-  background: #f5f9ff;
-  box-shadow: inset 0 0 0 1px #e4eefc;
-}
-
-.service-item:last-child,
-.todo-item:last-child {
-  padding-bottom: 0;
-  border-bottom: 0;
-}
-
-.service-mark,
-.todo-icon {
-  width: 36px;
-  height: 36px;
-  font-size: 16px;
-}
-
-.service-item div,
-.todo-item div {
-  display: grid;
+  gap: 10px;
   flex: 1;
-  gap: 3px;
-  min-width: 0;
+}
 
-  strong {
-    color: #1b2b45;
+.stat-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 84px;
+  padding: 14px;
+  border: 1px solid var(--cell-line);
+  border-radius: 12px;
+  background: var(--cell);
+  box-sizing: border-box;
+}
+
+.stat-cell.is-click {
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+
+  &:hover {
+    border-color: #d4e0f0;
+    background: var(--hover);
+  }
+}
+
+.stat-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.stat-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.stat-cell strong,
+.traffic-item strong {
+  color: var(--ink);
+  font-size: 24px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.stat-cell strong.is-warn,
+.traffic-item strong.is-warn {
+  color: #d97706;
+}
+
+.traffic-panel {
+  margin-bottom: 12px;
+}
+
+.traffic-strip {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+.traffic-item {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  min-height: 76px;
+  padding: 14px;
+  border: 1px solid var(--cell-line);
+  border-radius: 12px;
+  background: var(--cell);
+  box-sizing: border-box;
+
+  span {
+    color: var(--muted);
     font-size: 12px;
   }
 
-  small {
-    overflow: hidden;
-    color: #929cad;
-    font-size: 10px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  &.is-click {
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease;
+
+    &:hover {
+      border-color: #d4e0f0;
+      background: var(--hover);
+    }
   }
 }
 
-.service-state {
-  color: #16886b;
-  font-size: 10px;
+.todo-list {
+  display: grid;
+  gap: 8px;
+  flex: 1;
+  grid-auto-rows: 1fr;
+  align-content: stretch;
+}
 
-  i {
-    display: inline-block;
-    width: 6px;
-    height: 6px;
-    margin-right: 5px;
-    border-radius: 50%;
-    background: #20bd8d;
-    box-shadow: 0 0 0 0 rgba(32, 189, 141, 0.45);
-    animation: live-pulse 1.8s ease-out infinite;
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 10px 12px;
+  border: 1px solid var(--cell-line);
+  border-radius: 12px;
+  background: var(--cell);
+
+  &.is-action {
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease;
   }
+
+  &.is-action:hover {
+    border-color: #d4e0f0;
+    background: var(--hover);
+  }
+
+  > div {
+    display: grid;
+    flex: 1;
+    gap: 2px;
+    min-width: 0;
+
+    strong {
+      color: var(--ink);
+      font-size: 13px;
+    }
+
+    small {
+      color: #94a3b8;
+      font-size: 11px;
+    }
+  }
+}
+
+.todo-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 15px;
 }
 
 .quick-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  flex: 1;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 1fr;
   gap: 10px;
+  min-height: 0;
 
   button {
-    display: grid;
-    place-items: center;
-    gap: 8px;
-    min-height: 84px;
-    padding: 10px 8px;
-    color: #5f6b80;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 64px;
+    padding: 12px 14px;
+    color: inherit;
     font: inherit;
-    font-size: 12px;
+    text-align: left;
     cursor: pointer;
-    border: 1px solid #e8eef6;
+    border: 1px solid var(--cell-line);
     border-radius: 12px;
-    background: linear-gradient(#fff, #f8fbff);
-    transition: transform 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+    background: var(--cell);
+    box-sizing: border-box;
+    transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
   }
 
   button:hover {
-    color: #1d4ed8;
-    border-color: #c7dbff;
-    transform: translateY(-3px);
-    background: #fff;
-    box-shadow: 0 10px 18px rgba(36, 93, 204, 0.1);
+    border-color: #d4e0f0;
+    background: #f8fbff;
+    box-shadow: 0 8px 16px rgba(37, 99, 235, 0.06);
+    transform: translateY(-1px);
+  }
+}
+
+.quick-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  font-size: 18px;
+}
+
+.quick-copy {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+
+  strong {
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 700;
   }
 
-  span {
-    width: 34px;
-    height: 34px;
-    font-size: 15px;
+  small {
+    color: #94a3b8;
+    font-size: 11px;
   }
+}
+
+.quick-arrow {
+  flex: 0 0 auto;
+  color: #cbd5e1;
+  font-size: 14px;
 }
 
 @media (max-width: 1200px) {
-  .bottom-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .bottom-grid .panel:last-child {
-    grid-column: 1 / -1;
-  }
-}
-
-@media (max-width: 900px) {
-  .metric-grid {
-    grid-template-columns: 1fr 1fr;
+  .metric-grid,
+  .traffic-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .main-grid,
   .bottom-grid {
     grid-template-columns: 1fr;
   }
+}
 
-  .hero-panel,
-  .period-bar {
-    align-items: flex-start;
+@media (max-width: 900px) {
+  .page-head {
     flex-direction: column;
+    align-items: stretch;
   }
 
+  .page-head-aside {
+    align-items: stretch;
+  }
+
+  .page-head-meta,
   .period-filter {
-    width: 100%;
-    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
   .period-range-picker {
     width: 100%;
+  }
+
+  .quick-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -54,14 +54,39 @@ export interface HomeScreenFeedItem {
   tagClass: string;
 }
 
+export interface HomeScreenTicketSummary {
+  open: number;
+  processing: number;
+  resolved: number;
+  closed: number;
+}
+
+export interface HomeScreenCustomerRecent {
+  id: string;
+  name: string;
+  phone: string;
+  time: string;
+}
+
+export interface HomeScreenCustomerSummary {
+  todayNew: number;
+  total: number;
+  unassigned: number;
+  recent?: HomeScreenCustomerRecent[];
+}
+
 export interface HomeScreenDashboard {
   kpis: HomeScreenKpi[];
   heroCore: HomeScreenHeroCore;
   agentSummary: HomeScreenAgentSummary;
-  queueRanking: HomeScreenQueueRank[];
-  skillGroups: HomeScreenSkillRate[];
+  /** @deprecated kept for backend compat; UI no longer renders */
+  queueRanking?: HomeScreenQueueRank[];
+  /** @deprecated kept for backend compat; UI no longer renders */
+  skillGroups?: HomeScreenSkillRate[];
   trendHours: HomeScreenTrendPoint[];
   liveFeed: HomeScreenFeedItem[];
+  ticketSummary?: HomeScreenTicketSummary;
+  customerSummary?: HomeScreenCustomerSummary;
 }
 
 /** GET /api/v1/callcenter/screen/home/dashboard */
