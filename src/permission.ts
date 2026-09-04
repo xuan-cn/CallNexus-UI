@@ -13,9 +13,21 @@ import { ElMessage } from 'element-plus/es';
 // 默认 trickle 偏慢，菜单切换时顶栏会拖很久
 NProgress.configure({ showSpinner: false, speed: 180, trickleSpeed: 120, minimum: 0.25 });
 const whiteList = ['/login', '/register', '/social-callback', '/register*', '/register/*', '/chat/*'];
+const screenPathPattern = '/screen/*';
 
 const isWhiteList = (path: string) => {
   return whiteList.some((pattern) => isPathMatch(pattern, path));
+};
+
+const isScreenPath = (path: string) => isPathMatch(screenPathPattern, path);
+
+const registerAccessRoutes = async () => {
+  const accessRoutes = await usePermissionStore().generateRoutes();
+  accessRoutes.forEach((route) => {
+    if (!isHttp(route.path)) {
+      router.addRoute(route);
+    }
+  });
 };
 
 router.beforeEach(async (to) => {
@@ -41,14 +53,16 @@ router.beforeEach(async (to) => {
         return { path: '/' };
       }
       isRelogin.show = false;
+
+      // 大屏是常量路由，先放行进页；菜单权限后台补齐，避免整屏卡在启动加载
+      if (isScreenPath(to.path)) {
+        window.__appLoaded?.();
+        void registerAccessRoutes();
+        return true;
+      }
+
       window.__setLoaderStatus?.('正在加载菜单权限…');
-      const accessRoutes = await usePermissionStore().generateRoutes();
-      // 根据roles权限生成可访问的路由表
-      accessRoutes.forEach((route) => {
-        if (!isHttp(route.path)) {
-          router.addRoute(route); // 动态添加可访问的路由表
-        }
-      });
+      await registerAccessRoutes();
       window.__appLoaded?.();
       // hack：确保 addRoute 完成后按目标路由重新进入
       return { path: to.path, replace: true, params: to.params, query: to.query, hash: to.hash, name: to.name as string };

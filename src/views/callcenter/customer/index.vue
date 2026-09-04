@@ -4,7 +4,10 @@
       <el-card v-show="showSearch" class="mb-2 search-card" shadow="hover">
         <el-form ref="queryFormRef" :model="query" :inline="true" class="search-form" @submit.prevent>
           <el-form-item label="分配状态">
-            <el-segmented v-model="query.assignmentState" class="state-segmented" :options="assignmentStateOptions" @change="handleSearch" />
+            <el-select v-model="query.assignmentState" clearable placeholder="全部" @change="handleSearch">
+              <el-option label="未分配" value="UNASSIGNED" />
+              <el-option label="已分配" value="ASSIGNED" />
+            </el-select>
           </el-form-item>
           <el-form-item label="客户电话">
             <el-input v-model="query.primaryPhone" clearable placeholder="手机号或电话" @keyup.enter="handleSearch" />
@@ -58,7 +61,7 @@
                   {{ column.label }}
                 </el-checkbox>
               </el-checkbox-group>
-              <div class="column-setting-tip">当前页全空的自定义字段会自动隐藏。要长期显示请在客户表单模板中打开“列表显示”。</div>
+              <div class="column-setting-tip">要长期显示请在客户表单模板中打开“列表显示”。</div>
             </el-popover>
           </el-col>
           <el-col :span="6" class="table-meta-col">
@@ -127,23 +130,19 @@
         </el-table-column>
         <el-table-column label="归属" min-width="132" show-overflow-tooltip>
           <template #default="{ row }">
-<<<<<<< Updated upstream
             <div v-if="isAssigned(row)" class="assign-cell">
-              <el-tag v-if="row.skillGroupId" type="success" effect="plain" size="small" round>{{ skillGroupName(row.skillGroupId) }}</el-tag>
-              <span v-if="row.agentId" class="agent-text">坐席 {{ row.agentId }}</span>
+              <el-tag v-if="row.skillGroupId" type="success" effect="plain" size="small" round>
+                {{ skillGroupName(row.skillGroupId) }}
+              </el-tag>
+              <span v-if="row.agentId">坐席 {{ row.agentId }}</span>
+              <span v-if="!row.skillGroupId && !row.agentId">{{ assignmentText(row) }}</span>
             </div>
-            <span v-else class="cell-quiet">未分配</span>
-=======
-            <span :class="['assignment-text', { 'is-unassigned': !isAssigned(row) }]">
-              {{ assignmentText(row) }}
-            </span>
->>>>>>> Stashed changes
+            <span v-else>{{ assignmentText(row) }}</span>
           </template>
         </el-table-column>
         <el-table-column v-if="isFixedColumnVisible('customerType')" label="客户类型" min-width="100" show-overflow-tooltip>
           <template #default="{ row }">
-            <span v-if="row.customerType" class="cell-value">{{ row.customerType }}</span>
-            <span v-else class="cell-quiet">—</span>
+            <span>{{ row.customerType || '-' }}</span>
           </template>
         </el-table-column>
         <el-table-column v-if="isFixedColumnVisible('tags')" label="标签" min-width="128" show-overflow-tooltip>
@@ -152,39 +151,36 @@
               <el-tag v-for="tag in tagList(row.tags).slice(0, 2)" :key="tag" size="small" effect="plain" round>{{ tag }}</el-tag>
               <span v-if="tagList(row.tags).length > 2" class="tag-more">+{{ tagList(row.tags).length - 2 }}</span>
             </div>
-            <span v-else class="cell-quiet">—</span>
+            <span v-else>-</span>
           </template>
         </el-table-column>
         <el-table-column v-if="isFixedColumnVisible('sourceChannel')" label="来源渠道" min-width="100" show-overflow-tooltip>
           <template #default="{ row }">
-            <span v-if="row.sourceChannel" class="cell-value">{{ row.sourceChannel }}</span>
-            <span v-else class="cell-quiet">—</span>
+            <span>{{ row.sourceChannel || '-' }}</span>
           </template>
         </el-table-column>
         <el-table-column v-if="isFixedColumnVisible('sourceCallId')" label="来源通话" min-width="140" show-overflow-tooltip>
           <template #default="{ row }">
-            <span v-if="row.sourceCallId" class="cell-value">{{ row.sourceCallId }}</span>
-            <span v-else class="cell-quiet">—</span>
+            <span>{{ row.sourceCallId || '-' }}</span>
           </template>
         </el-table-column>
         <el-table-column
-          v-for="field in populatedListFields"
+          v-for="field in listVisibleCustomerFields"
           :key="field.fieldCode"
           :label="field.fieldName"
           min-width="96"
           show-overflow-tooltip
         >
           <template #default="{ row }">
-            <span v-if="hasFormFieldValue(row.formData?.[field.fieldCode])" class="cell-value">
+            <span v-if="hasFormFieldValue(row.formData?.[field.fieldCode])">
               {{ displayFormFieldValue(row.formData?.[field.fieldCode], field) }}
             </span>
-            <span v-else class="cell-quiet">—</span>
+            <span v-else>-</span>
           </template>
         </el-table-column>
         <el-table-column label="创建时间" width="156" show-overflow-tooltip>
           <template #default="{ row }">
-            <span v-if="formatCreateTime(row.createTime)" class="time-text">{{ formatCreateTime(row.createTime) }}</span>
-            <span v-else class="cell-quiet">—</span>
+            <span>{{ formatCreateTime(row.createTime) || '-' }}</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="88" align="center" fixed="right">
@@ -602,11 +598,6 @@ const customerDialogPhone = ref('');
 const router = useRouter();
 const query = reactive<CustomerQuery>({ pageNum: 1, pageSize: 10, assignmentState: '' });
 const selectedCustomers = ref<CustomerVO[]>([]);
-const assignmentStateOptions = [
-  { label: '全部', value: '' },
-  { label: '未分配', value: 'UNASSIGNED' },
-  { label: '已分配', value: 'ASSIGNED' }
-];
 const defaultAssignmentForm = (): CustomerAssignmentForm => ({
   customerIds: [],
   customerType: '',
@@ -682,12 +673,6 @@ const listVisibleCustomerFields = computed(() =>
     .filter((field, index, fields) => fields.findIndex((item) => item.fieldCode === field.fieldCode) === index)
     .sort((first, second) => (first.sortOrder || 0) - (second.sortOrder || 0))
 );
-/** 当前页至少有一条有值的自定义列才展示，避免空列铺满拉稀信息密度 */
-const populatedListFields = computed(() =>
-  listVisibleCustomerFields.value.filter((field) =>
-    rows.value.some((row) => hasFormFieldValue(row.formData?.[field.fieldCode]))
-  )
-);
 const templateImportFields = computed(() =>
   (selectedFormTemplate.value?.fields || [])
     .filter((field) => field.fieldType !== 'FILE')
@@ -734,7 +719,7 @@ const isAssigned = (row: CustomerVO) => !!(row.skillGroupId || row.agentId || ro
 const assignmentText = (row: CustomerVO) => {
   const parts: string[] = [];
   if (row.skillGroupId) parts.push(skillGroupName(row.skillGroupId));
-  if (row.agentId) parts.push(`#${row.agentId}`);
+  if (row.agentId) parts.push(`坐席 ${row.agentId}`);
   if (parts.length) return parts.join(' · ');
   return row.assignmentId ? '已分配' : '未分配';
 };
@@ -1144,11 +1129,6 @@ onBeforeUnmount(stopImportPolling);
   width: 168px;
 }
 
-.customer-list-page .state-segmented :deep(.el-segmented) {
-  --el-segmented-item-selected-bg-color: var(--el-color-primary);
-  --el-segmented-item-selected-color: #fff;
-  background: var(--el-fill-color-light);
-}
 
 .customer-list-page .table-card :deep(.el-card__header) {
   padding-top: 12px;
@@ -1180,12 +1160,12 @@ onBeforeUnmount(stopImportPolling);
   align-items: center;
   height: 24px;
   padding: 0 10px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--el-border-color-lighter);
   border-radius: 999px;
-  background: #f8fafc;
-  color: #64748b;
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-secondary);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .customer-list-page .meta-chip.is-active {
@@ -1194,57 +1174,18 @@ onBeforeUnmount(stopImportPolling);
   color: var(--el-color-primary);
 }
 
-.customer-list-page .customer-table {
-  --el-table-bg-color: #fff;
-  --el-table-tr-bg-color: #fff;
-  --el-table-header-bg-color: #f1f5f9;
-  --el-table-row-hover-bg-color: #f0f7ff;
-  overflow: hidden;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-}
-
-.customer-list-page .customer-table :deep(th.el-table__cell) {
-  height: 40px;
-  padding: 8px 0 !important;
-  font-weight: 650 !important;
-  font-size: 12px;
-  letter-spacing: 0.02em;
-  color: #475569 !important;
-  background: #f1f5f9 !important;
-  border-bottom: 1px solid #e2e8f0 !important;
-}
-
-.customer-list-page .customer-table :deep(td.el-table__cell) {
-  padding: 8px 0 !important;
-  border-bottom: 1px solid #eef2f7 !important;
-}
-
-.customer-list-page .customer-table :deep(.el-table__body tr.el-table__row--striped td.el-table__cell) {
-  background: #f8fafc;
-}
-
-.customer-list-page .customer-table :deep(.el-table__body tr:hover > td.el-table__cell) {
-  background: #f0f7ff !important;
-}
-
 .customer-list-page .customer-table :deep(.el-table-fixed-column--left),
 .customer-list-page .customer-table :deep(.el-table-fixed-column--right) {
-  background: #fff;
+  background: var(--el-bg-color);
 }
 
 .customer-list-page .customer-table :deep(.el-table__body tr.el-table__row--striped .el-table-fixed-column--left),
 .customer-list-page .customer-table :deep(.el-table__body tr.el-table__row--striped .el-table-fixed-column--right) {
-  background: #f8fafc;
+  background: var(--el-fill-color-lighter);
 }
 
-.customer-list-page .customer-table :deep(.el-table__body tr:hover .el-table-fixed-column--left),
-.customer-list-page .customer-table :deep(.el-table__body tr:hover .el-table-fixed-column--right) {
-  background: #f0f7ff !important;
-}
-
-.customer-list-page .customer-table :deep(.el-table-fixed-column--right) {
-  box-shadow: -6px 0 12px rgba(15, 23, 42, 0.05);
+.customer-list-page .customer-table :deep(.customer-name-column .cell) {
+  padding-left: 4px;
 }
 
 .name-link.el-button.is-link {
@@ -1252,17 +1193,10 @@ onBeforeUnmount(stopImportPolling);
   max-width: 100%;
   padding: 0;
   overflow: hidden;
-  color: #1e40af !important;
-  font-weight: 650;
+  font-weight: 400;
   text-overflow: ellipsis;
   vertical-align: middle;
   white-space: nowrap;
-}
-
-.name-link.el-button.is-link:hover {
-  color: #1d4ed8 !important;
-  text-decoration: underline;
-  text-underline-offset: 2px;
 }
 
 .phone-cell {
@@ -1276,17 +1210,14 @@ onBeforeUnmount(stopImportPolling);
   display: inline-flex;
   align-items: center;
   max-width: 100%;
-  padding: 1px 6px 1px 3px;
-  gap: 5px;
+  padding: 0;
+  gap: 4px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
-  color: #334155;
-  font-size: 13px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
+  color: var(--el-text-color-regular);
+  font: inherit;
   cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .phone-link span {
@@ -1296,62 +1227,36 @@ onBeforeUnmount(stopImportPolling);
 }
 
 .phone-link .el-icon {
-  display: inline-flex;
   flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--el-color-primary-light-9);
   color: var(--el-color-primary);
-  font-size: 11px;
+  font-size: 14px;
 }
 
 .phone-link:hover {
-  background: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
-}
-
-.phone-link:hover .el-icon {
-  background: var(--el-color-primary-light-8);
   color: var(--el-color-primary);
 }
 
 .phone-extra {
   flex: none;
-  padding: 0 6px;
-  border-radius: 10px;
-  background: var(--el-color-primary-light-9);
   color: var(--el-color-primary);
-  font-size: 11px;
-  line-height: 18px;
+  font-size: 12px;
   cursor: pointer;
-}
-
-.phone-extra:hover {
-  background: var(--el-color-primary-light-8);
 }
 
 .phone-disabled {
   color: var(--el-text-color-placeholder);
-  font-variant-numeric: tabular-nums;
   text-decoration: line-through;
 }
 
 .text-muted {
   color: var(--el-text-color-placeholder);
-  font-size: 13px;
 }
 
-.assignment-text {
-  color: var(--el-text-color-regular);
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-.assignment-text.is-unassigned {
-  color: var(--el-text-color-placeholder);
+.assign-cell {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .tag-cell {
@@ -1366,23 +1271,6 @@ onBeforeUnmount(stopImportPolling);
   font-size: 12px;
 }
 
-.cell-value {
-  color: #334155;
-  font-size: 13px;
-}
-
-.cell-quiet {
-  color: #cbd5e1;
-  font-size: 12px;
-  user-select: none;
-}
-
-.time-text {
-  color: #64748b;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-
 .row-actions {
   display: inline-flex;
   align-items: center;
@@ -1392,37 +1280,11 @@ onBeforeUnmount(stopImportPolling);
 
 .row-action-btn {
   padding: 4px;
-  font-size: 16px;
-}
-
-.row-action-view.el-button.is-link {
-  color: #94a3b8 !important;
-}
-
-.row-action-view.el-button.is-link:hover {
-  color: var(--el-color-primary) !important;
-}
-
-.row-action-edit.el-button.is-link {
-  color: var(--el-color-primary) !important;
-}
-
-.row-action-edit.el-button.is-link:hover {
-  color: #1d4ed8 !important;
-}
-
-.customer-list-page .customer-table :deep(.el-table__cell .cell) {
-  color: var(--el-text-color-regular);
-  font-size: 13px;
-}
-
-.customer-list-page .customer-table :deep(.customer-name-column .cell) {
-  padding-left: 4px;
 }
 
 .column-setting-title {
   margin-bottom: 8px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--el-text-color-primary);
 }
 
