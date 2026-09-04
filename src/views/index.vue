@@ -447,14 +447,14 @@ const dashboardRouteTargets: Record<DashboardLinkKey, DashboardRouteTarget> = {
   customer: {
     titles: ['客户列表', '客户', '客户管理'],
     names: ['Customer', 'customer'],
-    pathEnds: ['/customer'],
-    fallbacks: ['/customer', '/biz-center/customer', '/callcenter/customer']
+    pathEnds: ['/customer/customer', '/biz-center/customer', '/callcenter/customer', '/customer'],
+    fallbacks: ['/customer/customer', '/biz-center/customer', '/callcenter/customer', '/customer']
   },
   ticket: {
     titles: ['工单列表', '工单', '工单管理'],
     names: ['Ticket', 'ticket'],
-    pathEnds: ['/ticket'],
-    fallbacks: ['/ticket', '/biz-center/ticket', '/callcenter/ticket']
+    pathEnds: ['/ticket/ticket', '/biz-center/ticket', '/callcenter/ticket', '/ticket'],
+    fallbacks: ['/ticket/ticket', '/biz-center/ticket', '/callcenter/ticket', '/ticket']
   },
   callRecord: {
     titles: ['通话记录'],
@@ -491,17 +491,18 @@ const quickActions: QuickAction[] = [
   { label: '未分配客户', desc: '待分配线索', tone: 'red', icon: UserFilled, routeKey: 'customer' }
 ];
 
-const normalizePath = (path?: string) => {
-  if (!path) return '';
-  return path.startsWith('/') ? path : `/${path}`;
+const joinRoutePath = (parentPath: string, routePath?: string) => {
+  if (!routePath) return parentPath || '/';
+  // 绝对路径直接用；相对路径拼到父级，避免 child=`customer` + parent=`/customer` 被误判成 `/customer`
+  if (routePath.startsWith('/')) return getNormalPath(routePath);
+  const base = parentPath === '/' ? '' : parentPath;
+  return getNormalPath(`${base}/${routePath}`);
 };
 
 const flattenRoutes = (routes: RouteRecordRaw[], parentPath = ''): Array<RouteRecordRaw & { resolvedPath: string }> =>
   routes.flatMap((route) => {
-    const currentPath = normalizePath(route.path);
-    const resolvedPath =
-      currentPath.startsWith(parentPath) || currentPath === '/' ? currentPath : `${parentPath}${currentPath}`;
-    const current = { ...route, resolvedPath: getNormalPath(resolvedPath) };
+    const resolvedPath = joinRoutePath(parentPath, route.path);
+    const current = { ...route, resolvedPath };
     const nextParent = resolvedPath === '/' ? '' : resolvedPath;
     return [current, ...flattenRoutes((route.children || []) as RouteRecordRaw[], nextParent)];
   });
@@ -536,12 +537,15 @@ const resolveDashboardPath = (key: DashboardLinkKey) => {
   ]);
   const pages = routes.filter(isLeafPage);
 
-  const byExactPath = pages.find((route) => target.pathEnds.includes(route.resolvedPath));
+  // 优先更长路径，避免 `/customer` 误匹配目录而漏掉 `/customer/customer`
+  const sortedEnds = [...target.pathEnds].sort((a, b) => b.length - a.length);
+
+  const byExactPath = sortedEnds
+    .map((end) => pages.find((route) => route.resolvedPath === end))
+    .find((route) => route?.resolvedPath);
   if (byExactPath?.resolvedPath) return byExactPath.resolvedPath;
 
-  const byPath = pages.find((route) =>
-    target.pathEnds.some((end) => route.resolvedPath.endsWith(end))
-  );
+  const byPath = pages.find((route) => sortedEnds.some((end) => route.resolvedPath.endsWith(end)));
   if (byPath?.resolvedPath) return byPath.resolvedPath;
 
   const byName = pages.find((route) => target.names.includes(String(route.name || '')));
