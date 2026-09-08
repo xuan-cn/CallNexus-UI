@@ -5,7 +5,6 @@
     subtitle="AI VOICEBOT OPERATIONS DASHBOARD"
     :footer-text="text.footer"
     :badge-tone="liveDataOk ? 'live' : loadFailed ? 'demo' : 'loading'"
-    :switch-links="[{ label: text.switchHome, path: '/screen/home' }]"
   >
     <div
       class="screen-page ai-page theme-exhibit"

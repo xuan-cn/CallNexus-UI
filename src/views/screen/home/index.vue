@@ -5,7 +5,6 @@
     subtitle="CALL CENTER OPERATIONS DASHBOARD"
     :footer-text="text.footer"
     :badge-tone="liveDataOk ? 'live' : loadFailed ? 'demo' : 'loading'"
-    :switch-links="[{ label: text.switchAi, path: '/screen/ai' }]"
   >
     <div
       class="screen-page home-page theme-ops"

@@ -15,9 +15,9 @@
         </div>
         <div class="period-filter">
           <el-radio-group v-model="periodMode" size="small" @change="handlePeriodModeChange">
-            <el-radio-button value="day">按日</el-radio-button>
-            <el-radio-button value="month">按月</el-radio-button>
-            <el-radio-button value="year">今年</el-radio-button>
+            <el-radio-button value="day">本日</el-radio-button>
+            <el-radio-button value="week">本周</el-radio-button>
+            <el-radio-button value="month">本月</el-radio-button>
           </el-radio-group>
           <el-date-picker
             v-model="dateRange"
@@ -183,7 +183,7 @@ import { ElMessage } from 'element-plus';
 import { computed, onMounted, ref, type Component } from 'vue';
 import type { RouteRecordNormalized } from 'vue-router';
 
-type PeriodMode = 'day' | 'month' | 'year';
+type PeriodMode = 'day' | 'week' | 'month';
 
 const router = useRouter();
 
@@ -202,7 +202,14 @@ const formatDate = (date: Date) => `${date.getFullYear()}-${pad2(date.getMonth()
 const today = new Date();
 const todayText = formatDate(today);
 const monthStartText = formatDate(new Date(today.getFullYear(), today.getMonth(), 1));
-const yearStartText = `${today.getFullYear()}-01-01`;
+const weekStartDate = (() => {
+  const date = new Date(today);
+  const weekday = date.getDay();
+  const offset = weekday === 0 ? 6 : weekday - 1;
+  date.setDate(date.getDate() - offset);
+  return date;
+})();
+const weekStartText = formatDate(weekStartDate);
 
 const periodMode = ref<PeriodMode>('day');
 const dateRange = ref<[string, string]>([todayText, todayText]);
@@ -217,15 +224,15 @@ const isSingleToday = computed(
 );
 
 const periodPrefix = computed(() => {
-  if (periodMode.value === 'year') return '今年';
   if (periodMode.value === 'month') return '本月';
+  if (periodMode.value === 'week') return '本周';
   if (isSingleToday.value) return '今日';
   return '区间';
 });
 
 const periodKicker = computed(() => {
-  if (periodMode.value === 'year') return '年度业务';
-  if (periodMode.value === 'month') return '月度业务';
+  if (periodMode.value === 'month') return '本月业务';
+  if (periodMode.value === 'week') return '本周业务';
   if (isSingleToday.value) return '今日业务';
   return '区间业务';
 });
@@ -235,8 +242,8 @@ const applyPeriodPreset = (mode: PeriodMode) => {
     dateRange.value = [monthStartText, todayText];
     return;
   }
-  if (mode === 'year') {
-    dateRange.value = [yearStartText, todayText];
+  if (mode === 'week') {
+    dateRange.value = [weekStartText, todayText];
     return;
   }
   dateRange.value = [todayText, todayText];
@@ -245,12 +252,12 @@ const applyPeriodPreset = (mode: PeriodMode) => {
 const syncPeriodModeByRange = () => {
   const begin = periodRange.value.beginDate;
   const end = periodRange.value.endDate;
-  if (begin === yearStartText && end === todayText) {
-    periodMode.value = 'year';
-    return;
-  }
   if (begin === monthStartText && end === todayText) {
     periodMode.value = 'month';
+    return;
+  }
+  if (begin === weekStartText && end === todayText) {
+    periodMode.value = 'week';
     return;
   }
   periodMode.value = 'day';
@@ -742,19 +749,26 @@ onMounted(() => {
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
+
+  :deep(.el-radio-group) {
+    --el-border-radius-base: 999px;
+  }
 
   :deep(.el-radio-button__inner) {
-    min-width: 52px;
-    padding: 7px 12px;
-    color: rgba(255, 255, 255, 0.95);
-    background: rgba(255, 255, 255, 0.14);
-    border-color: rgba(255, 255, 255, 0.28);
+    min-width: 0;
+    height: 26px;
+    padding: 0 10px;
+    font-size: 12px;
+    line-height: 24px;
+    color: rgba(255, 255, 255, 0.92);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.24);
     box-shadow: none;
   }
 
   :deep(.el-radio-button:first-child .el-radio-button__inner) {
-    border-left-color: rgba(255, 255, 255, 0.28);
+    border-left-color: rgba(255, 255, 255, 0.24);
   }
 
   :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
@@ -765,25 +779,27 @@ onMounted(() => {
   }
 
   :deep(.el-range-editor.el-input__wrapper) {
-    height: 30px;
-    padding: 0 10px;
-    background: rgba(255, 255, 255, 0.16);
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.28) inset;
+    height: 26px;
+    padding: 0 8px;
+    background: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.24) inset;
   }
 
   :deep(.el-range-input) {
+    font-size: 12px;
     color: rgba(255, 255, 255, 0.95);
     background: transparent;
   }
 
   :deep(.el-range-separator),
   :deep(.el-range__icon) {
+    font-size: 12px;
     color: rgba(255, 255, 255, 0.75);
   }
 }
 
 .period-range-picker {
-  width: 240px;
+  width: 210px;
 }
 
 .metric-grid {
