@@ -25,27 +25,29 @@
         </el-table-column>
         <el-table-column label="操作" width="350" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button v-hasPermi="['callcenter:ivr-flow:update']" link type="primary" icon="Share" @click="openDesigner(row)">设计</el-button>
-            <el-button v-hasPermi="['callcenter:ivr-flow:query']" link type="primary" icon="Clock" @click="openVersions(row)">版本</el-button>
-            <el-button v-hasPermi="['callcenter:ivr-flow:publish']" link type="success" icon="Promotion" @click="handlePublish(row)">发布</el-button>
-            <el-button
-              v-if="row.publishStatus === 'PUBLISHED'"
-              v-hasPermi="['callcenter:ivr-flow:publish']"
-              link
-              type="warning"
-              icon="SwitchButton"
-              @click="handleUnpublish(row)"
-            >
-              取消发布
-            </el-button>
-            <el-button
-              v-hasPermi="['callcenter:ivr-flow:delete']"
-              link
-              type="danger"
-              icon="Delete"
-              :disabled="row.publishStatus === 'PUBLISHED'"
-              @click="handleDelete(row)"
-            />
+            <div class="table-row-actions">
+              <el-button v-hasPermi="['callcenter:ivr-flow:update']" link type="primary" icon="Share" @click="openDesigner(row)">设计</el-button>
+              <el-button v-hasPermi="['callcenter:ivr-flow:query']" link type="primary" icon="Clock" @click="openVersions(row)">版本</el-button>
+              <el-button v-hasPermi="['callcenter:ivr-flow:publish']" link type="success" icon="Promotion" @click="handlePublish(row)">发布</el-button>
+              <el-button
+                v-if="row.publishStatus === 'PUBLISHED'"
+                v-hasPermi="['callcenter:ivr-flow:publish']"
+                link
+                type="warning"
+                icon="SwitchButton"
+                @click="handleUnpublish(row)"
+              >
+                取消发布
+              </el-button>
+              <el-button
+                v-hasPermi="['callcenter:ivr-flow:delete']"
+                link
+                type="danger"
+                icon="Delete"
+                :disabled="row.publishStatus === 'PUBLISHED'"
+                @click="handleDelete(row)"
+              />
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -403,5 +405,16 @@ onMounted(load);
   display: flex;
   justify-content: space-between;
   margin-bottom: 16px;
+}
+.table-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.table-row-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 </style>

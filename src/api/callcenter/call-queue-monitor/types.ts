@@ -1,5 +1,5 @@
 export type QueueHealthStatus = 'NORMAL' | 'WARNING' | 'ABNORMAL';
-export type AgentRuntimeStatus = 'OFFLINE' | 'IDLE' | 'BUSY' | 'AFTER_CALL';
+export type AgentRuntimeStatus = 'OFFLINE' | 'IDLE' | 'NOT_READY' | 'BUSY' | 'AFTER_CALL';
 
 export interface CallQueueMonitorVO {
   queueId: string | number;

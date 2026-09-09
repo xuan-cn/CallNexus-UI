@@ -54,6 +54,13 @@
           :title="outboundWritebackHint"
         />
         <el-alert
+          v-if="selectedNode.type === 'LOOP_LIMIT'"
+          class="property-alert"
+          type="info"
+          :closable="false"
+          title="每次进入此节点计数一次。继续循环分支可连回等待输入，达到上限分支必须连接挂机、转人工或结束流程。"
+        />
+        <el-alert
           v-if="selectedNode.type === 'CUSTOMER_UPDATE'"
           class="property-alert"
           type="warning"
@@ -250,7 +257,8 @@
             <el-input-number
               v-else-if="property.type === 'NUMBER'"
               :model-value="selectedNode.config[property.key]"
-              :min="1"
+              :min="property.min ?? 1"
+              :max="property.max"
               style="width: 100%"
               @update:model-value="updateNodeProperty(property.key, $event)"
             />
@@ -270,6 +278,12 @@
             <el-select v-model="selectedEdge.condition" style="width: 100%" placeholder="请选择分支" @change="updateSelectedEdge">
               <el-option label="条件成立" value="TRUE" />
               <el-option label="条件不成立" value="FALSE" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-else-if="sourceDefinition.type === 'LOOP_LIMIT'" label="次数结果" required>
+            <el-select v-model="selectedEdge.condition" style="width: 100%" placeholder="请选择分支" @change="updateSelectedEdge">
+              <el-option label="继续循环" value="CONTINUE" />
+              <el-option label="达到上限" value="LIMIT" />
             </el-select>
           </el-form-item>
           <el-form-item v-else-if="sourceDefinition.type === 'INTENT_ROUTE'" label="识别结果" required>
@@ -311,9 +325,9 @@ const props = withDefaults(
     customerTemplates?: FormTemplate[];
   }>(),
   {
-  intentOptions: () => [],
-  queueOptions: () => [],
-  customerTemplates: () => []
+    intentOptions: () => [],
+    queueOptions: () => [],
+    customerTemplates: () => []
   }
 );
 const emit = defineEmits<{
@@ -361,6 +375,7 @@ const builtInVariableOptions = [
   { label: '企业名称', value: 'task.companyName' },
   { label: '产品名称', value: 'task.productName' },
   { label: '连续未命中次数', value: 'workflow.clarifyCount' },
+  { label: '当前循环次数', value: 'workflow.loopCount' },
   { label: '知识库是否命中', value: 'knowledge.hit' },
   { label: '是否使用模型兜底', value: 'knowledge.fallback' },
   { label: '知识库回答来源', value: 'knowledge.source' },
@@ -435,11 +450,7 @@ const customerFieldOptions = computed<StructuredFieldOption[]>(() => {
 });
 const slotTargetOptions = computed<StructuredFieldOption[]>(() => {
   const workflowVariables = customVariableOptions.value.map((item) => ({ label: `流程信息 / ${item.label}`, value: item.value, type: item.type }));
-  return [
-    ...workflowVariables,
-    ...customerFieldOptions.value,
-    { label: '客户性别', value: 'customer.gender', type: 'STRING' }
-  ];
+  return [...workflowVariables, ...customerFieldOptions.value, { label: '客户性别', value: 'customer.gender', type: 'STRING' }];
 });
 const enabledIntentOptions = computed(() => props.intentOptions.filter((item) => item.enabled !== false));
 const comparisonOptions = computed(() => {
@@ -515,6 +526,7 @@ const branchLabel = (sourceId: string, condition?: string) => {
   if (!condition) return '';
   const source = props.modelValue.nodes.find((node) => node.id === sourceId) || readGraph().nodes.find((node) => node.id === sourceId);
   if (source?.type === 'CONDITION') return condition === 'TRUE' ? '条件成立' : condition === 'FALSE' ? '条件不成立' : condition;
+  if (source?.type === 'LOOP_LIMIT') return condition === 'CONTINUE' ? '继续循环' : condition === 'LIMIT' ? '达到上限' : condition;
   if (source?.type === 'INTENT_ROUTE') {
     if (condition === 'FALLBACK') return '未命中意图';
     return props.intentOptions.find((item) => item.intentCode === condition)?.intentName || condition;

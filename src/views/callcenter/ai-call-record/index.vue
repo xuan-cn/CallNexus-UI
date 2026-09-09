@@ -123,7 +123,14 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { Right } from '@element-plus/icons-vue';
 import { getCallTranscript, listAiCallRecords, streamCallTranscript } from '@/api/callcenter/ai-speech';
-import { AiCallRecordQuery, AiCallRecordVO, AiCallTranscriptSegmentVO, AiCallTranscriptStreamEvent, AiCallTranscriptVO } from '@/api/callcenter/ai-speech/types';
+import {
+  AiCallRecordQuery,
+  AiCallRecordVO,
+  AiCallTranscriptSegmentVO,
+  AiCallTranscriptStreamEvent,
+  AiCallTranscriptVO
+} from '@/api/callcenter/ai-speech/types';
+import { mergeConsecutiveAiSegments } from '@/utils/callcenter/transcript';
 
 const loading = ref(false);
 const transcriptLoading = ref(false);
@@ -155,14 +162,18 @@ const normalizeTranscript = (res: any): AiCallTranscriptVO | undefined => {
   return data || undefined;
 };
 
-const directionLabel = (value?: string) => ({ INBOUND: '呼入', OUTBOUND: '呼出', INTERNAL: '内部', UNKNOWN: '未知' })[value || 'UNKNOWN'] || value || '-';
+const directionLabel = (value?: string) =>
+  ({ INBOUND: '呼入', OUTBOUND: '呼出', INTERNAL: '内部', UNKNOWN: '未知' })[value || 'UNKNOWN'] || value || '-';
 const directionInitial = (value?: string) => ({ INBOUND: '入', OUTBOUND: '出', INTERNAL: '内', UNKNOWN: '通' })[value || 'UNKNOWN'] || '通';
-const directionType = (value?: string) => ({ INBOUND: 'success', OUTBOUND: 'primary', INTERNAL: 'warning', UNKNOWN: 'info' })[value || 'UNKNOWN'] as any;
+const directionType = (value?: string) =>
+  ({ INBOUND: 'success', OUTBOUND: 'primary', INTERNAL: 'warning', UNKNOWN: 'info' })[value || 'UNKNOWN'] as any;
 const transcriptLabel = (value?: string) => ({ PROCESSING: '转写中', SUCCESS: '已转写', FAILED: '失败' })[value || ''] || '未转写';
 const transcriptType = (value?: string) => ({ PROCESSING: 'warning', SUCCESS: 'success', FAILED: 'danger' })[value || ''] as any;
-const speakerLabel = (value?: string) => ({ CUSTOMER: '客户', AGENT: '坐席', AI: 'AI', SYSTEM: '系统', UNKNOWN: '未知' })[value || 'UNKNOWN'] || value || '-';
+const speakerLabel = (value?: string) =>
+  ({ CUSTOMER: '客户', AGENT: '坐席', AI: 'AI', SYSTEM: '系统', UNKNOWN: '未知' })[value || 'UNKNOWN'] || value || '-';
 const speakerInitial = (value?: string) => ({ CUSTOMER: '客', AGENT: '席', AI: 'AI', SYSTEM: '系', UNKNOWN: '?' })[value || 'UNKNOWN'] || '?';
-const speakerClass = (value?: string) => ({ CUSTOMER: 'is-customer', AGENT: 'is-agent', AI: 'is-ai', SYSTEM: 'is-system', UNKNOWN: 'is-unknown' })[value || 'UNKNOWN'] || 'is-unknown';
+const speakerClass = (value?: string) =>
+  ({ CUSTOMER: 'is-customer', AGENT: 'is-agent', AI: 'is-ai', SYSTEM: 'is-system', UNKNOWN: 'is-unknown' })[value || 'UNKNOWN'] || 'is-unknown';
 const durationLabel = (seconds?: number) => {
   if (seconds === undefined || seconds === null) return '-';
   if (seconds < 60) return `${seconds}秒`;
@@ -190,7 +201,7 @@ const sortSegments = (segments: AiCallTranscriptSegmentVO[]) =>
     if (leftTime !== rightTime) return leftTime - rightTime;
     return (left.sentenceIndex ?? 0) - (right.sentenceIndex ?? 0);
   });
-const transcriptSegments = computed(() => sortSegments(transcript.value?.segments || []));
+const transcriptSegments = computed(() => mergeConsecutiveAiSegments(sortSegments(transcript.value?.segments || [])));
 
 const scrollBottom = () => {
   void nextTick(() => {
@@ -390,9 +401,7 @@ onBeforeUnmount(() => {
 }
 
 .record-list-card {
-  background:
-    linear-gradient(180deg, rgba(247, 251, 255, 0.95), rgba(255, 255, 255, 0.98)),
-    #fff;
+  background: linear-gradient(180deg, rgba(247, 251, 255, 0.95), rgba(255, 255, 255, 0.98)), #fff;
 }
 
 .record-list-card :deep(.el-card__header),
@@ -462,7 +471,10 @@ onBeforeUnmount(() => {
   border: 1px solid #e4ecf6;
   border-radius: 12px;
   background: #fff;
-  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
 .record-item:hover {
@@ -580,9 +592,7 @@ onBeforeUnmount(() => {
   padding: 14px;
   border: 1px solid #e4ecf6;
   border-radius: 14px;
-  background:
-    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.08), transparent 36%),
-    linear-gradient(180deg, #f8fbff, #f4f7fb);
+  background: radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.08), transparent 36%), linear-gradient(180deg, #f8fbff, #f4f7fb);
 }
 
 .conversation-empty {

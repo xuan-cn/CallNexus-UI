@@ -117,7 +117,14 @@ const statusLabel = computed(
 const statusType = computed(() => (execution.value?.status === 'FAILED' ? 'danger' : terminal.value ? 'success' : 'warning'));
 
 const appendOutputs = async (value: AiWorkflowTestExecutionVO) => {
-  value.outputMessages.slice(outputCount.value).forEach((content) => messages.value.push({ role: 'AI', content }));
+  value.outputMessages.slice(outputCount.value).forEach((content) => {
+    const previous = messages.value[messages.value.length - 1];
+    if (previous?.role === 'AI') {
+      previous.content += content;
+    } else {
+      messages.value.push({ role: 'AI', content });
+    }
+  });
   outputCount.value = value.outputMessages.length;
   execution.value = value;
   await nextTick();

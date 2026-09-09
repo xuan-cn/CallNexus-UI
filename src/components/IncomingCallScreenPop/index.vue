@@ -96,15 +96,26 @@
                   <strong>客户信息</strong>
                   <span>完善基础资料，便于后续跟进与外呼</span>
                 </div>
-                <el-select v-model="customerTemplateId" clearable placeholder="客户模板" class="template-select">
-                  <el-option
-                    v-for="item in customerTemplates"
-                    :key="String(item.id)"
-                    :label="item.templateName"
-                    :value="item.id"
-                    :disabled="!item.enabled"
-                  />
-                </el-select>
+                <div class="section-head-actions">
+                  <el-button
+                    v-if="showAssist"
+                    type="primary"
+                    :loading="summarizingCustomer"
+                    :disabled="!props.callId"
+                    @click="summarizeCustomerToField"
+                  >
+                    AI 总结到客户字段
+                  </el-button>
+                  <el-select v-model="customerTemplateId" clearable placeholder="客户模板" class="template-select">
+                    <el-option
+                      v-for="item in customerTemplates"
+                      :key="String(item.id)"
+                      :label="item.templateName"
+                      :value="item.id"
+                      :disabled="!item.enabled"
+                    />
+                  </el-select>
+                </div>
               </div>
               <el-form label-position="top" class="section-form dense-form">
                 <el-row :gutter="12">
@@ -181,12 +192,7 @@
                         clearable
                         style="width: 100%"
                       >
-                        <el-option
-                          v-for="option in item.field.options"
-                          :key="option.value"
-                          :label="option.label"
-                          :value="option.value"
-                        />
+                        <el-option v-for="option in item.field.options" :key="option.value" :label="option.label" :value="option.value" />
                       </el-select>
                     </el-form-item>
                   </el-col>
@@ -205,6 +211,15 @@
                   <span>{{ ticketSectionExpanded ? '填写后可提交或直接办结' : '点击展开快速建单' }}</span>
                 </div>
                 <div class="ticket-section-actions">
+                  <el-button
+                    v-if="ticketSectionExpanded && showAssist"
+                    type="primary"
+                    :loading="generatingTicketDraft"
+                    :disabled="!props.callId"
+                    @click="generateTicketDraft"
+                  >
+                    AI 自动填单
+                  </el-button>
                   <el-select v-if="ticketSectionExpanded" v-model="ticketTemplateId" clearable placeholder="工单模板" class="template-select">
                     <el-option
                       v-for="item in ticketTemplates"
@@ -300,12 +315,7 @@
                             clearable
                             style="width: 100%"
                           >
-                            <el-option
-                              v-for="option in item.field.options"
-                              :key="option.value"
-                              :label="option.label"
-                              :value="option.value"
-                            />
+                            <el-option v-for="option in item.field.options" :key="option.value" :label="option.label" :value="option.value" />
                           </el-select>
                         </el-form-item>
                       </el-col>
@@ -330,7 +340,9 @@
             <el-tabs v-model="historyTab" class="history-tabs">
               <el-tab-pane name="calls">
                 <template #label>
-                  <span class="tab-label">通话 <em>{{ callTotal }}</em></span>
+                  <span class="tab-label"
+                    >通话 <em>{{ callTotal }}</em></span
+                  >
                 </template>
                 <div v-loading="callHistoryLoading" class="history-pane" :class="{ 'is-empty': !callRecords.length }">
                   <template v-if="!callRecords.length && !callHistoryLoading">
@@ -374,7 +386,9 @@
               </el-tab-pane>
               <el-tab-pane name="tickets">
                 <template #label>
-                  <span class="tab-label">工单 <em>{{ ticketTotal }}</em></span>
+                  <span class="tab-label"
+                    >工单 <em>{{ ticketTotal }}</em></span
+                  >
                 </template>
                 <div v-loading="ticketHistoryLoading" class="history-pane" :class="{ 'is-empty': !tickets.length }">
                   <template v-if="!tickets.length && !ticketHistoryLoading">
@@ -410,7 +424,9 @@
               </el-tab-pane>
               <el-tab-pane name="followUps">
                 <template #label>
-                  <span class="tab-label">跟进 <em>{{ followUpTotal }}</em></span>
+                  <span class="tab-label"
+                    >跟进 <em>{{ followUpTotal }}</em></span
+                  >
                 </template>
                 <div v-loading="followUpHistoryLoading" class="history-pane" :class="{ 'is-empty': !followUps.length }">
                   <div v-if="customer?.id" class="follow-editor flat">
@@ -463,6 +479,7 @@
 import { ArrowDown, EditPen, Phone } from '@element-plus/icons-vue';
 import { ElMessage, type InputInstance } from 'element-plus';
 import AgentAssistPanel from '@/components/AgentAssistPanel/index.vue';
+import { generateAgentAssistTicketDraft, getAgentAssist, summarizeAgentAssistCustomer } from '@/api/callcenter/agent-assist';
 import { useAgentDialBus } from '@/composables/useAgentDial';
 import {
   addCustomerFollowUp,
@@ -521,6 +538,9 @@ const customerFormData = reactive<Record<string, any>>({});
 const ticketFormData = reactive<Record<string, any>>({});
 const savingCustomer = ref(false);
 const savingTicket = ref(false);
+const generatingTicketDraft = ref(false);
+const summarizingCustomer = ref(false);
+const assistEnabled = ref(false);
 const ticketSectionExpanded = ref(!props.customerView);
 const savingFollowUp = ref(false);
 const followUpContent = ref('');
@@ -547,7 +567,7 @@ const selectedCustomerTemplate = computed(() => customerTemplates.value.find((it
 const selectedTicketTemplate = computed(() => ticketTemplates.value.find((item) => String(item.id) === String(ticketTemplateId.value)));
 const avatarText = computed(() => (customerName.value || customer.value?.customerName || phone.value || '客').slice(0, 1));
 const callTone = computed(() => (props.incoming ? 'incoming' : props.active ? 'active' : 'idle'));
-const showAssist = computed(() => Boolean(props.callId) && !props.customerView);
+const showAssist = computed(() => Boolean(props.callId) && !props.customerView && assistEnabled.value);
 const numberLocationText = computed(() => props.numberLocation || '');
 const assignmentLabel = computed(() => {
   if (customer.value?.agentName) return `坐席 ${customer.value.agentName}`;
@@ -595,7 +615,11 @@ const heroFacts = computed(() => {
 
   // 优先常见字段，再兜底任意已填的短自定义字段
   preferredCodes.forEach((code) => {
-    const field = fields.find((item) => String(item.fieldCode || '').toLowerCase().includes(code));
+    const field = fields.find((item) =>
+      String(item.fieldCode || '')
+        .toLowerCase()
+        .includes(code)
+    );
     if (!field) return;
     pushFact(field.fieldName, customerFormData[field.fieldCode], String(field.fieldCode));
   });
@@ -668,8 +692,7 @@ const preferredFieldSpan = (field: LayoutField) => {
 
   const code = String(field.fieldCode || '').toLowerCase();
   const name = String(field.fieldName || '');
-  const looksWide =
-    /address|addr|remark|note|content|desc|detail/.test(code) || /地址|备注|说明|内容|描述|详情/.test(name);
+  const looksWide = /address|addr|remark|note|content|desc|detail/.test(code) || /地址|备注|说明|内容|描述|详情/.test(name);
   if (looksWide) return 16;
 
   if (field.fieldType === 'RADIO' || field.fieldType === 'CHECKBOX') {
@@ -839,6 +862,7 @@ const bootstrap = async () => {
   try {
     phone.value = props.phoneNumber.trim();
     customerName.value = '';
+    assistEnabled.value = false;
     customer.value = undefined;
     followUpContent.value = '';
     ticketSectionExpanded.value = !props.customerView;
@@ -846,7 +870,12 @@ const bootstrap = async () => {
     callPageNum.value = 1;
     ticketPageNum.value = 1;
     followUpPageNum.value = 1;
-    const [customerTplRes, ticketTplRes] = await Promise.all([listFormTemplates('CUSTOMER'), listFormTemplates('TICKET')]);
+    const [customerTplRes, ticketTplRes, assistRes] = await Promise.all([
+      listFormTemplates('CUSTOMER'),
+      listFormTemplates('TICKET'),
+      props.callId && !props.customerView ? getAgentAssist(props.callId) : Promise.resolve(undefined)
+    ]);
+    assistEnabled.value = Boolean(assistRes?.data?.assistEnabled);
     customerTemplates.value = customerTplRes.data || [];
     ticketTemplates.value = ticketTplRes.data || [];
     const enabledCustomer = customerTemplates.value.filter((item) => item.enabled);
@@ -941,6 +970,41 @@ const saveCustomerInfo = async () => {
   }
 };
 
+const summarizeCustomerToField = async () => {
+  if (!props.callId) return;
+  summarizingCustomer.value = true;
+  try {
+    const savedCustomer = await ensureCustomerSaved();
+    if (!savedCustomer?.id) return;
+    const response = await summarizeAgentAssistCustomer(props.callId, savedCustomer.id);
+    const result = response.data;
+    customerTemplateId.value = result.templateId;
+    await nextTick();
+    customerFormData[result.fieldCode] = result.summary;
+    customer.value = (await getCustomer(savedCustomer.id)).data;
+    ElMessage.success('通话总结已写入客户资料');
+    emit('saved');
+  } finally {
+    summarizingCustomer.value = false;
+  }
+};
+
+const generateTicketDraft = async () => {
+  if (!props.callId) return;
+  generatingTicketDraft.value = true;
+  try {
+    const response = await generateAgentAssistTicketDraft(props.callId);
+    const draft = response.data;
+    ticketTemplateId.value = draft.ticketTemplateId;
+    await nextTick();
+    populateFormData(ticketFormData, selectedTicketTemplate.value, draft.formData);
+    ticketSectionExpanded.value = true;
+    ElMessage.success('AI 已填写工单字段，请确认后提交');
+  } finally {
+    generatingTicketDraft.value = false;
+  }
+};
+
 const submitWorkOrder = async (directHandle: boolean) => {
   savingTicket.value = true;
   try {
@@ -984,7 +1048,6 @@ const addFollowUp = async () => {
 const handleClosed = () => emit('closed');
 </script>
 
-
 <style scoped lang="scss">
 .incoming-call-workspace {
   --ink: #15233d;
@@ -997,9 +1060,7 @@ const handleClosed = () => emit('closed');
   box-sizing: border-box;
   min-height: calc(100vh - 104px);
   padding: 16px 18px 22px;
-  background:
-    radial-gradient(circle at top right, rgba(47, 107, 255, 0.08), transparent 28%),
-    linear-gradient(180deg, #f7f9fc 0%, var(--soft) 100%);
+  background: radial-gradient(circle at top right, rgba(47, 107, 255, 0.08), transparent 28%), linear-gradient(180deg, #f7f9fc 0%, var(--soft) 100%);
 }
 
 .workspace-header {
@@ -1097,8 +1158,7 @@ const handleClosed = () => emit('closed');
   padding: 16px 18px;
   border: 1px solid #d9e6fb;
   border-radius: 18px;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(238, 244, 255, 0.96) 100%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(238, 244, 255, 0.96) 100%);
   box-shadow: 0 10px 28px rgba(36, 89, 207, 0.06);
 }
 
@@ -1131,13 +1191,16 @@ const handleClosed = () => emit('closed');
   padding: 8px 10px;
   border: 1px solid #dbe7f7;
   border-radius: 12px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(245, 249, 255, 0.94) 100%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(245, 249, 255, 0.94) 100%);
   box-shadow: 0 4px 12px rgba(36, 89, 207, 0.04);
   color: inherit;
   cursor: pointer;
   text-align: center;
-  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
 }
 
 .hero-stat:hover {
@@ -1362,12 +1425,19 @@ const handleClosed = () => emit('closed');
   width: 200px;
 }
 
+.section-head-actions,
 .ticket-section-actions,
 .ticket-submit-actions,
 .section-footer {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.section-head-actions,
+.ticket-section-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .ticket-toggle-icon {
@@ -1587,6 +1657,12 @@ const handleClosed = () => emit('closed');
   .section-footer {
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  .section-head,
+  .section-head-actions,
+  .ticket-section-actions {
+    align-items: flex-start;
   }
 
   .template-select {

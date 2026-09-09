@@ -384,6 +384,7 @@ import {
 import type { AgentAssistDetailVO, AgentAssistSuggestionVO } from '@/api/callcenter/agent-assist/types';
 import type { AiCallTranscriptSegmentVO } from '@/api/callcenter/ai-speech/types';
 import type { AiTicketDraftVO } from '@/api/callcenter/ai-ticket-draft';
+import { mergeConsecutiveAiSegments } from '@/utils/callcenter/transcript';
 
 const props = defineProps<{ businessType: FormBusinessType; businessId?: string | number; businessCallId?: string }>();
 const visible = defineModel<boolean>({ default: false });
@@ -425,7 +426,7 @@ const customerDetail = computed(() => (props.businessType === 'CUSTOMER' ? (deta
 const ticketDetail = computed(() => (props.businessType === 'TICKET' ? (detail.value as TicketVO | undefined) : undefined));
 const agentDialBus = useAgentDialBus();
 const businessCallId = computed(() => props.businessCallId?.trim() || '');
-const assistSegments = computed(() => assistDetail.value?.transcriptSegments || []);
+const assistSegments = computed(() => mergeConsecutiveAiSegments(assistDetail.value?.transcriptSegments || []));
 const selectedCustomerSegment = computed(() =>
   assistSegments.value.find((item) => String(item.id) === String(selectedAssistSegmentId.value) && item.speaker === 'CUSTOMER')
 );

@@ -154,7 +154,8 @@ const radiusBase = ref(settingsStore.radiusBase);
 const isDark = useDark({
   storageKey: 'useDarkKey',
   valueDark: 'dark',
-  valueLight: 'light'
+  valueLight: 'light',
+  initialValue: 'light'
 });
 // 匹配菜单颜色
 watch(isDark, () => {

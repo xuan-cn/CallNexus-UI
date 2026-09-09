@@ -1,7 +1,7 @@
 import request from '@/utils/request';
 import { getToken } from '@/utils/auth';
 import type { AxiosPromise } from 'axios';
-import type { AgentAssistDetailVO, AgentAssistStreamEvent } from './types';
+import type { AgentAssistCustomerSummaryVO, AgentAssistDetailVO, AgentAssistStreamEvent } from './types';
 import type { AiTicketDraftVO } from '@/api/callcenter/ai-ticket-draft';
 
 const root = '/api/v1/calls';
@@ -11,6 +11,16 @@ export const getAgentAssist = (businessCallId: string): AxiosPromise<AgentAssist
 
 export const regenerateAgentAssistSuggestion = (businessCallId: string, suggestionId: string | number) =>
   request({ url: `${root}/${businessCallId}/agent-assist/suggestions/${suggestionId}/regenerate`, method: 'post' });
+
+export const generateAgentAssistTicketDraft = (businessCallId: string) =>
+  request<AiTicketDraftVO>({ url: `${root}/${businessCallId}/agent-assist/ticket-drafts/generate`, method: 'post' });
+
+export const summarizeAgentAssistCustomer = (businessCallId: string, customerId: string | number) =>
+  request<AgentAssistCustomerSummaryVO>({
+    url: `${root}/${businessCallId}/agent-assist/customer-summary`,
+    method: 'post',
+    data: { customerId }
+  });
 
 export const approveAgentAssistTicketDraft = (businessCallId: string, draftId: string | number, version: number) =>
   request<string | number>({

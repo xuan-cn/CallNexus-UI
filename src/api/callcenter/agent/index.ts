@@ -11,6 +11,9 @@ export const createAgent = (data: AgentForm) => request({ url: '/api/v1/agents',
 
 export const updateAgent = (data: AgentForm) => request({ url: `/api/v1/agents/${data.id}`, method: 'put', data });
 
+export const updateAgentStatus = (id: string | number, enabled: boolean, version: number) =>
+  request({ url: `/api/v1/agents/${id}/status`, method: 'put', data: { enabled, version } });
+
 export const deleteAgent = (id: string | number) => request({ url: `/api/v1/agents/${id}`, method: 'delete' });
 
 export const bindAgentExtension = (id: string | number, sipAccountId: string | number) =>

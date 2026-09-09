@@ -7,12 +7,12 @@ const setting: DefaultSettings = {
    */
   title: import.meta.env.VITE_APP_TITLE,
 
-  theme: '#409EFF',
+  theme: '#004a91',
 
   /**
    * 侧边栏主题 深色主题theme-dark，浅色主题theme-light
    */
-  sideTheme: 'theme-dark',
+  sideTheme: 'theme-light',
   /**
    * 是否系统布局配置
    */
@@ -76,6 +76,6 @@ const setting: DefaultSettings = {
   /**
    * 页面圆角大小（与列表页皮肤默认值对齐）
    */
-  radiusBase: 10
+  radiusBase: 0
 };
 export default setting;

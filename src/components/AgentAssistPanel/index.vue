@@ -7,7 +7,7 @@
       </el-tag>
     </header>
 
-    <div ref="transcriptRef" class="assist-transcript">
+    <div ref="transcriptRef" class="assist-transcript" @scroll="handleTranscriptScroll">
       <div v-if="dialogueItems.length" class="dialogue-list">
         <article
           v-for="item in dialogueItems"
@@ -21,26 +21,34 @@
           </div>
 
           <div v-if="item.segment.speaker === 'CUSTOMER' && (item.suggestion || detail?.assistAgentId)" class="segment-suggestion">
-            <div class="suggestion-heading">
-              <span>辅助话术</span>
-              <el-tag v-if="item.suggestion?.sourceType" size="small" effect="plain">
-                {{ sourceLabel(item.suggestion.sourceType) }}
-              </el-tag>
-            </div>
-            <div v-if="!item.suggestion || item.suggestion.status === 'PROCESSING'" class="assist-thinking">
-              <i></i><i></i><i></i><span>正在生成建议</span>
-            </div>
-            <div v-else-if="item.suggestion.status === 'FAILED'" class="assist-failed">
-              <span>{{ item.suggestion.failureReason || '建议生成失败' }}</span>
-              <el-button link type="primary" @click="regenerate(item.suggestion)">重新生成</el-button>
-            </div>
-            <template v-else>
-              <div class="suggestion-content">{{ item.suggestion.suggestedReply }}</div>
-              <div class="suggestion-actions">
-                <el-button link type="primary" @click="copySuggestion(item.suggestion.suggestedReply)">复制话术</el-button>
-                <el-button link type="primary" @click="regenerate(item.suggestion)">换一条</el-button>
+            <button class="suggestion-heading" type="button" @click="toggleSuggestion(item.segment.id)">
+              <span class="suggestion-heading-text" :title="suggestionTitle(item.suggestion)">{{ suggestionTitle(item.suggestion) }}</span>
+              <span class="suggestion-heading-meta">
+                <el-tag v-if="item.suggestion?.sourceType" size="small" effect="plain">
+                  {{ sourceLabel(item.suggestion.sourceType) }}
+                </el-tag>
+                <span>{{ isSuggestionExpanded(item.segment.id) ? '收起' : '展开' }}</span>
+              </span>
+            </button>
+            <div v-show="isSuggestionExpanded(item.segment.id)" class="suggestion-body">
+              <div v-if="!item.suggestion || item.suggestion.status === 'PROCESSING'" class="assist-thinking">
+                <i></i><i></i><i></i><span>正在生成建议</span>
+                <el-button v-if="isSuggestionStalled(item.suggestion)" link type="primary" @click.stop="regenerate(item.suggestion!)">
+                  重新生成
+                </el-button>
               </div>
-            </template>
+              <div v-else-if="item.suggestion.status === 'FAILED'" class="assist-failed">
+                <span>{{ item.suggestion.failureReason || '建议生成失败' }}</span>
+                <el-button link type="primary" @click.stop="regenerate(item.suggestion)">重新生成</el-button>
+              </div>
+              <template v-else>
+                <div class="suggestion-content">{{ item.suggestion.suggestedReply }}</div>
+                <div class="suggestion-actions">
+                  <el-button link type="primary" @click.stop="copySuggestion(item.suggestion.suggestedReply)">复制话术</el-button>
+                  <el-button link type="primary" @click.stop="regenerate(item.suggestion)">换一条</el-button>
+                </div>
+              </template>
+            </div>
           </div>
         </article>
       </div>
@@ -54,20 +62,23 @@ import { ElMessage } from 'element-plus';
 import { getAgentAssist, regenerateAgentAssistSuggestion, streamAgentAssist } from '@/api/callcenter/agent-assist';
 import type { AgentAssistDetailVO, AgentAssistStreamEvent, AgentAssistSuggestionVO } from '@/api/callcenter/agent-assist/types';
 import type { AiCallTranscriptSegmentVO } from '@/api/callcenter/ai-speech/types';
+import { mergeConsecutiveAiSegments } from '@/utils/callcenter/transcript';
 
 const props = defineProps<{ businessCallId?: string }>();
 
 const detail = ref<AgentAssistDetailVO>();
 const connected = ref(false);
 const transcriptRef = ref<HTMLElement>();
+const expandedSuggestionId = ref('');
 let streamController: AbortController | undefined;
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 let reconcileTimer: ReturnType<typeof setInterval> | undefined;
 let streamCallId = '';
 let loadingDetail = false;
+const followLatest = ref(true);
 
 const callId = computed(() => props.businessCallId?.trim() || '');
-const segments = computed(() => detail.value?.transcriptSegments || []);
+const segments = computed(() => mergeConsecutiveAiSegments(detail.value?.transcriptSegments || []));
 const dialogueItems = computed(() => {
   const suggestions = new Map((detail.value?.suggestions || []).map((item) => [String(item.transcriptSegmentId), item]));
   return segments.value.map((segment) => ({ segment, suggestion: suggestions.get(String(segment.id)) }));
@@ -81,10 +92,34 @@ const sourceLabel = (source?: string) => {
   if (source === 'MODEL') return '模型建议';
   return source;
 };
+const suggestionTitle = (suggestion?: AgentAssistSuggestionVO) => {
+  if (suggestion?.status === 'COMPLETED' && suggestion.suggestedReply?.trim()) return suggestion.suggestedReply.trim();
+  if (suggestion?.status === 'FAILED') return suggestion.failureReason || '建议生成失败，点击展开重试';
+  return '正在生成建议...';
+};
+const isSuggestionStalled = (suggestion?: AgentAssistSuggestionVO) => {
+  if (!suggestion || suggestion.status !== 'PROCESSING' || !suggestion.createTime) return false;
+  return Date.now() - new Date(suggestion.createTime).getTime() > 30_000;
+};
+const suggestionKey = (segmentId: string | number) => String(segmentId);
+const isSuggestionExpanded = (segmentId: string | number) => expandedSuggestionId.value === suggestionKey(segmentId);
+const toggleSuggestion = (segmentId: string | number) => {
+  const key = suggestionKey(segmentId);
+  expandedSuggestionId.value = expandedSuggestionId.value === key ? '' : key;
+};
 
-const scrollToBottom = async () => {
+const handleTranscriptScroll = () => {
+  const element = transcriptRef.value;
+  if (!element) return;
+  followLatest.value = element.scrollHeight - element.scrollTop - element.clientHeight <= 48;
+};
+
+const scrollToBottom = async (force = false) => {
+  if (!force && !followLatest.value) return;
   await nextTick();
-  transcriptRef.value?.scrollTo({ top: transcriptRef.value.scrollHeight, behavior: 'smooth' });
+  const element = transcriptRef.value;
+  if (!element) return;
+  element.scrollTo({ top: element.scrollHeight, behavior: force ? 'auto' : 'smooth' });
 };
 
 const load = async () => {
@@ -94,8 +129,9 @@ const load = async () => {
   }
   loadingDetail = true;
   try {
+    const shouldFollow = followLatest.value;
     detail.value = (await getAgentAssist(callId.value)).data;
-    await scrollToBottom();
+    if (shouldFollow) await scrollToBottom();
   } finally {
     loadingDetail = false;
   }
@@ -198,7 +234,10 @@ watch(
   async () => {
     stopStream();
     stopReconcile();
+    expandedSuggestionId.value = '';
+    followLatest.value = true;
     await load().catch(() => undefined);
+    await scrollToBottom(true);
     startStream();
     startReconcile();
   },
@@ -233,10 +272,13 @@ onBeforeUnmount(() => {
 }
 
 .assist-transcript {
+  width: 100%;
+  box-sizing: border-box;
   min-width: 0;
   min-height: 280px;
   max-height: 560px;
   overflow-y: auto;
+  overflow-x: hidden;
   scrollbar-color: #b9c5d6 transparent;
   scrollbar-width: thin;
   padding: 10px;
@@ -260,6 +302,7 @@ onBeforeUnmount(() => {
 
 .dialogue-list {
   display: grid;
+  min-width: 0;
   gap: 12px;
 }
 
@@ -278,7 +321,8 @@ onBeforeUnmount(() => {
 
 .dialogue-item {
   display: grid;
-  width: min(82%, 560px);
+  width: min(90%, 560px);
+  max-width: 100%;
   padding: 8px 11px;
   border: 1px solid transparent;
   border-radius: 11px;
@@ -296,19 +340,20 @@ onBeforeUnmount(() => {
 
 .dialogue-text {
   overflow-wrap: anywhere;
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .segment-suggestion {
-  width: min(88%, 590px);
+  width: calc(100% - 12px);
+  max-width: calc(100% - 12px);
   box-sizing: border-box;
   margin-top: 6px;
   margin-left: 12px;
   padding: 9px 11px;
   border: 1px solid #cfe3fa;
   border-radius: 10px;
-  background: #eef6ff;
+  background: #a6eba6;
 }
 
 .suggestion-heading,
@@ -320,17 +365,53 @@ onBeforeUnmount(() => {
 }
 
 .suggestion-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: 100%;
+  padding: 0;
+  border: 0;
   color: #17345f;
-  font-size: 12px;
-  font-weight: 700;
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.suggestion-heading-text {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.suggestion-heading-meta {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #718096;
+}
+
+.suggestion-body {
+  width: 100%;
+  min-width: 0;
+  padding-top: 5px;
 }
 
 .suggestion-content {
-  margin-top: 6px;
+  width: 100%;
+  min-width: 0;
   color: #1d3557;
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 12px;
+  line-height: 1.55;
   white-space: pre-wrap;
+  word-break: break-word;
   overflow-wrap: anywhere;
 }
 
@@ -338,7 +419,7 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
   margin-top: 3px;
   color: #97a3b6;
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .assist-thinking,
@@ -348,7 +429,7 @@ onBeforeUnmount(() => {
   gap: 6px;
   min-height: 32px;
   color: #7d899b;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .assist-thinking i {

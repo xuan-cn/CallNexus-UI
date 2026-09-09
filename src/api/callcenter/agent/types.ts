@@ -33,7 +33,7 @@ export interface AgentQuery extends PageQuery {
   enabled?: boolean;
 }
 
-export type AgentPresenceStatus = 'OFFLINE' | 'IDLE' | 'BUSY' | 'AFTER_CALL';
+export type AgentPresenceStatus = 'OFFLINE' | 'IDLE' | 'NOT_READY' | 'BUSY' | 'AFTER_CALL';
 export type AgentCallPhase = 'IDLE' | 'INCOMING_RINGING' | 'OUTBOUND_DIALING' | 'CONNECTED' | 'HELD' | 'ENDING' | 'ENDED';
 export type AgentCallOperation = 'NONE' | 'TRANSFERRING_IVR' | 'CONSULTING' | 'CONFERENCE' | 'BLIND_TRANSFERRING';
 

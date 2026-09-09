@@ -53,8 +53,23 @@ const workspace = computed<WorkspaceContext>(() => {
   const queryCallId = queryText('callId');
   // The URL can contain an agent-leg UUID captured before the authoritative
   // business call event arrives. Always prefer the live toolbar context.
-  if (!customerView && live?.businessCallId) {
-    return { ...live, customerId: '', customerView: false };
+  if (!customerView && live) {
+    if (live.businessCallId) {
+      return { ...live, customerId: '', customerView: false };
+    }
+    if (queryCallId) {
+      return {
+        businessCallId: queryCallId,
+        phoneNumber: queryText('phone'),
+        numberLocation: queryText('location'),
+        callStatusText: '已结束',
+        durationText: queryText('duration'),
+        incoming: false,
+        active: false,
+        customerId: '',
+        customerView: false
+      };
+    }
   }
   return {
     businessCallId: customerView ? '' : queryCallId,

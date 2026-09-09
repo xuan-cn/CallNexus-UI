@@ -156,7 +156,7 @@
                 <el-dropdown-item v-if="!signedIn" command="signIn">签入坐席</el-dropdown-item>
                 <template v-else>
                   <el-dropdown-item command="idle">示闲</el-dropdown-item>
-                  <el-dropdown-item command="busy">示忙</el-dropdown-item>
+                  <el-dropdown-item command="notReady">示忙</el-dropdown-item>
                   <el-dropdown-item command="afterCall">话后处理</el-dropdown-item>
                   <el-dropdown-item divided command="signOut">签出坐席</el-dropdown-item>
                 </template>
@@ -393,8 +393,9 @@ import { listIvrFlows } from '@/api/callcenter/ivr-flow';
 import type { IvrFlowVO } from '@/api/callcenter/ivr-flow/types';
 import { idleAgentCallState, reduceAgentCallState, type AgentCallState, type AgentCallTransition } from './agentCallState';
 
-type AgentStatus = 'idle' | 'busy' | 'afterCall';
-type StatusCommand = AgentStatus | 'signIn' | 'signOut';
+type AgentStatus = 'idle' | 'notReady' | 'busy' | 'afterCall';
+type ControllableAgentStatus = 'idle' | 'notReady' | 'afterCall';
+type StatusCommand = ControllableAgentStatus | 'signIn' | 'signOut';
 type PhoneMode = 'EXTERNAL_SOFTPHONE' | 'WEBRTC';
 const PHONE_MODE_STORAGE_KEY = 'callnexus_agent_phone_mode';
 const WEBRTC_MODE_ENABLED =
@@ -523,9 +524,14 @@ const phonePositionStyle = computed(() => {
   };
 });
 const dialKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
-const statusLabels: Record<AgentStatus, string> = { idle: '示闲', busy: '示忙', afterCall: '话后处理' };
-const statusToApi: Record<AgentStatus, AgentPresenceStatus> = { idle: 'IDLE', busy: 'BUSY', afterCall: 'AFTER_CALL' };
-const statusFromApi: Record<Exclude<AgentPresenceStatus, 'OFFLINE'>, AgentStatus> = { IDLE: 'idle', BUSY: 'busy', AFTER_CALL: 'afterCall' };
+const statusLabels: Record<AgentStatus, string> = { idle: '示闲', notReady: '示忙', busy: '通话中', afterCall: '话后处理' };
+const statusToApi: Record<ControllableAgentStatus, AgentPresenceStatus> = { idle: 'IDLE', notReady: 'NOT_READY', afterCall: 'AFTER_CALL' };
+const statusFromApi: Record<Exclude<AgentPresenceStatus, 'OFFLINE'>, AgentStatus> = {
+  IDLE: 'idle',
+  NOT_READY: 'notReady',
+  BUSY: 'busy',
+  AFTER_CALL: 'afterCall'
+};
 const extensionSummary = computed(() => (currentAgent.value.extension ? `分机 ${currentAgent.value.extension}` : '未绑定分机'));
 const currentStatusLabel = computed(() => {
   if (agentStatus.value !== 'afterCall') return statusLabels[agentStatus.value];
@@ -592,7 +598,7 @@ const dialButtonTitle = computed(() => {
 const statusClass = computed(() => ({
   offline: !signedIn.value,
   idle: signedIn.value && agentStatus.value === 'idle',
-  busy: signedIn.value && agentStatus.value === 'busy',
+  busy: signedIn.value && (agentStatus.value === 'busy' || agentStatus.value === 'notReady'),
   afterCall: signedIn.value && agentStatus.value === 'afterCall'
 }));
 const clearWebRtcFirstLegTimeout = () => {

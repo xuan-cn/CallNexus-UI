@@ -178,7 +178,7 @@
             <span>{{ formatCreateTime(row.createTime) || '-' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="88" align="center" fixed="right">
+        <el-table-column label="操作" width="116" align="center" fixed="right">
           <template #default="{ row }">
             <div class="row-actions">
               <el-tooltip content="查看详情" placement="top">
@@ -192,6 +192,16 @@
                   icon="Edit"
                   class="row-action-btn row-action-edit"
                   @click="openEditCustomer(row)"
+                />
+              </el-tooltip>
+              <el-tooltip content="删除客户" placement="top">
+                <el-button
+                  v-hasPermi="['callcenter:customer:delete']"
+                  link
+                  type="danger"
+                  icon="Delete"
+                  class="row-action-btn"
+                  @click="handleDeleteCustomer(row)"
                 />
               </el-tooltip>
             </div>
@@ -565,6 +575,7 @@ import {
   CustomerPhoneVO,
   CustomerQuery,
   CustomerVO,
+  deleteCustomer,
   getCustomerImportBatch,
   pageCustomerImportBatches,
   retryCustomerImportRows,
@@ -817,6 +828,17 @@ const openEditCustomer = (row: CustomerVO) => {
   }
   customerDialogPhone.value = phone;
   createVisible.value = true;
+};
+
+const handleDeleteCustomer = async (row: CustomerVO) => {
+  await proxy?.$modal.confirm(`确认删除客户“${row.customerName || row.primaryPhone || row.id}”吗？客户号码将释放，历史通话和工单仍会保留。`);
+  await deleteCustomer(row.id);
+  proxy?.$modal.msgSuccess('客户资料已删除');
+  selectedCustomers.value = selectedCustomers.value.filter((item) => String(item.id) !== String(row.id));
+  if (rows.value.length === 1 && (query.pageNum || 1) > 1) {
+    query.pageNum = (query.pageNum || 1) - 1;
+  }
+  await load();
 };
 
 const handleSelectionChange = (selection: CustomerVO[]) => {

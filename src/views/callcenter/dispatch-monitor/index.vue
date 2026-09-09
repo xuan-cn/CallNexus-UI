@@ -973,7 +973,8 @@ const registrationLabel = (value: DispatchRegistrationStatus) =>
 const registrationTagType = (value: DispatchRegistrationStatus) =>
   value === 'REGISTERED' ? 'success' : value === 'UNREGISTERED' ? 'danger' : value === 'NODE_UNAVAILABLE' ? 'warning' : 'info';
 const presenceLabel = (value?: string) =>
-  ({ OFFLINE: '未签入', IDLE: '示闲', BUSY: '示忙', AFTER_CALL: '话后处理' })[value || ''] || (value ? value : '未绑定');
+  ({ OFFLINE: '未签入', IDLE: '示闲', NOT_READY: '示忙', BUSY: '通话中', AFTER_CALL: '话后处理' })[value || ''] ||
+  (value ? value : '未绑定');
 const extensionCallLabel = (value?: string) =>
   ({ IDLE: '空闲', DIALING: '呼出中', RINGING: '振铃', TALKING: '通话中', HELD: '保持' })[value || ''] || '-';
 const extensionCallTagType = (value?: string) =>

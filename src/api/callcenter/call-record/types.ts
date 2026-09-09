@@ -155,5 +155,6 @@ export interface CallRecordQuery extends PageQuery {
   calledNumber?: string;
   direction?: CallDirection;
   callStatus?: CallStatus;
+  answerResult?: 'ANSWERED' | 'MISSED';
   hangupCause?: string;
 }

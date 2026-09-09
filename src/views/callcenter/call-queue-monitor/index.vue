@@ -382,6 +382,7 @@ const syncLabel = (status?: string) => {
 const agentTagType = (status: AgentRuntimeStatus) => {
   if (status === 'IDLE') return 'success';
   if (status === 'BUSY') return 'primary';
+  if (status === 'NOT_READY') return 'danger';
   if (status === 'AFTER_CALL') return 'warning';
   return 'info';
 };

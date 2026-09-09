@@ -244,6 +244,9 @@ export interface AiTicketPolicyVO {
   afterCreateAction: 'CREATE_ONLY' | 'SUBMIT' | 'RESOLVE';
   customerTemplateId?: Id;
   defaultSkillGroupId?: Id;
+  customerSummaryEnabled: boolean;
+  customerSummaryTemplateId?: Id;
+  customerSummaryFieldCode?: string;
   defaultValues: Record<string, unknown>;
   activePromptVersionId?: Id;
   version?: number;

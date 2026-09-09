@@ -190,6 +190,8 @@ export const assignCustomers = (data: CustomerAssignmentForm) => request<void>({
 
 export const updateCustomer = (id: string | number, data: UpdateCustomerForm) => request({ url: `/api/v1/customers/${id}`, method: 'put', data });
 
+export const deleteCustomer = (id: string | number) => request<void>({ url: `/api/v1/customers/${id}`, method: 'delete' });
+
 export const claimCustomerForCurrentAgent = (id: string | number, businessCallId: string) =>
   request<void>({ url: `/api/v1/customers/${id}/claim-current-agent`, method: 'post', data: { businessCallId } });
 

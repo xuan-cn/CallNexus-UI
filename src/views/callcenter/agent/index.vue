@@ -49,7 +49,16 @@
         </el-table-column>
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
-            <el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag>
+            <el-switch
+              v-if="canUpdateAgent"
+              :model-value="row.enabled"
+              :loading="statusChangingId === row.id"
+              inline-prompt
+              active-text="启"
+              inactive-text="停"
+              @change="(enabled) => handleEnabledChange(row, enabled)"
+            />
+            <el-tag v-else :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="工号提示音" min-width="150">
@@ -168,7 +177,8 @@ import {
   getAgent,
   listAgents,
   unbindAgentExtension,
-  updateAgent
+  updateAgent,
+  updateAgentStatus
 } from '@/api/callcenter/agent';
 import { AgentForm, AgentQuery, AgentVO } from '@/api/callcenter/agent/types';
 import { listSpeechTemplates } from '@/api/callcenter/ai-speech';
@@ -179,6 +189,7 @@ import { listSipAccounts } from '@/api/callcenter/sip-account';
 import { SipAccountVO } from '@/api/callcenter/sip-account/types';
 import { listUser, optionSelect } from '@/api/system/user';
 import { UserVO } from '@/api/system/user/types';
+import { useUserStore } from '@/store/modules/user';
 
 interface PromptGenerateForm {
   agentId?: string | number;
@@ -197,6 +208,7 @@ const callerNumberOptions = ref<PhoneNumberVO[]>([]);
 const agentPromptTemplates = ref<AiSpeechTemplateVO[]>([]);
 const userMap = ref<Map<string, UserVO>>(new Map());
 const userLoading = ref(false);
+const statusChangingId = ref<string | number>();
 const selectedAgentId = ref<string | number>();
 const selectedSipAccountId = ref<string | number>();
 const queryFormRef = ref<ElFormInstance>();
@@ -206,6 +218,10 @@ const bindDialog = reactive<DialogOption>({ visible: false, title: '' });
 const promptDialog = reactive({ visible: false, mode: 'single', scopeText: '' });
 const promptForm = reactive<PromptGenerateForm>({});
 const promptSubmitting = ref(false);
+const userStore = useUserStore();
+const canUpdateAgent = computed(
+  () => userStore.permissions.includes('*:*:*') || userStore.permissions.includes('callcenter:agent:update')
+);
 
 const initialForm: AgentForm = { agentCode: '', agentName: '', userId: undefined, callerNumberId: undefined, enabled: true };
 const data = reactive<PageData<AgentForm, AgentQuery>>({
@@ -322,6 +338,24 @@ const handleDelete = async (row: AgentVO) => {
   await deleteAgent(row.id);
   proxy?.$modal.msgSuccess('删除成功');
   await getList();
+};
+
+const handleEnabledChange = async (row: AgentVO, enabled: string | number | boolean) => {
+  if (typeof enabled !== 'boolean' || statusChangingId.value !== undefined) return;
+  const action = enabled ? '启用' : '停用';
+  try {
+    await proxy?.$modal.confirm(`确认${action}坐席“${row.agentName}”吗？${enabled ? '' : '停用后坐席将立即签出并停止接收队列来电。'}`);
+  } catch {
+    return;
+  }
+  statusChangingId.value = row.id;
+  try {
+    await updateAgentStatus(row.id, enabled, row.version);
+    proxy?.$modal.msgSuccess(`${action}成功`);
+  } finally {
+    statusChangingId.value = undefined;
+    await getList();
+  }
 };
 
 const handleBind = async (row: AgentVO) => {

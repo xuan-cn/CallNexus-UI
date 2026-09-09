@@ -8,14 +8,20 @@
         <el-form-item label="被叫号码" prop="calledNumber">
           <el-input v-model="queryParams.calledNumber" clearable @keyup.enter="handleQuery" />
         </el-form-item>
-        <el-form-item label="呼叫方向" prop="direction">
+        <el-form-item v-if="!props.missedOnly" label="呼叫方向" prop="direction">
           <el-select v-model="queryParams.direction" clearable style="width: 130px">
             <el-option v-for="item in directionOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="状态" prop="callStatus">
+        <el-form-item v-if="!props.missedOnly" label="状态" prop="callStatus">
           <el-select v-model="queryParams.callStatus" clearable style="width: 130px">
             <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="!props.missedOnly" label="接听结果" prop="answerResult">
+          <el-select v-model="queryParams.answerResult" clearable placeholder="全部" style="width: 130px">
+            <el-option label="已接听" value="ANSWERED" />
+            <el-option label="未接来电" value="MISSED" />
           </el-select>
         </el-form-item>
         <el-form-item label="挂断原因" prop="hangupCause">
@@ -53,7 +59,10 @@
           </template>
         </el-table-column>
         <el-table-column label="状态" width="100">
-          <template #default="{ row }">{{ statusLabel(row.callStatus) }}</template>
+          <template #default="{ row }">
+            <el-tag v-if="isMissedCall(row)" type="danger" effect="light">未接来电</el-tag>
+            <span v-else>{{ statusLabel(row.callStatus) }}</span>
+          </template>
         </el-table-column>
         <el-table-column label="开始时间" prop="startedAt" min-width="170" />
         <el-table-column label="通话时长" width="110">
@@ -440,12 +449,16 @@ import { getCallRecord, listCallRecords } from '@/api/callcenter/call-record';
 import { hangupCauseLabel } from '@/api/callcenter/call-record/display';
 import { getCallTranscript, streamCallTranscript, transcribeCallRecording } from '@/api/callcenter/ai-speech';
 import { AiCallTranscriptSegmentVO, AiCallTranscriptStreamEvent, AiCallTranscriptVO } from '@/api/callcenter/ai-speech/types';
+import { mergeConsecutiveAiSegments } from '@/utils/callcenter/transcript';
 import { handleVoiceMailMessage } from '@/api/callcenter/voicemail';
 import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/index.vue';
 import { CallDirection, CallRecordQuery, CallRecordVO, CallStatus } from '@/api/callcenter/call-record/types';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Connection, Bell, CircleCheck, SwitchButton, Download, Upload, Warning, CircleClose } from '@element-plus/icons-vue';
 
+const props = withDefaults(defineProps<{ missedOnly?: boolean }>(), {
+  missedOnly: false
+});
 const loading = ref(false);
 const total = ref(0);
 const router = useRouter();
@@ -493,7 +506,7 @@ const transcriptSegments = computed<AiCallTranscriptSegmentVO[]>(() => {
             } as AiCallTranscriptSegmentVO
           ]
         : [];
-  return sortTranscriptSegments(segments);
+  return mergeConsecutiveAiSegments(sortTranscriptSegments(segments));
 });
 const transcriptFullText = computed(() => {
   const segments = transcriptSegments.value;
@@ -548,11 +561,13 @@ const queryParams = reactive<CallRecordQuery>({
   calledNumber: '',
   direction: undefined,
   callStatus: undefined,
+  answerResult: props.missedOnly ? 'MISSED' : undefined,
   hangupCause: ''
 });
 
 const directionLabel = (value: CallDirection) => directionOptions.find((item) => item.value === value)?.label || value;
 const statusLabel = (value: CallStatus) => statusOptions.find((item) => item.value === value)?.label || value;
+const isMissedCall = (record: Partial<CallRecordVO>) => record.direction === 'INBOUND' && record.callStatus === 'ENDED' && !record.answeredAt;
 const formatNumberLocation = (record: Partial<CallRecordVO> | undefined, side: 'caller' | 'called') => {
   if (!record) return '-';
   const prefix = side === 'caller' ? 'caller' : 'called';
@@ -777,7 +792,7 @@ const eventTone = (eventType: string) => {
 const getList = async () => {
   loading.value = true;
   try {
-    const res = await listCallRecords(queryParams);
+    const res = await listCallRecords(props.missedOnly ? { ...queryParams, answerResult: 'MISSED' } : queryParams);
     recordList.value = res.rows;
     total.value = res.total;
   } finally {
@@ -1046,9 +1061,7 @@ onBeforeUnmount(() => {
   padding: 16px 18px;
   border: 1px solid #dce8f8;
   border-radius: 14px;
-  background:
-    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.14), transparent 40%),
-    linear-gradient(135deg, #f4f9ff, #eef5ff);
+  background: radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.14), transparent 40%), linear-gradient(135deg, #f4f9ff, #eef5ff);
 }
 
 .detail-hero-copy {

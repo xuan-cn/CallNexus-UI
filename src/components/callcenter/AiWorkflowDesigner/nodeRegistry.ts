@@ -20,6 +20,8 @@ export interface AiWorkflowPropertyDefinition {
   type: AiWorkflowPropertyType;
   placeholder?: string;
   defaultValue?: unknown;
+  min?: number;
+  max?: number;
 }
 
 export interface AiWorkflowNodeDefinition {
@@ -67,6 +69,14 @@ export const aiWorkflowNodeDefinitions: AiWorkflowNodeDefinition[] = [
       { key: 'operator', label: '判断方式', type: 'OPERATOR_SELECT', defaultValue: 'EQ' },
       { key: 'compareValue', label: '比较值', type: 'INPUT', placeholder: '请输入要比较的内容' }
     ]
+  },
+  {
+    type: 'LOOP_LIMIT',
+    label: '次数限制',
+    color: '#ea580c',
+    description: '限制知识问答或澄清的循环轮次，达到上限后退出循环',
+    branch: true,
+    properties: [{ key: 'maxIterations', label: '最大循环次数', type: 'NUMBER', defaultValue: 3, min: 1, max: 20 }]
   },
   {
     type: 'SET_VARIABLE',

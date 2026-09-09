@@ -34,24 +34,20 @@
       </div>
     </section>
 
-    <section class="metric-grid">
-      <article
-        v-for="item in metrics"
-        :key="item.label"
-        class="metric-card"
-        :class="[`is-${item.tone}`, { 'is-alert': item.alert }]"
-        @click="item.onClick && item.onClick()"
-      >
-        <div class="metric-icon" :class="item.tone">
-          <el-icon><component :is="item.icon" /></el-icon>
-        </div>
-        <div class="metric-content">
-          <span>{{ item.label }}</span>
-          <strong>{{ item.value }}</strong>
+    <el-card class="metric-overview-card" shadow="never">
+      <div class="metric-grid">
+        <article
+          v-for="item in metrics"
+          :key="item.label"
+          class="metric-card"
+          :class="{ 'is-alert': item.alert }"
+          @click="item.onClick && item.onClick()"
+        >
+          <el-statistic class="metric-statistic" :title="item.label" :value="item.value" :suffix="item.suffix" />
           <small :class="{ positive: item.positive, warn: item.alert }">{{ item.change }}</small>
-        </div>
-      </article>
-    </section>
+        </article>
+      </div>
+    </el-card>
 
     <section class="main-grid">
       <article class="panel">
@@ -67,7 +63,7 @@
               <i class="stat-dot" :style="{ background: item.color }" />
               {{ item.label }}
             </span>
-            <strong>{{ item.value }}</strong>
+            <el-statistic class="panel-statistic" :value="item.value" />
           </div>
         </div>
       </article>
@@ -94,7 +90,7 @@
               <i class="stat-dot" :style="{ background: item.color }" />
               {{ item.label }}
             </span>
-            <strong :class="{ 'is-warn': item.warn }">{{ item.value }}</strong>
+            <el-statistic class="panel-statistic" :class="{ 'is-warn': item.warn }" :value="item.value" />
           </div>
         </div>
       </article>
@@ -116,7 +112,12 @@
           @click="item.clickable && openVoicemail()"
         >
           <span>{{ item.label }}</span>
-          <strong :class="{ 'is-warn': item.warn }">{{ item.value }}</strong>
+          <el-statistic
+            class="panel-statistic"
+            :class="{ 'is-warn': item.warn }"
+            :value="item.value"
+            :suffix="item.suffix"
+          />
         </div>
       </div>
     </section>
@@ -291,41 +292,37 @@ const metrics = computed(() => [
   {
     label: '待办工单',
     value: ticketPending.value,
+    suffix: '',
     change: `总量 ${overview.value?.ticketTotal || 0}`,
     positive: ticketPending.value === 0,
     alert: ticketPending.value > 0,
-    tone: 'orange',
-    icon: Tickets,
     onClick: openTicket
   },
   {
     label: '未分配客户',
     value: overview.value?.customerUnassigned || 0,
+    suffix: '',
     change: `总量 ${overview.value?.customerTotal || 0}`,
     positive: (overview.value?.customerUnassigned || 0) === 0,
     alert: (overview.value?.customerUnassigned || 0) > 0,
-    tone: 'purple',
-    icon: UserFilled,
     onClick: openUnassignedCustomer
   },
   {
     label: `${periodPrefix.value}新增客户`,
     value: overview.value?.customerPeriodNew || 0,
+    suffix: '',
     change: `客户池 ${overview.value?.customerTotal || 0}`,
     positive: (overview.value?.customerPeriodNew || 0) > 0,
     alert: false,
-    tone: 'blue',
-    icon: User,
     onClick: openCustomer
   },
   {
     label: `${periodPrefix.value}接通率`,
-    value: `${overview.value?.answerRate || 0}%`,
+    value: overview.value?.answerRate || 0,
+    suffix: '%',
     change: `呼入 ${overview.value?.inboundCount || 0} · 呼出 ${overview.value?.outboundCount || 0}`,
     positive: (overview.value?.answerRate || 0) >= 80,
     alert: false,
-    tone: 'green',
-    icon: Phone,
     onClick: openCallRecord
   }
 ]);
@@ -369,19 +366,21 @@ const customerStats = computed(() => [
 ]);
 
 const trafficStats = computed(() => [
-  { label: `${periodPrefix.value}呼入`, value: overview.value?.inboundCount || 0, warn: false, clickable: false },
-  { label: `${periodPrefix.value}呼出`, value: overview.value?.outboundCount || 0, warn: false, clickable: false },
-  { label: `${periodPrefix.value}接通`, value: overview.value?.answeredCount || 0, warn: false, clickable: false },
-  { label: '接通率', value: `${overview.value?.answerRate || 0}%`, warn: false, clickable: false },
+  { label: `${periodPrefix.value}呼入`, value: overview.value?.inboundCount || 0, suffix: '', warn: false, clickable: false },
+  { label: `${periodPrefix.value}呼出`, value: overview.value?.outboundCount || 0, suffix: '', warn: false, clickable: false },
+  { label: `${periodPrefix.value}接通`, value: overview.value?.answeredCount || 0, suffix: '', warn: false, clickable: false },
+  { label: '接通率', value: overview.value?.answerRate || 0, suffix: '%', warn: false, clickable: false },
   {
     label: '外呼完成率',
-    value: `${overview.value?.outboundCompletionRate || 0}%`,
+    value: overview.value?.outboundCompletionRate || 0,
+    suffix: '%',
     warn: false,
     clickable: false
   },
   {
     label: '未处理留言',
     value: overview.value?.voicemailPending || 0,
+    suffix: '',
     warn: Number(overview.value?.voicemailPending || 0) > 0,
     clickable: true
   }
@@ -638,7 +637,6 @@ onMounted(() => {
   background: #f5f6f8;
 }
 
-.metric-card,
 .panel {
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -805,79 +803,60 @@ onMounted(() => {
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+}
+
+.metric-overview-card {
   margin-bottom: 12px;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 8px 24px rgba(15, 23, 42, 0.03);
+
+  :deep(.el-card__body) {
+    padding: 0;
+  }
 }
 
 .metric-card {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 15px 16px;
-  overflow: hidden;
-  cursor: pointer;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
-
-  &::before {
-    position: absolute;
-    left: 0;
-    top: 14px;
-    bottom: 14px;
-    width: 3px;
-    content: '';
-    border-radius: 0 3px 3px 0;
-    background: #cbd5e1;
-  }
-
-  &.is-orange::before { background: #f59e0b; }
-  &.is-purple::before { background: #8b5cf6; }
-  &.is-blue::before { background: #3b82f6; }
-  &.is-green::before { background: #10b981; }
-  &.is-cyan::before { background: #06b6d4; }
-
-  &:hover {
-    border-color: #d5e4f7;
-    box-shadow: 0 10px 22px rgba(37, 99, 235, 0.07);
-    transform: translateY(-1px);
-  }
-}
-
-.metric-icon {
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  width: 40px;
-  height: 40px;
-  border-radius: 11px;
-  font-size: 17px;
-}
-
-.metric-content {
-  display: grid;
-  gap: 2px;
   min-width: 0;
+  padding: 24px 28px 22px;
+  cursor: pointer;
+  border-right: 1px solid var(--line);
+  transition: background 0.18s ease;
 
-  span {
-    color: var(--muted);
+  &:last-child { border-right: 0; }
+  &:hover { background: #fafcff; }
+
+  small {
+    display: block;
+    margin-top: 18px;
+    color: #94a3b8;
     font-size: 12px;
   }
 
-  strong {
+  small.positive { color: #059669; }
+  small.warn { color: #d97706; }
+}
+
+.metric-statistic {
+  --el-statistic-content-font-size: 30px;
+
+  :deep(.el-statistic__head) {
+    margin-bottom: 12px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  :deep(.el-statistic__content) {
     color: var(--ink);
-    font-size: 22px;
+    font-weight: 500;
     line-height: 1.1;
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.02em;
   }
 
-  small {
-    color: #94a3b8;
-    font-size: 11px;
+  :deep(.el-statistic__suffix) {
+    margin-left: 1px;
+    font-size: 14px;
   }
-
-  small.positive { color: #059669; }
-  small.warn { color: #d97706; }
 }
 
 .blue { color: #2563eb; background: #eff6ff; }
@@ -991,18 +970,25 @@ onMounted(() => {
   flex: 0 0 auto;
 }
 
-.stat-cell strong,
-.traffic-item strong {
-  color: var(--ink);
-  font-size: 24px;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-}
+.panel-statistic {
+  --el-statistic-content-font-size: 24px;
 
-.stat-cell strong.is-warn,
-.traffic-item strong.is-warn {
-  color: #d97706;
+  :deep(.el-statistic__content) {
+    color: var(--ink);
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  :deep(.el-statistic__suffix) {
+    margin-left: 1px;
+    font-size: 14px;
+  }
+
+  &.is-warn :deep(.el-statistic__content) {
+    color: #d97706;
+  }
 }
 
 .traffic-panel {
@@ -1174,6 +1160,18 @@ onMounted(() => {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .metric-card {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .metric-card:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .metric-card:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
+
   .main-grid,
   .bottom-grid {
     grid-template-columns: 1fr;
@@ -1181,6 +1179,21 @@ onMounted(() => {
 }
 
 @media (max-width: 900px) {
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-card,
+  .metric-card:nth-child(2n),
+  .metric-card:nth-last-child(-n + 2) {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .metric-card:last-child {
+    border-bottom: 0;
+  }
+
   .page-head {
     flex-direction: column;
     align-items: stretch;

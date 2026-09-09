@@ -265,6 +265,67 @@
             </template>
           </el-tab-pane>
 
+          <el-tab-pane label="坐席辅助" name="assist">
+            <el-alert v-if="!form.id" type="info" :closable="false" title="请先保存 AI 助手，再配置坐席工作台能力。" />
+            <template v-else>
+              <section class="edit-section">
+                <div class="edit-section-title">坐席工作台能力</div>
+                <el-alert
+                  class="mb-4"
+                  type="info"
+                  :closable="false"
+                  title="实时辅助话术由技能组中的“坐席辅助”开关控制；客户总结可以独立启用，不要求开启自动工单。"
+                />
+                <div class="customer-summary-config">
+                  <div class="customer-summary-heading">
+                    <div>
+                      <span>客户通话总结</span>
+                      <small>坐席点击“AI 总结到客户字段”后，将当前人工通话的对话摘要写入指定客户文本字段。</small>
+                    </div>
+                    <el-switch v-model="ticketPolicy.customerSummaryEnabled" active-text="启用" />
+                  </div>
+                  <el-row v-if="ticketPolicy.customerSummaryEnabled" :gutter="16">
+                    <el-col :span="12">
+                      <el-form-item label="客户资料模板" required>
+                        <el-select
+                          v-model="ticketPolicy.customerSummaryTemplateId"
+                          clearable
+                          filterable
+                          style="width: 100%"
+                          placeholder="请选择客户当前使用的模板"
+                          @change="handleCustomerSummaryTemplateChange"
+                        >
+                          <el-option v-for="item in customerTemplates" :key="item.id" :label="item.templateName" :value="item.id!" />
+                        </el-select>
+                      </el-form-item>
+                    </el-col>
+                    <el-col :span="12">
+                      <el-form-item label="总结写入字段" required>
+                        <el-select
+                          v-model="ticketPolicy.customerSummaryFieldCode"
+                          clearable
+                          filterable
+                          style="width: 100%"
+                          placeholder="请选择单行文本或多行文本字段"
+                        >
+                          <el-option
+                            v-for="field in customerSummaryFields"
+                            :key="field.fieldCode"
+                            :label="field.fieldName"
+                            :value="field.fieldCode"
+                          />
+                        </el-select>
+                      </el-form-item>
+                    </el-col>
+                  </el-row>
+                </div>
+                <div class="section-actions">
+                  <el-button type="primary" :loading="ticketSaving" @click="saveAssistPolicy">保存坐席辅助配置</el-button>
+                </div>
+              </section>
+            </template>
+          </el-tab-pane>
+
           <el-tab-pane label="自动工单" name="ticket">
             <el-alert v-if="!form.id" type="info" :closable="false" title="请先保存 AI 助手，再配置自动工单策略和提示词。" />
             <template v-else>
@@ -489,6 +550,7 @@ const activeTab = ref('basic');
 const testVisible = ref(false);
 const testAgent = ref<AiAgentVO>();
 const ticketTemplates = ref<FormTemplate[]>([]);
+const customerTemplates = ref<FormTemplate[]>([]);
 const ticketSkillGroups = ref<SkillGroupVO[]>([]);
 const ticketSaving = ref(false);
 const promptSaving = ref(false);
@@ -529,6 +591,9 @@ const ticketPolicyDefaults = (agentId: Id = ''): AiTicketPolicyVO => ({
   duplicatePolicy: 'MERGE_PENDING',
   duplicateWindowHours: 24,
   afterCreateAction: 'CREATE_ONLY',
+  customerSummaryEnabled: false,
+  customerSummaryTemplateId: undefined,
+  customerSummaryFieldCode: undefined,
   defaultValues: {}
 });
 const ticketPromptDefaults = (): AiTicketPromptVO => ({
@@ -543,6 +608,15 @@ const ticketPromptDefaults = (): AiTicketPromptVO => ({
 });
 const ticketPolicy = ref<AiTicketPolicyVO>(ticketPolicyDefaults());
 const ticketPrompt = ref<AiTicketPromptVO>(ticketPromptDefaults());
+const customerSummaryFields = computed(() => {
+  const template = customerTemplates.value.find((item) => String(item.id) === String(ticketPolicy.value.customerSummaryTemplateId));
+  return (template?.fields || []).filter((field) => ['INPUT', 'TEXTAREA'].includes(field.fieldType));
+});
+const handleCustomerSummaryTemplateChange = () => {
+  if (!customerSummaryFields.value.some((field) => field.fieldCode === ticketPolicy.value.customerSummaryFieldCode)) {
+    ticketPolicy.value.customerSummaryFieldCode = undefined;
+  }
+};
 const promptVariableDescriptions: Record<string, string> = {
   agentName: '当前 AI 助手名称，例如“售后服务助手”。',
   conversation: '本次通话的完整转写对话，包含客户与 AI 的发言。',
@@ -651,11 +725,12 @@ const saveWorkflowBinding = async (scene: BindingScene) => {
   }
 };
 const loadTicketConfiguration = async (agentId: Id) => {
-  const [policyResult, promptResult, versionsResult, templatesResult, skillGroupsResult] = await Promise.all([
+  const [policyResult, promptResult, versionsResult, templatesResult, customerTemplatesResult, skillGroupsResult] = await Promise.all([
     getAiTicketPolicy(agentId),
     getAiTicketPrompt(agentId),
     listAiTicketPromptVersions(agentId),
     listFormTemplates('TICKET'),
+    listFormTemplates('CUSTOMER'),
     listSkillGroups()
   ]);
   ticketPolicy.value = { ...ticketPolicyDefaults(agentId), ...(policyResult.data || {}) };
@@ -663,6 +738,7 @@ const loadTicketConfiguration = async (agentId: Id) => {
   promptVersionName.value = ticketPrompt.value.versionName || '';
   promptVersions.value = versionsResult.data || [];
   ticketTemplates.value = (templatesResult.data || []).filter((item) => item.enabled);
+  customerTemplates.value = (customerTemplatesResult.data || []).filter((item) => item.enabled);
   ticketSkillGroups.value = (skillGroupsResult.data || []).filter((item) => item.enabled);
 };
 const saveTicketPolicy = async () => {
@@ -672,6 +748,18 @@ const saveTicketPolicy = async () => {
     const { id, aiAgentId, activePromptVersionId, version, ...payload } = ticketPolicy.value;
     await saveAiTicketPolicy(form.value.id, payload);
     proxy?.$modal.msgSuccess('自动工单策略已保存');
+    await loadTicketConfiguration(form.value.id);
+  } finally {
+    ticketSaving.value = false;
+  }
+};
+const saveAssistPolicy = async () => {
+  if (!form.value.id) return;
+  ticketSaving.value = true;
+  try {
+    const { id, aiAgentId, activePromptVersionId, version, ...payload } = ticketPolicy.value;
+    await saveAiTicketPolicy(form.value.id, payload);
+    proxy?.$modal.msgSuccess('坐席辅助配置已保存');
     await loadTicketConfiguration(form.value.id);
   } finally {
     ticketSaving.value = false;
@@ -894,6 +982,39 @@ onMounted(load);
 
 .ticket-section-title {
   justify-content: space-between;
+}
+
+.customer-summary-config {
+  margin: 2px 0 14px;
+  padding: 12px 14px 0;
+  border: 1px solid #e4eaf2;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.customer-summary-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+
+  > div {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  span {
+    color: #27364d;
+    font-size: 13px;
+  }
+
+  small {
+    color: #7b8798;
+    font-size: 11px;
+    line-height: 1.5;
+  }
 }
 
 .section-actions {

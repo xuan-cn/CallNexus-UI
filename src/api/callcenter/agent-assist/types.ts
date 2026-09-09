@@ -14,6 +14,7 @@ export interface AgentAssistSuggestionVO {
 }
 
 export interface AgentAssistDetailVO {
+  assistEnabled?: boolean;
   sessionId?: string | number;
   callSessionId?: string | number;
   businessCallId: string;
@@ -31,4 +32,10 @@ export interface AgentAssistStreamEvent {
   suggestion?: AgentAssistSuggestionVO;
   segment?: AiCallTranscriptSegmentVO;
   ticketDraft?: AiTicketDraftVO;
+}
+
+export interface AgentAssistCustomerSummaryVO {
+  templateId: string | number;
+  fieldCode: string;
+  summary: string;
 }
