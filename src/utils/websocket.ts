@@ -3,6 +3,8 @@ import { ElNotification } from 'element-plus';
 import { useNoticeStore } from '@/store/modules/notice';
 
 let initialized = false;
+let initializedToken = '';
+let closeWebSocket: (() => void) | undefined;
 const callEventSubscribers = new Set<(event: Record<string, unknown>) => void>();
 const recentCallEvents = new Map<string, number>();
 const callEventDedupWindowMs = 5000;
@@ -15,13 +17,7 @@ export const subscribeCallEvents = (subscriber: (event: Record<string, unknown>)
 export const dispatchCallEvent = (event: Record<string, unknown>, source = 'WebSocket') => {
   if (typeof event.type !== 'string' || !event.type.startsWith('CALL_')) return false;
   const now = Date.now();
-  const eventKey = [
-    event.type,
-    event.businessCallId,
-    event.legUuid || event.callId,
-    event.occurredAt,
-    event.hangupCause
-  ].join('|');
+  const eventKey = [event.type, event.businessCallId, event.legUuid || event.callId, event.occurredAt, event.hangupCause].join('|');
   const lastReceivedAt = recentCallEvents.get(eventKey);
   if (lastReceivedAt && now - lastReceivedAt < callEventDedupWindowMs) {
     return true;
@@ -39,27 +35,27 @@ export const dispatchCallEvent = (event: Record<string, unknown>, source = 'WebS
 
 // 初始化socket
 export const initWebSocket = (url: any) => {
-  if (import.meta.env.VITE_APP_WEBSOCKET === 'false' || initialized) {
+  if (import.meta.env.VITE_APP_WEBSOCKET === 'false') {
     return;
   }
+  const token = getToken() || '';
+  if (initialized && initializedToken === token) return;
+  closeWebSocket?.();
   initialized = true;
-  url = url + '?Authorization=Bearer ' + getToken() + '&clientid=' + import.meta.env.VITE_APP_CLIENT_ID;
-  useWebSocket(url, {
+  initializedToken = token;
+  url = url + '?Authorization=Bearer ' + token + '&clientid=' + import.meta.env.VITE_APP_CLIENT_ID;
+  const socket = useWebSocket(url, {
     autoReconnect: {
-      // 重连最大次数
-      retries: 3,
-      // 重连间隔
-      delay: 1000,
-      onFailed() {
-        console.log('websocket重连失败');
-      }
+      // 通话状态依赖实时通道，持续重连并限制最大退避时间。
+      retries: -1,
+      delay: (retried) => Math.min(1000 * 2 ** Math.min(retried, 3), 5000)
     },
     heartbeat: {
       message: JSON.stringify({ type: 'ping' }),
       // 发送心跳的间隔
-      interval: 10000,
+      interval: 5000,
       // 接收到心跳response的超时时间
-      pongTimeout: 2000
+      pongTimeout: 3000
     },
     onConnected() {
       console.log('websocket已经连接');
@@ -92,4 +88,5 @@ export const initWebSocket = (url: any) => {
       });
     }
   });
+  closeWebSocket = socket.close;
 };

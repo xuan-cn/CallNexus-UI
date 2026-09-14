@@ -39,6 +39,9 @@ export interface IvrNode {
   config: {
     [key: string]: unknown;
     mediaId?: string | number;
+    invalidMediaId?: string | number;
+    inputTimeoutSeconds?: number;
+    maxAttempts?: number;
     text?: string;
     extension?: string;
     queueId?: string | number;

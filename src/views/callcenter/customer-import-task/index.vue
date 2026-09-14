@@ -319,7 +319,12 @@ const mappingOptions = computed(() => {
     { label: '备注', value: 'remark' }
   ];
   const template = formTemplates.value.find((item) => `${item.id}` === `${selectedTask.value?.formTemplateId}`);
-  return [...base, ...(template?.fields || []).map((field) => ({ label: `自定义：${field.fieldName}`, value: `form:${field.fieldCode}` }))];
+  return [
+    ...base,
+    ...(template?.fields || [])
+      .filter((field) => field.enabled !== false && field.importEnabled !== false && field.fieldType !== 'FILE')
+      .map((field) => ({ label: `自定义：${field.fieldName}`, value: `form:${field.fieldCode}` }))
+  ];
 });
 const hasPhoneMapping = computed(() => Object.values(fieldMapping).filter((value) => value === 'phone').length === 1);
 const canUpload = computed(() => !!selectedFile.value && !!analysis.value && hasPhoneMapping.value && selectedTask.value?.status === 'ENABLED');

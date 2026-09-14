@@ -1,11 +1,14 @@
 import request from '@/utils/request';
 import { AxiosPromise } from 'axios';
-import { FormBusinessType, FormTemplate } from './types';
+import { FormBusinessType, FormQuerySchema, FormTemplate } from './types';
 
 export const listFormTemplates = (businessType?: FormBusinessType): AxiosPromise<FormTemplate[]> =>
   request({ url: '/api/v1/form-templates', method: 'get', params: { businessType } });
 
 export const getFormTemplate = (id: string | number): AxiosPromise<FormTemplate> => request({ url: `/api/v1/form-templates/${id}`, method: 'get' });
+
+export const getFormQuerySchema = (id: string | number): AxiosPromise<FormQuerySchema> =>
+  request({ url: `/api/v1/form-templates/${id}/query-schema`, method: 'get' });
 
 export const createFormTemplate = (data: FormTemplate) => request({ url: '/api/v1/form-templates', method: 'post', data });
 

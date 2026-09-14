@@ -15,6 +15,11 @@
           <el-form-item label="客户姓名">
             <el-input v-model="query.customerName" clearable placeholder="客户姓名" @keyup.enter="handleSearch" />
           </el-form-item>
+          <el-form-item label="资料模板">
+            <el-select v-model="query.templateId" clearable filterable placeholder="全部模板" @change="handleTemplateChange">
+              <el-option v-for="template in customerFormTemplates" :key="template.id" :label="template.templateName" :value="template.id" />
+            </el-select>
+          </el-form-item>
           <el-form-item label="客户类型">
             <el-input v-model="query.customerType" clearable placeholder="意向客户等" @keyup.enter="handleSearch" />
           </el-form-item>
@@ -23,6 +28,7 @@
               <el-option v-for="group in skillGroups" :key="group.id" :label="group.groupName" :value="group.id" />
             </el-select>
           </el-form-item>
+          <DynamicQueryFields v-model="dynamicQueryValues" :fields="querySchemaFields" @search="handleSearch" />
           <el-form-item>
             <el-button type="primary" icon="Search" @click="handleSearch">搜索</el-button>
             <el-button icon="Refresh" @click="resetQuery">重置</el-button>
@@ -63,6 +69,9 @@
               </el-checkbox-group>
               <div class="column-setting-tip">要长期显示请在客户表单模板中打开“列表显示”。</div>
             </el-popover>
+          </el-col>
+          <el-col :span="1.5">
+            <el-button plain icon="Download" @click="exportCurrentCustomers">导出</el-button>
           </el-col>
           <el-col :span="6" class="table-meta-col">
             <div class="table-meta">
@@ -167,7 +176,17 @@
           show-overflow-tooltip
         >
           <template #default="{ row }">
-            <span v-if="hasFormFieldValue(row.formData?.[field.fieldCode])">
+            <button
+              v-if="field.dialEnabled && dynamicDialPhone(row, field)"
+              type="button"
+              class="phone-link"
+              title="点击拨打"
+              @click="requestDialPhone(row, dynamicDialPhone(row, field)!)"
+            >
+              <el-icon><Phone /></el-icon>
+              <span>{{ displayFormFieldValue(row.formData?.[field.fieldCode], field) }}</span>
+            </button>
+            <span v-else-if="hasFormFieldValue(row.formData?.[field.fieldCode])">
               {{ displayFormFieldValue(row.formData?.[field.fieldCode], field) }}
             </span>
             <span v-else>-</span>
@@ -576,21 +595,25 @@ import {
   CustomerQuery,
   CustomerVO,
   deleteCustomer,
+  exportCustomers,
   getCustomerImportBatch,
   pageCustomerImportBatches,
   retryCustomerImportRows,
   startCustomerImport,
   updateCustomerImportRow,
-  listCustomers
+  searchCustomers
 } from '@/api/callcenter/customer';
 import { listSkillGroups } from '@/api/callcenter/skill-group';
 import { SkillGroupVO } from '@/api/callcenter/skill-group/types';
-import { listFormTemplates } from '@/api/callcenter/form-template';
-import { FormTemplate } from '@/api/callcenter/form-template/types';
+import { getFormQuerySchema, listFormTemplates } from '@/api/callcenter/form-template';
+import { FormQueryField, FormTemplate } from '@/api/callcenter/form-template/types';
+import DynamicQueryFields from '@/components/callcenter/DynamicQueryFields.vue';
+import { buildDynamicFilters } from '@/utils/callcenter/dynamic-form-query';
 import DynamicBusinessFormDialog from '@/layout/components/DynamicBusinessFormDialog.vue';
 import { useAgentDialBus } from '@/composables/useAgentDial';
 import { Phone } from '@element-plus/icons-vue';
 import { ElMessageBox, type UploadFile, type UploadUserFile } from 'element-plus';
+import FileSaver from 'file-saver';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const agentDialBus = useAgentDialBus();
@@ -622,6 +645,8 @@ const assignmentDialog = reactive({
 const importFileList = ref<UploadUserFile[]>([]);
 const skillGroups = ref<SkillGroupVO[]>([]);
 const customerFormTemplates = ref<FormTemplate[]>([]);
+const querySchemaFields = ref<FormQueryField[]>([]);
+const dynamicQueryValues = ref<Record<string, unknown>>({});
 const configurableFixedColumns = [
   { key: 'customerType', label: '客户类型' },
   { key: 'tags', label: '标签' },
@@ -673,16 +698,13 @@ const fixedImportFields = [
 const normalizeImportHeader = (value?: string) => (value || '').trim().toLowerCase().replace(/\s|_|-|\/|\\/g, '');
 const selectedFormTemplate = computed(() => customerFormTemplates.value.find((item) => String(item.id) === String(importDialog.form.formTemplateId)));
 const listVisibleCustomerFields = computed(() =>
-  customerFormTemplates.value
-    .filter((template) => template.enabled && template.businessType === 'CUSTOMER')
-    .flatMap((template) => template.fields || [])
-    .filter((field) => field.listVisible)
-    .filter((field, index, fields) => fields.findIndex((item) => item.fieldCode === field.fieldCode) === index)
+  (customerFormTemplates.value.find((template) => String(template.id) === String(query.templateId))?.fields || [])
+    .filter((field) => field.enabled !== false && field.listVisible)
     .sort((first, second) => (first.sortOrder || 0) - (second.sortOrder || 0))
 );
 const templateImportFields = computed(() =>
   (selectedFormTemplate.value?.fields || [])
-    .filter((field) => field.fieldType !== 'FILE')
+    .filter((field) => field.enabled !== false && field.importEnabled !== false && field.fieldType !== 'FILE')
     .map((field) => ({
       label: `${field.fieldName}（表单）`,
       value: `form:${field.fieldCode}`
@@ -778,7 +800,8 @@ const importProgressStatus = computed(() => {
 const load = async () => {
   loading.value = true;
   try {
-    const response = await listCustomers(query);
+    query.dynamicFilters = buildDynamicFilters(querySchemaFields.value, dynamicQueryValues.value);
+    const response = await searchCustomers(query);
     rows.value = response.rows;
     total.value = response.total;
   } finally {
@@ -790,6 +813,38 @@ const handleSearch = () => {
   query.pageNum = 1;
   load();
 };
+const exportCurrentCustomers = async () => {
+  const data = {
+    ...query,
+    dynamicFilters: buildDynamicFilters(querySchemaFields.value, dynamicQueryValues.value)
+  };
+  const blob = await exportCustomers(data);
+  FileSaver.saveAs(blob, `客户资料_${Date.now()}.xlsx`);
+};
+
+const dynamicDialPhone = (row: CustomerVO, field: FormTemplate['fields'][number]): CustomerPhoneVO | undefined => {
+  const value = row.formData?.[field.fieldCode];
+  if (!field.dialEnabled || typeof value !== 'string' || !value.trim()) return undefined;
+  const phoneNumber = value.trim();
+  return {
+    id: `form-${row.id}-${field.fieldCode}`,
+    phoneNumber,
+    normalizedPhone: phoneNumber,
+    primaryFlag: false,
+    enabled: true,
+    sortOrder: 0
+  };
+};
+
+const handleTemplateChange = async () => {
+  dynamicQueryValues.value = {};
+  querySchemaFields.value = [];
+  if (query.templateId) {
+    const response = await getFormQuerySchema(query.templateId);
+    querySchemaFields.value = response.data?.fields || [];
+  }
+  handleSearch();
+};
 
 const resetQuery = () => {
   query.pageNum = 1;
@@ -798,6 +853,10 @@ const resetQuery = () => {
   query.customerType = '';
   query.skillGroupId = undefined;
   query.assignmentState = '';
+  query.templateId = undefined;
+  query.dynamicFilters = [];
+  querySchemaFields.value = [];
+  dynamicQueryValues.value = {};
   load();
 };
 
@@ -809,6 +868,10 @@ const loadSkillGroups = async () => {
 const loadCustomerFormTemplates = async () => {
   const response = await listFormTemplates('CUSTOMER');
   customerFormTemplates.value = (response.data || []).filter((item) => item.enabled);
+  if (customerFormTemplates.value.length === 1 && !query.templateId) {
+    query.templateId = customerFormTemplates.value[0].id;
+    await handleTemplateChange();
+  }
 };
 
 const showDetail = (row: CustomerVO) => {

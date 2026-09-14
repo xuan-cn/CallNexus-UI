@@ -610,7 +610,9 @@ const ticketPolicy = ref<AiTicketPolicyVO>(ticketPolicyDefaults());
 const ticketPrompt = ref<AiTicketPromptVO>(ticketPromptDefaults());
 const customerSummaryFields = computed(() => {
   const template = customerTemplates.value.find((item) => String(item.id) === String(ticketPolicy.value.customerSummaryTemplateId));
-  return (template?.fields || []).filter((field) => ['INPUT', 'TEXTAREA'].includes(field.fieldType));
+  return (template?.fields || []).filter(
+    (field) => field.enabled !== false && field.aiFillEnabled !== false && ['INPUT', 'TEXTAREA'].includes(field.fieldType)
+  );
 });
 const handleCustomerSummaryTemplateChange = () => {
   if (!customerSummaryFields.value.some((field) => field.fieldCode === ticketPolicy.value.customerSummaryFieldCode)) {

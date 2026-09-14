@@ -4,7 +4,7 @@
       <div class="page-header">
         <div>
           <div class="page-title">表单模板</div>
-          <div class="page-description">配置业务表单字段；客户模板还可控制哪些字段作为列表自定义列显示。</div>
+          <div class="page-description">配置业务表单字段，并决定客户或工单列表中的可查询字段和自定义列。</div>
         </div>
         <div class="header-actions">
           <el-button type="primary" @click="openCreate">
@@ -17,7 +17,9 @@
 
     <el-card class="table-card" shadow="never">
       <div class="table-toolbar">
-        <span class="stat-pill">共 <b>{{ templates.length }}</b> 个模板</span>
+        <span class="stat-pill"
+          >共 <b>{{ templates.length }}</b> 个模板</span
+        >
         <el-button circle :icon="Refresh" title="刷新" @click="load" />
       </div>
       <el-table v-loading="loading" :data="templates" class="template-table" stripe>
@@ -25,7 +27,6 @@
           <template #default="{ row }">
             <div class="template-cell">
               <strong>{{ row.templateName }}</strong>
-              <span>{{ row.templateCode }}</span>
             </div>
           </template>
         </el-table-column>
@@ -46,9 +47,7 @@
           <template #default="{ row }">
             <div class="count-cell">
               <span>{{ row.fields.length }} 字段</span>
-              <span v-if="row.businessType === 'CUSTOMER'" class="list-count">
-                {{ listVisibleCount(row) }} 列
-              </span>
+              <span class="list-count">{{ listVisibleCount(row) }} 列 · {{ queryEnabledCount(row) }} 条件</span>
             </div>
           </template>
         </el-table-column>
@@ -73,7 +72,7 @@
     <el-drawer
       v-model="visible"
       :title="form.id ? '配置字段与列表列' : '新增表单模板'"
-      size="min(1180px, 94vw)"
+      size="min(1280px, 96vw)"
       class="form-template-drawer"
       append-to-body
     >
@@ -92,12 +91,11 @@
         </div>
 
         <el-alert
-          v-if="form.businessType === 'CUSTOMER'"
           class="editor-tip"
           type="info"
           :closable="false"
           show-icon
-          title="客户模板：打开「列表列」后，该字段会出现在客户列表的自定义列中。"
+          title="打开「列表列」后字段会出现在对应业务列表；打开「可查询」后列表会按配置动态生成查询条件。"
         />
 
         <el-form v-if="form.businessType === 'TICKET'" class="workflow-form" label-width="85px">
@@ -115,178 +113,301 @@
         </el-form>
 
         <div class="editor-grid">
-          <section class="fields-panel">
+          <section class="field-list-panel">
             <div class="section-heading">
               <div>
-                <strong>字段配置</strong>
-                <small>{{ form.fields.length }} 个字段<span v-if="form.businessType === 'CUSTOMER'"> · {{ editorListCount }} 个列表列</span></small>
+                <strong>字段列表</strong>
+                <small>{{ form.fields.length }} 个字段，可拖拽调整顺序</small>
               </div>
-              <el-button type="primary" plain @click="addField">添加字段</el-button>
+              <el-button type="primary" plain size="small" @click="addField">
+                <el-icon><Plus /></el-icon>
+                添加
+              </el-button>
             </div>
 
-            <el-empty v-if="!form.fields.length" description="点击「添加字段」开始配置" :image-size="72" />
-
-            <div v-else class="field-table">
-              <div class="field-table-head" :class="{ 'has-list-col': form.businessType === 'CUSTOMER' }">
-                <span class="col-drag"></span>
-                <span class="col-index">#</span>
-                <span class="col-name">显示名</span>
-                <span class="col-code">编码</span>
-                <span class="col-type">类型</span>
-                <span class="col-flag">必填</span>
-                <span v-if="form.businessType === 'CUSTOMER'" class="col-flag">列表</span>
-                <span class="col-span">布局</span>
-                <span class="col-action"></span>
-              </div>
-
+            <el-empty v-if="!form.fields.length" description="点击「添加」创建字段" :image-size="64" />
+            <div v-else class="field-list">
               <div
                 v-for="(field, fieldIndex) in form.fields"
                 :key="field.localId"
-                class="field-row"
+                class="field-list-item"
                 :class="{
+                  'is-active': selectedFieldId === field.localId,
                   'is-dragging': draggedFieldIndex === fieldIndex,
-                  'is-drag-over': dragOverFieldIndex === fieldIndex && draggedFieldIndex !== fieldIndex,
-                  'is-list-on': form.businessType === 'CUSTOMER' && field.listVisible,
-                  'has-list-col': form.businessType === 'CUSTOMER',
-                  'has-options': optionTypes.includes(field.fieldType)
+                  'is-drag-over': dragOverFieldIndex === fieldIndex && draggedFieldIndex !== fieldIndex
                 }"
+                @click="selectField(field)"
                 @dragover.prevent="handleFieldDragOver(fieldIndex)"
                 @drop.prevent="handleFieldDrop(fieldIndex)"
               >
-                <div class="field-row-main">
-                  <button
-                    type="button"
-                    class="field-drag-handle col-drag"
-                    draggable="true"
-                    title="拖拽调整顺序"
-                    @dragstart.stop="handleFieldDragStart(fieldIndex, $event)"
-                    @dragend.stop="handleFieldDragEnd"
-                  >
-                    <el-icon><Rank /></el-icon>
-                  </button>
-
-                  <span class="field-index col-index">{{ fieldIndex + 1 }}</span>
-
-                  <el-input v-model="field.fieldName" class="col-name" placeholder="如 性别" />
-                  <el-input v-model="field.fieldCode" class="col-code" placeholder="如 gender" />
-                  <el-select v-model="field.fieldType" class="col-type" @change="handleFieldTypeChange(field)">
-                    <el-option v-for="item in fieldTypes" :key="item.value" :label="item.label" :value="item.value" />
-                  </el-select>
-
-                  <div class="col-flag">
-                    <el-switch v-model="field.required" size="small" inline-prompt active-text="是" inactive-text="否" />
+                <button
+                  type="button"
+                  class="field-drag-handle"
+                  draggable="true"
+                  title="拖拽调整顺序"
+                  @dragstart.stop="handleFieldDragStart(fieldIndex, $event)"
+                  @dragend.stop="handleFieldDragEnd"
+                >
+                  <el-icon><Rank /></el-icon>
+                </button>
+                <span class="field-index">{{ fieldIndex + 1 }}</span>
+                <div class="field-list-content">
+                  <div class="field-list-title">{{ field.fieldName || '未命名字段' }}</div>
+                  <div class="field-list-meta">
+                    <span>{{ fieldTypeLabel(field.fieldType) }}</span>
+                    <span>{{ field.fieldCode || '未设置编码' }}</span>
                   </div>
-                  <div v-if="form.businessType === 'CUSTOMER'" class="col-flag">
-                    <el-switch
-                      v-model="field.listVisible"
-                      size="small"
-                      inline-prompt
-                      active-text="显"
-                      inactive-text="隐"
-                    />
+                  <div v-if="field.enabled === false || field.required || field.listVisible || field.queryEnabled" class="field-list-flags">
+                    <span v-if="field.enabled === false" class="is-disabled">已停用</span>
+                    <span v-if="field.required">必填</span>
+                    <span v-if="field.listVisible">列表显示</span>
+                    <span v-if="field.queryEnabled">可查询</span>
                   </div>
-
-                  <el-select v-model="field.layoutSpan" class="col-span" size="default">
-                    <el-option :value="12" label="半行" />
-                    <el-option :value="24" label="整行" />
-                  </el-select>
-
-                  <el-button class="col-action" link type="danger" @click="form.fields.splice(fieldIndex, 1)">删除</el-button>
                 </div>
-
-                <div v-if="optionTypes.includes(field.fieldType)" class="option-editor">
-                  <div class="option-heading">
-                    <span>选项配置</span>
-                    <el-button link type="primary" @click="addOption(field)">添加选项</el-button>
-                  </div>
-                  <div v-for="(option, optionIndex) in field.options" :key="option.localId" class="option-row">
-                    <el-input v-model="option.label" placeholder="显示名，如 男" />
-                    <el-input v-model="option.value" placeholder="值，如 MALE" />
-                    <el-button link type="danger" @click="field.options.splice(optionIndex, 1)">删除</el-button>
-                  </div>
-                  <div v-if="!field.options.length" class="option-empty">请至少添加一个完整选项</div>
-                </div>
+                <el-button link type="danger" size="small" @click.stop="removeField(fieldIndex)">删除</el-button>
               </div>
-
-              <button type="button" class="field-table-foot" @click="addField">
-                <el-icon><Plus /></el-icon>
-                继续添加字段
-              </button>
             </div>
           </section>
 
-          <aside class="preview-panel">
-            <div class="preview-block" v-if="form.businessType === 'CUSTOMER'">
-              <div class="section-heading">
-                <strong>列表列预览</strong>
-                <el-tag size="small" effect="plain" round>{{ editorListCount }} 列</el-tag>
+          <section class="field-property-panel">
+            <template v-if="selectedField">
+              <div class="property-heading">
+                <div>
+                  <strong>{{ selectedField.fieldName || '未命名字段' }}</strong>
+                  <small>{{ fieldTypeLabel(selectedField.fieldType) }} · {{ selectedField.fieldCode || '未设置编码' }}</small>
+                </div>
+                <el-tag size="small" effect="plain">字段属性</el-tag>
               </div>
-              <div v-if="editorListFields.length" class="list-preview">
-                <span v-for="field in editorListFields" :key="field.localId" class="list-chip">
-                  {{ field.fieldName || field.fieldCode || '未命名' }}
-                </span>
-              </div>
-              <div v-else class="preview-empty">尚未勾选列表列，客户列表不会展示自定义列</div>
-            </div>
 
-            <div class="preview-block">
-              <div class="section-heading">
-                <strong>表单预览</strong>
-                <el-tag size="small" effect="plain" round>
-                  {{ form.businessType === 'CUSTOMER' ? '客户表单' : '工单表单' }}
-                </el-tag>
-              </div>
+              <el-tabs v-model="activePropertyTab" class="property-tabs">
+                <el-tab-pane label="基础属性" name="basic">
+                  <el-form label-position="top" class="property-form">
+                    <el-row :gutter="12">
+                      <el-col :span="12">
+                        <el-form-item label="字段名称" required>
+                          <el-input v-model="selectedField.fieldName" placeholder="如 性别" />
+                        </el-form-item>
+                      </el-col>
+                      <el-col :span="12">
+                        <el-form-item label="字段编码" required>
+                          <el-input v-model="selectedField.fieldCode" placeholder="如 gender" />
+                        </el-form-item>
+                      </el-col>
+                      <el-col :span="12">
+                        <el-form-item label="字段类型">
+                          <el-select v-model="selectedField.fieldType" style="width: 100%" @change="handleFieldTypeChange(selectedField)">
+                            <el-option v-for="item in fieldTypes" :key="item.value" :label="item.label" :value="item.value" />
+                          </el-select>
+                        </el-form-item>
+                      </el-col>
+                      <el-col :span="12">
+                        <el-form-item label="表单布局">
+                          <el-select v-model="selectedField.layoutSpan" style="width: 100%">
+                            <el-option :value="12" label="半行" />
+                            <el-option :value="24" label="整行" />
+                          </el-select>
+                        </el-form-item>
+                      </el-col>
+                      <el-col :span="12">
+                        <el-form-item label="输入提示">
+                          <el-input v-model="selectedField.placeholder" clearable placeholder="字段为空时显示的提示" />
+                        </el-form-item>
+                      </el-col>
+                      <el-col :span="12">
+                        <el-form-item label="默认值">
+                          <el-input v-model="selectedField.defaultValue" clearable placeholder="新建数据时的默认值" />
+                        </el-form-item>
+                      </el-col>
+                      <el-col :span="24">
+                        <el-form-item label="字段说明">
+                          <el-input
+                            v-model="selectedField.fieldRemark"
+                            type="textarea"
+                            :rows="3"
+                            maxlength="500"
+                            show-word-limit
+                            placeholder="说明字段用途，也可作为查询条件提示"
+                          />
+                        </el-form-item>
+                      </el-col>
+                    </el-row>
+                  </el-form>
+                </el-tab-pane>
+
+                <el-tab-pane label="显示设置" name="display">
+                  <div class="setting-list">
+                    <div class="setting-item">
+                      <div><strong>启用字段</strong><small>停用后不再参与新数据录入，但历史数据仍会保留</small></div>
+                      <el-switch v-model="selectedField.enabled" />
+                    </div>
+                    <div class="setting-item">
+                      <div><strong>必填字段</strong><small>录入表单时必须填写该字段</small></div>
+                      <el-switch v-model="selectedField.required" />
+                    </div>
+                    <div class="setting-item">
+                      <div><strong>列表中显示</strong><small>在客户或工单列表中增加该自定义列</small></div>
+                      <el-switch v-model="selectedField.listVisible" />
+                    </div>
+                  </div>
+                </el-tab-pane>
+
+                <el-tab-pane label="业务能力" name="capabilities">
+                  <div class="setting-list">
+                    <div class="setting-item">
+                      <div><strong>允许导入</strong><small>资料导入字段映射中允许选择该字段</small></div>
+                      <el-switch v-model="selectedField.importEnabled" :disabled="selectedField.fieldType === 'FILE'" />
+                    </div>
+                    <div class="setting-item">
+                      <div><strong>允许导出</strong><small>客户或工单导出时包含该字段</small></div>
+                      <el-switch v-model="selectedField.exportEnabled" />
+                    </div>
+                    <div class="setting-item">
+                      <div><strong>允许 AI 填写</strong><small>AI 工单、坐席辅助和 AI 工作流可以自动写入该字段</small></div>
+                      <el-switch v-model="selectedField.aiFillEnabled" :disabled="selectedField.fieldType === 'FILE'" />
+                    </div>
+                    <div class="setting-item">
+                      <div>
+                        <strong>点击拨号</strong>
+                        <small>{{ dialCapabilityTip(selectedField) }}</small>
+                      </div>
+                      <el-switch v-model="selectedField.dialEnabled" :disabled="!canEnableDial(selectedField)" />
+                    </div>
+                  </div>
+                </el-tab-pane>
+
+                <el-tab-pane label="查询设置" name="query">
+                  <div class="setting-list">
+                    <div class="setting-item">
+                      <div>
+                        <strong>作为查询条件</strong>
+                        <small>{{ selectedField.fieldType === 'FILE' ? '附件字段不支持查询' : '在业务列表中动态生成该字段的查询控件' }}</small>
+                      </div>
+                      <el-switch
+                        v-model="selectedField.queryEnabled"
+                        :disabled="selectedField.fieldType === 'FILE'"
+                        @change="ensureQueryMode(selectedField)"
+                      />
+                    </div>
+                  </div>
+                  <el-form v-if="selectedField.queryEnabled" label-position="top" class="property-form query-property-form">
+                    <el-row :gutter="12">
+                      <el-col :span="12">
+                        <el-form-item label="查询方式">
+                          <el-select v-model="selectedField.queryMode" style="width: 100%">
+                            <el-option
+                              v-for="item in queryModeOptions(selectedField.fieldType)"
+                              :key="item.value"
+                              :label="item.label"
+                              :value="item.value"
+                            />
+                          </el-select>
+                        </el-form-item>
+                      </el-col>
+                      <el-col :span="12">
+                        <el-form-item label="查询排序">
+                          <el-input-number v-model="selectedField.queryOrder" :min="0" :max="999" controls-position="right" style="width: 100%" />
+                        </el-form-item>
+                      </el-col>
+                    </el-row>
+                  </el-form>
+                </el-tab-pane>
+
+                <el-tab-pane label="选项配置" name="options">
+                  <template v-if="optionTypes.includes(selectedField.fieldType)">
+                    <div class="option-heading">
+                      <span>配置用户可选择的显示名和存储值</span>
+                      <el-button link type="primary" @click="addOption(selectedField)">添加选项</el-button>
+                    </div>
+                    <div class="option-list">
+                      <div v-for="(option, optionIndex) in selectedField.options" :key="option.localId" class="option-row">
+                        <span class="option-index">{{ optionIndex + 1 }}</span>
+                        <el-input v-model="option.label" placeholder="显示名，如 男" />
+                        <el-input v-model="option.value" placeholder="存储值，如 MALE" />
+                        <el-button link type="danger" @click="selectedField.options.splice(optionIndex, 1)">删除</el-button>
+                      </div>
+                    </div>
+                    <div v-if="!selectedField.options.length" class="option-empty">请至少添加一个完整选项</div>
+                  </template>
+                  <el-alert v-else type="info" :closable="false" show-icon title="当前字段类型不需要配置选项" />
+                </el-tab-pane>
+
+                <el-tab-pane label="校验规则" name="validation">
+                  <el-form label-position="top" class="property-form">
+                    <el-form-item label="校验规则 JSON">
+                      <el-input
+                        v-model="selectedField.validationRules"
+                        type="textarea"
+                        :rows="8"
+                        placeholder='例如：[{"min":2,"max":20,"message":"长度为 2 到 20 个字符"}]'
+                      />
+                      <div class="property-help">高级配置项，留空表示仅使用“必填”规则。</div>
+                    </el-form-item>
+                  </el-form>
+                </el-tab-pane>
+              </el-tabs>
+            </template>
+            <el-empty v-else description="从左侧选择字段后配置属性" :image-size="72" />
+          </section>
+        </div>
+
+        <section class="preview-section">
+          <div class="section-heading preview-section-heading">
+            <div>
+              <strong>效果预览</strong>
+              <small>预览仅用于核对布局和启用状态</small>
+            </div>
+            <div class="preview-counts">
+              <span>{{ editorListCount }} 个列表列</span>
+              <span>{{ editorQueryCount }} 个查询条件</span>
+            </div>
+          </div>
+          <el-tabs v-model="previewTab" class="preview-tabs">
+            <el-tab-pane label="表单预览" name="form">
               <el-form label-position="top" class="preview-form">
-                <el-row :gutter="10">
+                <el-row :gutter="12">
                   <el-col v-for="field in form.fields" :key="field.localId" :span="field.layoutSpan || 12">
                     <el-form-item :label="field.fieldName || '未命名字段'" :required="field.required">
                       <el-input v-if="field.fieldType === 'INPUT'" :placeholder="field.placeholder || '请输入'" />
-                      <el-input v-else-if="field.fieldType === 'TEXTAREA'" type="textarea" :rows="2" placeholder="请输入" />
+                      <el-input v-else-if="field.fieldType === 'TEXTAREA'" type="textarea" :rows="2" :placeholder="field.placeholder || '请输入'" />
                       <el-input-number v-else-if="field.fieldType === 'NUMBER'" controls-position="right" style="width: 100%" />
                       <el-button v-else-if="field.fieldType === 'FILE'" disabled>选择文件</el-button>
-                      <el-date-picker
-                        v-else-if="field.fieldType === 'DATE'"
-                        type="date"
-                        placeholder="选择日期"
-                        style="width: 100%"
-                      />
-                      <el-date-picker
-                        v-else-if="field.fieldType === 'DATETIME'"
-                        type="datetime"
-                        placeholder="选择日期时间"
-                        style="width: 100%"
-                      />
+                      <el-date-picker v-else-if="field.fieldType === 'DATE'" type="date" placeholder="选择日期" style="width: 100%" />
+                      <el-date-picker v-else-if="field.fieldType === 'DATETIME'" type="datetime" placeholder="选择日期时间" style="width: 100%" />
                       <el-radio-group v-else-if="field.fieldType === 'RADIO'">
-                        <el-radio v-for="option in validOptions(field)" :key="option.localId" :value="option.value">
-                          {{ option.label }}
-                        </el-radio>
+                        <el-radio v-for="option in validOptions(field)" :key="option.localId" :value="option.value">{{ option.label }}</el-radio>
                       </el-radio-group>
                       <el-checkbox-group v-else-if="field.fieldType === 'CHECKBOX'">
-                        <el-checkbox v-for="option in validOptions(field)" :key="option.localId" :value="option.value">
-                          {{ option.label }}
-                        </el-checkbox>
+                        <el-checkbox v-for="option in validOptions(field)" :key="option.localId" :value="option.value">{{
+                          option.label
+                        }}</el-checkbox>
                       </el-checkbox-group>
-                      <el-select
-                        v-else
-                        :multiple="field.fieldType === 'MULTI_SELECT'"
-                        placeholder="请选择"
-                        style="width: 100%"
-                      >
-                        <el-option
-                          v-for="option in validOptions(field)"
-                          :key="option.localId"
-                          :label="option.label"
-                          :value="option.value"
-                        />
+                      <el-select v-else :multiple="field.fieldType === 'MULTI_SELECT'" placeholder="请选择" style="width: 100%">
+                        <el-option v-for="option in validOptions(field)" :key="option.localId" :label="option.label" :value="option.value" />
                       </el-select>
                     </el-form-item>
                   </el-col>
                 </el-row>
                 <el-empty v-if="!form.fields.length" :image-size="56" description="字段会在这里实时展示" />
               </el-form>
-            </div>
-          </aside>
-        </div>
+            </el-tab-pane>
+            <el-tab-pane :label="`列表列（${editorListCount}）`" name="list">
+              <div v-if="editorListFields.length" class="list-preview">
+                <span v-for="field in editorListFields" :key="field.localId" class="list-chip">{{
+                  field.fieldName || field.fieldCode || '未命名'
+                }}</span>
+              </div>
+              <div v-else class="preview-empty">尚未开启列表显示，对应业务列表不会展示自定义列</div>
+            </el-tab-pane>
+            <el-tab-pane :label="`查询条件（${editorQueryCount}）`" name="query">
+              <div v-if="editorQueryFields.length" class="list-preview">
+                <span v-for="field in editorQueryFields" :key="field.localId" class="list-chip">
+                  {{ field.fieldName || field.fieldCode || '未命名' }} · {{ queryModeLabel(field.queryMode) }}
+                </span>
+              </div>
+              <div v-else class="preview-empty">尚未开放动态查询字段</div>
+            </el-tab-pane>
+          </el-tabs>
+        </section>
       </div>
 
       <template #footer>
@@ -301,7 +422,7 @@
 import { Plus, Rank, Refresh } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { createFormTemplate, deleteFormTemplate, listFormTemplates, updateFormTemplate } from '@/api/callcenter/form-template';
-import { FormField, FormFieldOption, FormFieldType, FormTemplate } from '@/api/callcenter/form-template/types';
+import { FormField, FormFieldOption, FormFieldType, FormQueryMode, FormTemplate } from '@/api/callcenter/form-template/types';
 import { listDefinitionOptions } from '@/api/workflow/definition';
 import { FlowDefinitionVo } from '@/api/workflow/definition/types';
 
@@ -338,10 +459,47 @@ const emptyForm = (): EditableTemplate => ({
 const form = ref<EditableTemplate>(emptyForm());
 const draggedFieldIndex = ref<number>();
 const dragOverFieldIndex = ref<number>();
+const selectedFieldId = ref<string>();
+const activePropertyTab = ref('basic');
+const previewTab = ref('form');
 
 const listVisibleCount = (template: FormTemplate) => template.fields.filter((field) => field.listVisible).length;
+const selectedField = computed(() => form.value.fields.find((field) => field.localId === selectedFieldId.value));
 const editorListFields = computed(() => form.value.fields.filter((field) => field.listVisible));
 const editorListCount = computed(() => editorListFields.value.length);
+const editorQueryFields = computed(() =>
+  form.value.fields.filter((field) => field.queryEnabled).sort((a, b) => (a.queryOrder || 0) - (b.queryOrder || 0))
+);
+const editorQueryCount = computed(() => editorQueryFields.value.length);
+const queryEnabledCount = (template: FormTemplate) => template.fields.filter((field) => field.queryEnabled).length;
+
+const queryModeOptions = (fieldType: FormFieldType): Array<{ label: string; value: FormQueryMode }> => {
+  if (['INPUT', 'TEXTAREA'].includes(fieldType))
+    return [
+      { label: '模糊匹配', value: 'LIKE' },
+      { label: '精确匹配', value: 'EQ' }
+    ];
+  if (['RADIO', 'SELECT'].includes(fieldType)) return [{ label: '精确匹配', value: 'EQ' }];
+  if (['CHECKBOX', 'MULTI_SELECT'].includes(fieldType)) return [{ label: '包含任一', value: 'CONTAINS_ANY' }];
+  if (['NUMBER', 'DATE', 'DATETIME'].includes(fieldType))
+    return [
+      { label: '范围查询', value: 'BETWEEN' },
+      { label: '精确匹配', value: 'EQ' }
+    ];
+  return [];
+};
+const defaultQueryMode = (fieldType: FormFieldType): FormQueryMode => queryModeOptions(fieldType)[0]?.value || 'AUTO';
+const ensureQueryMode = (field: EditableField) => {
+  if (!field.queryEnabled) return;
+  const options = queryModeOptions(field.fieldType);
+  if (!options.some((item) => item.value === field.queryMode)) field.queryMode = defaultQueryMode(field.fieldType);
+};
+const queryModeLabel = (mode?: FormQueryMode) =>
+  ({ LIKE: '模糊', EQ: '精确', BETWEEN: '范围', CONTAINS_ANY: '包含任一', AUTO: '自动' })[mode || 'AUTO'];
+const fieldTypeLabel = (fieldType: FormFieldType) => fieldTypes.find((item) => item.value === fieldType)?.label || fieldType;
+const selectField = (field: EditableField) => {
+  selectedFieldId.value = field.localId;
+};
 
 const load = async () => {
   loading.value = true;
@@ -353,6 +511,9 @@ const load = async () => {
 };
 const openCreate = () => {
   form.value = emptyForm();
+  selectedFieldId.value = undefined;
+  activePropertyTab.value = 'basic';
+  previewTab.value = 'form';
   visible.value = true;
 };
 const openEdit = (template: FormTemplate) => {
@@ -362,14 +523,25 @@ const openEdit = (template: FormTemplate) => {
       ...field,
       layoutSpan: field.layoutSpan || 12,
       listVisible: Boolean(field.listVisible),
+      queryEnabled: Boolean(field.queryEnabled),
+      queryMode: field.queryMode || defaultQueryMode(field.fieldType),
+      queryOrder: field.queryOrder ?? field.sortOrder ?? 0,
+      importEnabled: field.fieldType !== 'FILE' && field.importEnabled !== false,
+      exportEnabled: field.exportEnabled !== false,
+      aiFillEnabled: field.fieldType !== 'FILE' && field.aiFillEnabled !== false,
+      dialEnabled: Boolean(field.dialEnabled),
+      enabled: field.enabled !== false,
       localId: localId(),
-      options: field.options.map((option) => ({ ...option, localId: localId() }))
+      options: (field.options || []).map((option) => ({ ...option, localId: localId() }))
     }))
   };
+  selectedFieldId.value = form.value.fields[0]?.localId;
+  activePropertyTab.value = 'basic';
+  previewTab.value = 'form';
   visible.value = true;
 };
-const addField = () =>
-  form.value.fields.push({
+const addField = () => {
+  const field: EditableField = {
     localId: localId(),
     fieldCode: '',
     fieldName: '',
@@ -377,8 +549,26 @@ const addField = () =>
     required: false,
     layoutSpan: 12,
     listVisible: false,
+    queryEnabled: false,
+    queryMode: 'LIKE',
+    queryOrder: form.value.fields.length,
+    fieldRemark: '',
+    importEnabled: true,
+    exportEnabled: true,
+    aiFillEnabled: true,
+    dialEnabled: false,
+    enabled: true,
     options: []
-  });
+  };
+  form.value.fields.push(field);
+  selectedFieldId.value = field.localId;
+  activePropertyTab.value = 'basic';
+};
+const removeField = (fieldIndex: number) => {
+  const [removed] = form.value.fields.splice(fieldIndex, 1);
+  if (removed?.localId !== selectedFieldId.value) return;
+  selectedFieldId.value = form.value.fields[fieldIndex]?.localId || form.value.fields[fieldIndex - 1]?.localId;
+};
 const addOption = (field: EditableField) => field.options.push({ localId: localId(), label: '', value: '', sortOrder: field.options.length });
 const handleFieldDragStart = (fieldIndex: number, event: DragEvent) => {
   draggedFieldIndex.value = fieldIndex;
@@ -408,7 +598,17 @@ const handleFieldDragEnd = () => {
 const handleFieldTypeChange = (field: EditableField) => {
   if (!optionTypes.includes(field.fieldType)) field.options = [];
   if (optionTypes.includes(field.fieldType) && !field.options.length) addOption(field);
+  if (field.fieldType === 'FILE') {
+    field.queryEnabled = false;
+    field.importEnabled = false;
+    field.aiFillEnabled = false;
+  }
+  if (!canEnableDial(field)) field.dialEnabled = false;
+  field.queryMode = defaultQueryMode(field.fieldType);
 };
+const canEnableDial = (field: EditableField) => form.value.businessType === 'CUSTOMER' && field.fieldType === 'INPUT';
+const dialCapabilityTip = (field: EditableField) =>
+  canEnableDial(field) ? '字段值将显示拨号操作，号码仍会经过外呼权限和线路策略' : '仅客户表单的输入框字段支持点击拨号';
 const validOptions = (field: EditableField) => field.options.filter((option) => option.label && option.value);
 const workflowLabel = (workflowCode?: string) => {
   if (!workflowCode) return '未绑定';
@@ -440,6 +640,15 @@ const submit = async () => {
       defaultValue: field.defaultValue,
       validationRules: field.validationRules,
       listVisible: Boolean(field.listVisible),
+      queryEnabled: Boolean(field.queryEnabled),
+      queryMode: field.queryEnabled ? field.queryMode || defaultQueryMode(field.fieldType) : undefined,
+      queryOrder: field.queryOrder ?? index,
+      fieldRemark: field.fieldRemark,
+      importEnabled: Boolean(field.importEnabled),
+      exportEnabled: Boolean(field.exportEnabled),
+      aiFillEnabled: Boolean(field.aiFillEnabled),
+      dialEnabled: Boolean(field.dialEnabled),
+      enabled: field.enabled !== false,
       sortOrder: index,
       options: validOptions(field).map((option, optionIndex) => ({ label: option.label, value: option.value, sortOrder: optionIndex }))
     }))
@@ -467,6 +676,7 @@ watch(
   () => form.value.businessType,
   (businessType) => {
     if (businessType !== 'TICKET') form.value.workflowCode = undefined;
+    if (businessType !== 'CUSTOMER') form.value.fields.forEach((field) => (field.dialEnabled = false));
   }
 );
 onMounted(async () => {
@@ -484,9 +694,7 @@ onMounted(async () => {
 
 .hero-card {
   border-color: #e4ecf6;
-  background:
-    radial-gradient(circle at 0% 0%, rgba(56, 189, 248, 0.08), transparent 42%),
-    linear-gradient(180deg, #ffffff, #f7fbff);
+  background: radial-gradient(circle at 0% 0%, rgba(56, 189, 248, 0.08), transparent 42%), linear-gradient(180deg, #ffffff, #f7fbff);
 }
 
 .hero-card :deep(.el-card__body) {
@@ -517,7 +725,7 @@ onMounted(async () => {
   border-radius: 999px;
   background: #fff;
   color: #64748b;
-  font-size: 12px;
+  font-size: 11px;
 
   b {
     margin: 0 2px;
@@ -528,23 +736,32 @@ onMounted(async () => {
 
 .template-table :deep(.el-table__header th) {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
+}
+
+.template-table :deep(.el-table__cell) {
+  padding: 7px 0;
+  font-size: 12px;
+}
+
+.template-table :deep(.el-tag) {
+  height: 21px;
+  padding: 0 7px;
+  font-size: 11px;
+}
+
+.template-table :deep(.el-button) {
+  font-size: 12px;
 }
 
 .template-cell {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
 
   strong {
     color: #17324d;
-    font-size: 14px;
-    font-weight: 600;
-  }
-
-  span {
-    color: #94a3b8;
-    font-size: 12px;
+    font-size: 13px;
+    font-weight: 500;
   }
 }
 
@@ -553,7 +770,7 @@ onMounted(async () => {
   flex-direction: column;
   gap: 2px;
   color: #475569;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .list-count {
@@ -564,7 +781,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .empty-chip {
@@ -576,7 +793,7 @@ onMounted(async () => {
   border-radius: 999px;
   background: #f8fafc;
   color: #94a3b8;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .editor-shell {
@@ -627,10 +844,9 @@ onMounted(async () => {
 
 .editor-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.9fr);
+  grid-template-columns: 310px minmax(0, 1fr);
   gap: 14px;
-  align-items: start;
-  padding-bottom: 20px;
+  align-items: stretch;
 }
 
 .section-heading {
@@ -654,77 +870,66 @@ onMounted(async () => {
   }
 }
 
-.fields-panel,
-.preview-panel {
+.field-list-panel,
+.field-property-panel,
+.preview-section {
   min-width: 0;
-}
-
-.fields-panel {
-  display: flex;
-  flex-direction: column;
-  min-height: 100%;
-}
-
-.field-table {
-  overflow: hidden;
   border: 1px solid #e4ecf6;
   border-radius: 12px;
   background: #fff;
 }
 
-.field-table-head,
-.field-row-main {
+.field-list-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 500px;
+  padding: 14px;
+}
+
+.field-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 560px;
+  overflow-y: auto;
+  padding-right: 3px;
+}
+
+.field-list-item {
   display: grid;
-  grid-template-columns: 28px 28px minmax(88px, 1.1fr) minmax(88px, 1fr) 108px 52px 72px 48px;
-  gap: 8px;
+  grid-template-columns: 26px 24px minmax(0, 1fr) auto;
+  gap: 7px;
   align-items: center;
-}
-
-.field-table-head.has-list-col,
-.field-row.has-list-col .field-row-main {
-  grid-template-columns: 28px 28px minmax(80px, 1.05fr) minmax(80px, 0.95fr) 104px 48px 48px 72px 44px;
-}
-
-.field-table-head {
-  padding: 8px 12px;
-  background: #f5f8fc;
-  border-bottom: 1px solid #e8eef6;
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.field-row {
-  border-bottom: 1px solid #eef2f7;
+  min-height: 76px;
+  padding: 9px 8px;
+  border: 1px solid #e8eef6;
+  border-radius: 9px;
+  background: #fff;
+  cursor: pointer;
   transition:
+    border-color 0.15s ease,
     background-color 0.15s ease,
-    box-shadow 0.15s ease,
     opacity 0.15s ease;
 }
 
-.field-row:last-of-type {
-  border-bottom: 0;
-}
-
-.field-row:hover {
+.field-list-item:hover {
+  border-color: #c5d8ff;
   background: #fafcff;
 }
 
-.field-row.is-list-on {
-  background: #f7faff;
+.field-list-item.is-active {
+  border-color: #79a8ff;
+  background: #f1f6ff;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.08);
 }
 
-.field-row.is-dragging {
+.field-list-item.is-dragging {
   opacity: 0.45;
 }
 
-.field-row.is-drag-over {
-  box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.35);
-  background: #eff6ff;
-}
-
-.field-row-main {
-  padding: 10px 12px;
+.field-list-item.is-drag-over {
+  box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.3);
 }
 
 .field-drag-handle {
@@ -761,40 +966,155 @@ onMounted(async () => {
   background: #eef2f7;
   color: #64748b;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
-.col-flag {
+.field-list-content {
+  min-width: 0;
+}
+
+.field-list-title {
+  overflow: hidden;
+  color: #243b53;
+  font-size: 13px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field-list-meta {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.field-list-meta span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field-list-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.field-list-flags span {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #eaf2ff;
+  color: #3574cf;
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.field-property-panel {
+  min-height: 500px;
+  padding: 14px 16px;
+}
+
+.property-heading {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #edf1f6;
 }
 
-.col-action {
-  justify-self: end;
+.property-heading strong,
+.property-heading small {
+  display: block;
 }
 
-.field-row-main :deep(.el-input),
-.field-row-main :deep(.el-select) {
-  width: 100%;
+.property-heading strong {
+  color: #1f3349;
+  font-size: 14px;
+  font-weight: 500;
 }
 
-.field-row-main :deep(.el-input__wrapper),
-.field-row-main :deep(.el-select__wrapper) {
-  min-height: 32px;
-  box-shadow: 0 0 0 1px #e4ecf6 inset;
+.property-heading small {
+  margin-top: 2px;
+  color: #94a3b8;
+  font-size: 11px;
 }
 
-.field-row-main :deep(.el-input__wrapper:hover),
-.field-row-main :deep(.el-select__wrapper:hover) {
-  box-shadow: 0 0 0 1px #c5d8ff inset;
+.property-tabs {
+  margin-top: 2px;
 }
 
-.option-editor {
-  margin: 0 12px 10px;
-  padding: 10px;
-  border: 1px dashed #dbe5f2;
-  border-radius: 10px;
+.property-tabs :deep(.el-tabs__item),
+.preview-tabs :deep(.el-tabs__item) {
+  height: 38px;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.property-form {
+  padding: 8px 2px 0;
+}
+
+.property-form :deep(.el-form-item) {
+  margin-bottom: 13px;
+}
+
+.property-form :deep(.el-form-item__label) {
+  margin-bottom: 3px;
+  color: #52677d;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.property-help {
+  margin-top: 6px;
+  color: #94a3b8;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.setting-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+.setting-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 13px 14px;
+  border: 1px solid #e8eef6;
+  border-radius: 9px;
+  background: #fafcff;
+}
+
+.setting-item strong,
+.setting-item small {
+  display: block;
+}
+
+.setting-item strong {
+  color: #334e68;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.setting-item small {
+  margin-top: 3px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.query-property-form {
+  margin-top: 10px;
+  padding: 12px 14px 0;
+  border-radius: 9px;
   background: #f8fafc;
 }
 
@@ -803,16 +1123,28 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
+  padding: 8px 2px;
   color: #64748b;
   font-size: 12px;
 }
 
+.option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .option-row {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: 28px 1fr 1fr auto;
   gap: 8px;
-  margin-bottom: 8px;
   align-items: center;
+}
+
+.option-index {
+  color: #94a3b8;
+  font-size: 12px;
+  text-align: center;
 }
 
 .option-empty {
@@ -820,50 +1152,31 @@ onMounted(async () => {
   font-size: 12px;
 }
 
-.field-table-foot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 100%;
-  min-height: 44px;
-  padding: 0 12px;
-  border: 0;
-  border-top: 1px dashed #d7e4f4;
-  color: #3b82f6;
-  font-size: 13px;
-  font-weight: 500;
-  background: #f8fbff;
-  cursor: pointer;
-  transition:
-    color 0.15s ease,
-    background-color 0.15s ease;
-}
-
-.field-table-foot:hover {
-  color: #1d4ed8;
-  background: #eff6ff;
-}
-
-.preview-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  position: sticky;
-  top: 8px;
-  padding-bottom: 4px;
-}
-
-.preview-block {
+.preview-section {
+  margin-bottom: 20px;
   padding: 14px;
-  border: 1px solid #e4ecf6;
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(28, 48, 78, 0.03);
 }
 
-.preview-block:last-child {
+.preview-section-heading {
   margin-bottom: 0;
+}
+
+.preview-counts {
+  display: flex;
+  gap: 6px;
+}
+
+.preview-counts span {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.preview-tabs :deep(.el-tab-pane) {
+  min-height: 90px;
+  padding: 6px 2px 2px;
 }
 
 .list-preview {
@@ -902,7 +1215,7 @@ onMounted(async () => {
 .preview-form :deep(.el-form-item__label) {
   color: #475569;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 @media (max-width: 1100px) {
@@ -910,21 +1223,16 @@ onMounted(async () => {
     grid-template-columns: 1fr;
   }
 
-  .preview-panel {
-    position: static;
+  .field-list-panel {
+    min-height: auto;
+  }
+
+  .field-list {
+    max-height: 320px;
   }
 
   .meta-bar {
     grid-template-columns: 1fr 1fr;
-  }
-
-  .field-table {
-    overflow-x: auto;
-  }
-
-  .field-table-head,
-  .field-row-main {
-    min-width: 720px;
   }
 }
 </style>

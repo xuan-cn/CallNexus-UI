@@ -7,7 +7,7 @@
       </el-tag>
     </header>
 
-    <div ref="transcriptRef" class="assist-transcript" @scroll="handleTranscriptScroll">
+    <div ref="transcriptRef" class="assist-transcript" :class="{ 'is-empty': !dialogueItems.length }" @scroll="handleTranscriptScroll">
       <div v-if="dialogueItems.length" class="dialogue-list">
         <article
           v-for="item in dialogueItems"
@@ -22,11 +22,14 @@
 
           <div v-if="item.segment.speaker === 'CUSTOMER' && (item.suggestion || detail?.assistAgentId)" class="segment-suggestion">
             <button class="suggestion-heading" type="button" @click="toggleSuggestion(item.segment.id)">
-              <span class="suggestion-heading-text" :title="suggestionTitle(item.suggestion)">{{ suggestionTitle(item.suggestion) }}</span>
+              <span
+                class="suggestion-heading-text"
+                :class="{ 'is-expanded': isSuggestionExpanded(item.segment.id) }"
+                :title="suggestionTitle(item.suggestion)"
+              >
+                {{ suggestionTitle(item.suggestion) }}
+              </span>
               <span class="suggestion-heading-meta">
-                <el-tag v-if="item.suggestion?.sourceType" size="small" effect="plain">
-                  {{ sourceLabel(item.suggestion.sourceType) }}
-                </el-tag>
                 <span>{{ isSuggestionExpanded(item.segment.id) ? '收起' : '展开' }}</span>
               </span>
             </button>
@@ -41,13 +44,10 @@
                 <span>{{ item.suggestion.failureReason || '建议生成失败' }}</span>
                 <el-button link type="primary" @click.stop="regenerate(item.suggestion)">重新生成</el-button>
               </div>
-              <template v-else>
-                <div class="suggestion-content">{{ item.suggestion.suggestedReply }}</div>
-                <div class="suggestion-actions">
-                  <el-button link type="primary" @click.stop="copySuggestion(item.suggestion.suggestedReply)">复制话术</el-button>
-                  <el-button link type="primary" @click.stop="regenerate(item.suggestion)">换一条</el-button>
-                </div>
-              </template>
+              <div v-else class="suggestion-actions">
+                <el-button link type="primary" @click.stop="copySuggestion(item.suggestion.suggestedReply)">复制话术</el-button>
+                <el-button link type="primary" @click.stop="regenerate(item.suggestion)">换一条</el-button>
+              </div>
             </div>
           </div>
         </article>
@@ -85,13 +85,6 @@ const dialogueItems = computed(() => {
 });
 
 const speakerLabel = (speaker?: string) => ({ CUSTOMER: '客户', AGENT: '坐席', AI: 'AI' })[speaker || ''] || '通话方';
-const sourceLabel = (source?: string) => {
-  if (!source) return '';
-  if (source.startsWith('FAQ')) return 'FAQ';
-  if (source === 'DOCUMENT') return '知识文档';
-  if (source === 'MODEL') return '模型建议';
-  return source;
-};
 const suggestionTitle = (suggestion?: AgentAssistSuggestionVO) => {
   if (suggestion?.status === 'COMPLETED' && suggestion.suggestedReply?.trim()) return suggestion.suggestedReply.trim();
   if (suggestion?.status === 'FAILED') return suggestion.failureReason || '建议生成失败，点击展开重试';
@@ -300,6 +293,16 @@ onBeforeUnmount(() => {
   }
 }
 
+.assist-transcript.is-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.assist-transcript.is-empty :deep(.el-empty) {
+  width: 100%;
+}
+
 .dialogue-list {
   display: grid;
   min-width: 0;
@@ -351,9 +354,9 @@ onBeforeUnmount(() => {
   margin-top: 6px;
   margin-left: 12px;
   padding: 9px 11px;
-  border: 1px solid #cfe3fa;
+  border: 1px solid #d8dee8;
   border-radius: 10px;
-  background: #a6eba6;
+  background: #f1f3f5;
 }
 
 .suggestion-heading,
@@ -387,7 +390,14 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: normal;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
+}
+
+.suggestion-heading-text.is-expanded {
+  display: block;
+  overflow: visible;
+  text-overflow: clip;
+  -webkit-line-clamp: unset;
 }
 
 .suggestion-heading-meta {
@@ -402,17 +412,6 @@ onBeforeUnmount(() => {
   width: 100%;
   min-width: 0;
   padding-top: 5px;
-}
-
-.suggestion-content {
-  width: 100%;
-  min-width: 0;
-  color: #1d3557;
-  font-size: 12px;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-wrap: anywhere;
 }
 
 .suggestion-actions {

@@ -2,6 +2,7 @@ import type { IvrNodeType } from '@/api/callcenter/ivr-flow/types';
 
 export type IvrPropertyEditorType =
   | 'MEDIA_SELECT'
+  | 'NUMBER_INPUT'
   | 'TEXTAREA'
   | 'EXTENSION_INPUT'
   | 'QUEUE_SELECT'
@@ -17,6 +18,10 @@ export interface IvrPropertyDefinition {
   component: IvrPropertyEditorType;
   required?: boolean;
   placeholder?: string;
+  defaultValue?: unknown;
+  min?: number;
+  max?: number;
+  unit?: string;
 }
 
 export interface IvrEdgeSchema {
@@ -71,12 +76,38 @@ const definitions: IvrNodeDefinition[] = [
     label: '按键菜单',
     color: '#e6a23c',
     description: '播放提示音并根据用户按键分流',
-    propertySchema: [{ key: 'mediaId', label: '提示音', component: 'MEDIA_SELECT', required: true }],
+    propertySchema: [
+      { key: 'mediaId', label: '菜单提示音', component: 'MEDIA_SELECT', required: true },
+      {
+        key: 'inputTimeoutSeconds',
+        label: '等待按键时间',
+        component: 'NUMBER_INPUT',
+        defaultValue: 5,
+        min: 3,
+        max: 30,
+        unit: '秒'
+      },
+      {
+        key: 'maxAttempts',
+        label: '最大尝试次数',
+        component: 'NUMBER_INPUT',
+        defaultValue: 3,
+        min: 1,
+        max: 5,
+        unit: '次'
+      },
+      {
+        key: 'invalidMediaId',
+        label: '错误或超时提示音',
+        component: 'MEDIA_SELECT',
+        placeholder: '不选择时使用短静音后重试'
+      }
+    ],
     edgeSchema: {
-      label: '按键',
+      label: '按键或失败处理',
       component: 'DTMF_DIGIT',
       required: true,
-      placeholder: '0-9'
+      placeholder: '请选择按键或失败处理'
     }
   },
   {

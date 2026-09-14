@@ -15,7 +15,16 @@
             <el-option label="已解决" value="RESOLVED" /><el-option label="已关闭" value="CLOSED" />
           </el-select>
         </el-form-item>
-        <el-form-item><el-button type="primary" @click="load">查询</el-button></el-form-item>
+        <el-form-item label="工单模板">
+          <el-select v-model="query.templateId" clearable filterable placeholder="全部模板" style="width: 180px" @change="handleTemplateChange">
+            <el-option v-for="template in ticketTemplates" :key="template.id" :label="template.templateName" :value="template.id" />
+          </el-select>
+        </el-form-item>
+        <DynamicQueryFields v-model="dynamicQueryValues" :fields="querySchemaFields" @search="handleSearch" />
+        <el-form-item>
+          <el-button type="primary" @click="handleSearch">查询</el-button>
+          <el-button @click="resetQuery">重置</el-button>
+        </el-form-item>
       </el-form>
     </el-card>
     <el-card shadow="hover">
@@ -24,6 +33,7 @@
           <el-icon><Plus /></el-icon>
           新增工单
         </el-button>
+        <el-button plain @click="exportCurrentTickets">导出</el-button>
       </div>
       <el-table v-loading="loading" :data="rows">
         <el-table-column label="工单编号" min-width="190">
@@ -40,6 +50,9 @@
         </el-table-column>
         <el-table-column label="来电号码" prop="callerNumber" min-width="140" />
         <el-table-column label="来源通话" prop="sourceCallId" min-width="240" show-overflow-tooltip />
+        <el-table-column v-for="field in listVisibleTicketFields" :key="field.fieldCode" :label="field.fieldName" min-width="110" show-overflow-tooltip>
+          <template #default="{ row }">{{ formatDynamicFieldValue(row.formData?.[field.fieldCode], field) }}</template>
+        </el-table-column>
         <el-table-column label="创建时间" prop="createTime" min-width="170" />
         <el-table-column label="操作" fixed="right" width="260">
           <template #default="{ row }">
@@ -78,13 +91,18 @@
 </template>
 
 <script setup name="TicketManagement" lang="ts">
-import { closeTicket, listTickets, resolveTicketDirectly, submitTicket, TicketQuery, TicketVO } from '@/api/callcenter/ticket';
+import { closeTicket, exportTickets, resolveTicketDirectly, searchTickets, submitTicket, TicketQuery, TicketVO } from '@/api/callcenter/ticket';
+import { getFormQuerySchema, listFormTemplates } from '@/api/callcenter/form-template';
+import type { FormQueryField, FormTemplate } from '@/api/callcenter/form-template/types';
+import DynamicQueryFields from '@/components/callcenter/DynamicQueryFields.vue';
+import { buildDynamicFilters, formatDynamicFieldValue } from '@/utils/callcenter/dynamic-form-query';
 import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/index.vue';
 import DynamicBusinessFormDialog from '@/layout/components/DynamicBusinessFormDialog.vue';
 import SubmitVerify from '@/components/Process/submitVerify.vue';
 import ApprovalRecord from '@/components/Process/approvalRecord.vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import AiTicketDraftReview from './AiTicketDraftReview.vue';
+import FileSaver from 'file-saver';
 
 const route = useRoute();
 const loading = ref(false);
@@ -98,16 +116,56 @@ const submitVerifyRef = ref<InstanceType<typeof SubmitVerify>>();
 const approvalRecordRef = ref<InstanceType<typeof ApprovalRecord>>();
 const taskVariables = ref<Record<string, unknown>>({});
 const query = reactive<TicketQuery>({ pageNum: 1, pageSize: 10 });
+const ticketTemplates = ref<FormTemplate[]>([]);
+const querySchemaFields = ref<FormQueryField[]>([]);
+const dynamicQueryValues = ref<Record<string, unknown>>({});
+const listVisibleTicketFields = computed(() =>
+  (ticketTemplates.value.find((template) => String(template.id) === String(query.templateId))?.fields || [])
+    .filter((field) => field.enabled !== false && field.listVisible)
+    .sort((first, second) => (first.sortOrder || 0) - (second.sortOrder || 0))
+);
 const activeTab = ref('tickets');
 const load = async () => {
   loading.value = true;
   try {
-    const response = await listTickets(query);
+    query.dynamicFilters = buildDynamicFilters(querySchemaFields.value, dynamicQueryValues.value);
+    const response = await searchTickets(query);
     rows.value = response.rows;
     total.value = response.total;
   } finally {
     loading.value = false;
   }
+};
+const exportCurrentTickets = async () => {
+  const data = {
+    ...query,
+    dynamicFilters: buildDynamicFilters(querySchemaFields.value, dynamicQueryValues.value)
+  };
+  const blob = await exportTickets(data);
+  FileSaver.saveAs(blob, `工单资料_${Date.now()}.xlsx`);
+};
+const handleSearch = () => {
+  query.pageNum = 1;
+  load();
+};
+const handleTemplateChange = async () => {
+  querySchemaFields.value = [];
+  dynamicQueryValues.value = {};
+  if (query.templateId) {
+    querySchemaFields.value = (await getFormQuerySchema(query.templateId)).data?.fields || [];
+  }
+  handleSearch();
+};
+const resetQuery = () => {
+  query.pageNum = 1;
+  query.ticketNo = '';
+  query.callerNumber = '';
+  query.ticketStatus = undefined;
+  query.templateId = undefined;
+  query.dynamicFilters = [];
+  querySchemaFields.value = [];
+  dynamicQueryValues.value = {};
+  load();
 };
 const showDetail = (row: TicketVO) => {
   detailId.value = row.id;
@@ -167,7 +225,12 @@ const openCreatedTicket = async (id: string | number) => {
   detailVisible.value = true;
 };
 onMounted(async () => {
-  await load();
+  const [templates] = await Promise.all([listFormTemplates('TICKET'), load()]);
+  ticketTemplates.value = (templates.data || []).filter((template) => template.enabled);
+  if (ticketTemplates.value.length === 1 && !query.templateId) {
+    query.templateId = ticketTemplates.value[0].id;
+    await handleTemplateChange();
+  }
   if (route.query.id) {
     detailId.value = String(route.query.id);
     detailVisible.value = true;

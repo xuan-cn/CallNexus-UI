@@ -49,12 +49,6 @@
                   <span v-if="customer?.createTime" class="hero-divider">·</span>
                   <span v-if="customer?.createTime" class="hero-meta-text">建档 {{ formatShortTime(customer.createTime) }}</span>
                 </div>
-                <div v-if="heroFacts.length" class="hero-facts-inline">
-                  <template v-for="(fact, index) in heroFacts" :key="fact.label">
-                    <span v-if="index > 0" class="hero-divider">·</span>
-                    <span class="hero-meta-text">{{ fact.label }} {{ fact.value }}</span>
-                  </template>
-                </div>
               </div>
             </div>
 
@@ -592,53 +586,6 @@ const heroChips = computed(() => {
   return chips;
 });
 
-const formatFactValue = (value: unknown) => {
-  if (value === undefined || value === null || value === '') return '';
-  if (Array.isArray(value)) return value.filter(Boolean).join('、');
-  return String(value);
-};
-
-const heroFacts = computed(() => {
-  const facts: Array<{ label: string; value: string }> = [];
-  const preferredCodes = ['gender', 'email', 'mail', 'country', 'province', 'city'];
-  const preferredNames = ['性别', '邮箱', '国家', '地区', '省', '州', '城市'];
-  const fields = selectedCustomerTemplate.value?.fields || [];
-  const picked = new Set<string>();
-
-  const pushFact = (label: string, value: unknown, key: string) => {
-    if (picked.has(key) || facts.length >= 3) return;
-    const text = formatFactValue(value);
-    if (!text) return;
-    picked.add(key);
-    facts.push({ label, value: text });
-  };
-
-  // 优先常见字段，再兜底任意已填的短自定义字段
-  preferredCodes.forEach((code) => {
-    const field = fields.find((item) =>
-      String(item.fieldCode || '')
-        .toLowerCase()
-        .includes(code)
-    );
-    if (!field) return;
-    pushFact(field.fieldName, customerFormData[field.fieldCode], String(field.fieldCode));
-  });
-
-  fields.forEach((field) => {
-    if (field.fieldType === 'TEXTAREA' || field.fieldType === 'FILE') return;
-    if (!preferredNames.some((name) => field.fieldName.includes(name))) return;
-    pushFact(field.fieldName, customerFormData[field.fieldCode], String(field.fieldCode));
-  });
-
-  fields.forEach((field) => {
-    if (field.fieldType === 'TEXTAREA' || field.fieldType === 'FILE') return;
-    if (field.layoutSpan === 24) return;
-    pushFact(field.fieldName, customerFormData[field.fieldCode], String(field.fieldCode));
-  });
-
-  return facts;
-});
-
 const startEditName = async () => {
   editingName.value = true;
   await nextTick();
@@ -1123,7 +1070,7 @@ const handleClosed = () => emit('closed');
 
 .pop-body {
   display: grid;
-  grid-template-columns: minmax(420px, 38%) minmax(0, 1fr);
+  grid-template-columns: minmax(360px, 31%) minmax(0, 1fr);
   gap: 14px;
   min-height: calc(100vh - 190px);
 }
@@ -1137,18 +1084,33 @@ const handleClosed = () => emit('closed');
   min-width: 0;
 }
 
+.pop-side {
+  position: sticky;
+  top: 12px;
+  display: flex;
+  align-self: start;
+  height: calc(100vh - 126px);
+  min-height: 480px;
+  max-height: calc(100vh - 126px);
+}
+
 .screen-assist-panel {
   display: flex;
   flex: 1;
   flex-direction: column;
   min-width: 0;
-  min-height: calc(100vh - 190px);
+  min-height: 0;
 }
 
 .screen-assist-panel :deep(.assist-transcript) {
-  flex: 0 1 auto;
-  min-height: 280px;
-  max-height: min(560px, calc(100vh - 286px));
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+.screen-assist-panel :deep(.assist-transcript.is-empty) {
+  flex: 1 1 auto;
+  max-height: none;
 }
 
 .customer-hero {
@@ -1309,8 +1271,7 @@ const handleClosed = () => emit('closed');
   font-weight: 700;
 }
 
-.hero-phone-row,
-.hero-facts-inline {
+.hero-phone-row {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1318,11 +1279,6 @@ const handleClosed = () => emit('closed');
   color: var(--accent);
   font-size: 13px;
   font-weight: 600;
-}
-
-.hero-facts-inline {
-  color: var(--muted);
-  font-weight: 500;
 }
 
 .hero-divider {
@@ -1639,6 +1595,23 @@ const handleClosed = () => emit('closed');
 
   .pop-body {
     grid-template-columns: 1fr;
+  }
+
+  .pop-side {
+    position: static;
+    display: block;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .screen-assist-panel {
+    min-height: 420px;
+  }
+
+  .screen-assist-panel :deep(.assist-transcript) {
+    min-height: 340px;
+    max-height: 520px;
   }
 
   .hero-top {

@@ -1,4 +1,5 @@
 import request from '@/utils/request';
+import type { DynamicFieldFilter } from '@/api/callcenter/form-template/types';
 
 export interface CreateTicketForm {
   customerId?: string | number;
@@ -34,9 +35,16 @@ export interface TicketQuery extends PageQuery {
   ticketNo?: string;
   callerNumber?: string;
   ticketStatus?: TicketStatus;
+  templateId?: string | number;
+  dynamicFilters?: DynamicFieldFilter[];
 }
 
 export const listTickets = (params: TicketQuery) => request({ url: '/api/v1/tickets', method: 'get', params });
+
+export const searchTickets = (data: TicketQuery) => request({ url: '/api/v1/tickets/search', method: 'post', data });
+
+export const exportTickets = (data: TicketQuery) =>
+  request<Blob>({ url: '/api/v1/tickets/export', method: 'post', data, responseType: 'blob' });
 
 export const getTicket = (id: string | number) => request<TicketVO>({ url: `/api/v1/tickets/${id}`, method: 'get' });
 

@@ -1,11 +1,13 @@
 <template>
-  <el-select :model-value="modelValue" filterable style="width: 100%" @change="emit('update:modelValue', $event)">
-    <el-option
-      v-for="media in mediaOptions"
-      :key="media.id"
-      :label="`${media.assetName}（v${media.latestVersionNo || 1}）`"
-      :value="media.id"
-    />
+  <el-select
+    :model-value="modelValue"
+    :placeholder="placeholder"
+    filterable
+    clearable
+    style="width: 100%"
+    @change="emit('update:modelValue', $event)"
+  >
+    <el-option v-for="media in mediaOptions" :key="media.id" :label="`${media.assetName}（v${media.latestVersionNo || 1}）`" :value="media.id" />
   </el-select>
 </template>
 
@@ -21,6 +23,6 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: string | number): void;
+  (e: 'update:modelValue', value: string | number | undefined): void;
 }>();
 </script>

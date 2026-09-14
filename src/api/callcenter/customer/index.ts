@@ -1,4 +1,5 @@
 import request from '@/utils/request';
+import type { DynamicFieldFilter } from '@/api/callcenter/form-template/types';
 
 export interface CreateCustomerForm {
   primaryPhone: string;
@@ -75,6 +76,8 @@ export interface CustomerQuery extends PageQuery {
   importBatchId?: string | number;
   importTaskId?: string | number;
   assignmentState?: 'ASSIGNED' | 'UNASSIGNED' | '';
+  templateId?: string | number;
+  dynamicFilters?: DynamicFieldFilter[];
 }
 
 export interface CustomerAssignmentForm {
@@ -178,6 +181,11 @@ export interface CustomerImportAnalysisVO {
 }
 
 export const listCustomers = (params: CustomerQuery) => request({ url: '/api/v1/customers', method: 'get', params });
+
+export const searchCustomers = (data: CustomerQuery) => request({ url: '/api/v1/customers/search', method: 'post', data });
+
+export const exportCustomers = (data: CustomerQuery) =>
+  request<Blob>({ url: '/api/v1/customers/export', method: 'post', data, responseType: 'blob' });
 
 export const getCustomer = (id: string | number) => request<CustomerVO>({ url: `/api/v1/customers/${id}`, method: 'get' });
 

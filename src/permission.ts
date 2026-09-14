@@ -21,6 +21,11 @@ const isWhiteList = (path: string) => {
 
 const isScreenPath = (path: string) => isPathMatch(screenPathPattern, path);
 
+const isAccessibleRoute = (fullPath: string) => {
+  const resolved = router.resolve(fullPath);
+  return resolved.matched.length > 0 && !resolved.matched.some((record) => record.path === '/:pathMatch(.*)*');
+};
+
 const registerAccessRoutes = async () => {
   const accessRoutes = await usePermissionStore().generateRoutes();
   accessRoutes.forEach((route) => {
@@ -64,8 +69,13 @@ router.beforeEach(async (to) => {
       window.__setLoaderStatus?.('正在加载菜单权限…');
       await registerAccessRoutes();
       window.__appLoaded?.();
+      // 登录页可能携带上一个账号访问过的地址。当前账号没有该菜单时回到首页，
+      // 避免动态路由加载完成后仍重新进入 catch-all 404。
+      if (!isAccessibleRoute(to.fullPath)) {
+        return { path: '/index', replace: true };
+      }
       // hack：确保 addRoute 完成后按目标路由重新进入
-      return { path: to.path, replace: true, params: to.params, query: to.query, hash: to.hash, name: to.name as string };
+      return { path: to.path, replace: true, query: to.query, hash: to.hash };
     }
     return true;
   }

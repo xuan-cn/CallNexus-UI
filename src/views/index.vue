@@ -34,20 +34,19 @@
       </div>
     </section>
 
-    <el-card class="metric-overview-card" shadow="never">
-      <div class="metric-grid">
-        <article
-          v-for="item in metrics"
-          :key="item.label"
-          class="metric-card"
-          :class="{ 'is-alert': item.alert }"
-          @click="item.onClick && item.onClick()"
-        >
-          <el-statistic class="metric-statistic" :title="item.label" :value="item.value" :suffix="item.suffix" />
-          <small :class="{ positive: item.positive, warn: item.alert }">{{ item.change }}</small>
-        </article>
-      </div>
-    </el-card>
+    <section class="metric-grid">
+      <el-card
+        v-for="item in metrics"
+        :key="item.label"
+        class="metric-card"
+        :class="{ 'is-alert': item.alert }"
+        shadow="never"
+        @click="item.onClick && item.onClick()"
+      >
+        <el-statistic class="metric-statistic" :title="item.label" :value="item.value" :suffix="item.suffix" />
+        <small :class="{ positive: item.positive, warn: item.alert }">{{ item.change }}</small>
+      </el-card>
+    </section>
 
     <section class="main-grid">
       <article class="panel">
@@ -803,27 +802,26 @@ onMounted(() => {
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.metric-overview-card {
+  gap: 12px;
   margin-bottom: 12px;
-  border-radius: 14px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 8px 24px rgba(15, 23, 42, 0.03);
-
-  :deep(.el-card__body) {
-    padding: 0;
-  }
 }
 
 .metric-card {
   min-width: 0;
-  padding: 24px 28px 22px;
   cursor: pointer;
-  border-right: 1px solid var(--line);
-  transition: background 0.18s ease;
+  border-radius: 14px;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 
-  &:last-child { border-right: 0; }
-  &:hover { background: #fafcff; }
+  :deep(.el-card__body) {
+    padding: 22px 24px 20px;
+  }
+
+  &:hover {
+    border-color: #d5e4f7;
+    background: #fafcff;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.06);
+    transform: translateY(-1px);
+  }
 
   small {
     display: block;
@@ -1160,18 +1158,6 @@ onMounted(() => {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .metric-card {
-    border-bottom: 1px solid var(--line);
-  }
-
-  .metric-card:nth-child(2n) {
-    border-right: 0;
-  }
-
-  .metric-card:nth-last-child(-n + 2) {
-    border-bottom: 0;
-  }
-
   .main-grid,
   .bottom-grid {
     grid-template-columns: 1fr;
@@ -1181,17 +1167,6 @@ onMounted(() => {
 @media (max-width: 900px) {
   .metric-grid {
     grid-template-columns: 1fr;
-  }
-
-  .metric-card,
-  .metric-card:nth-child(2n),
-  .metric-card:nth-last-child(-n + 2) {
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .metric-card:last-child {
-    border-bottom: 0;
   }
 
   .page-head {

@@ -28,6 +28,7 @@
           <el-button icon="ZoomIn" title="放大" @click="lf?.zoom(true)" />
           <el-button icon="ZoomOut" title="缩小" @click="lf?.zoom(false)" />
           <el-button icon="FullScreen" title="适应画布" @click="fitCanvas" />
+          <el-button icon="Rank" title="整理布局" @click="organizeLayout">整理</el-button>
         </el-button-group>
         <span class="muted">点击节点或连线编辑，选中后按 Delete 可删除</span>
       </div>
@@ -315,6 +316,7 @@ import type { AiIntentVO } from '@/api/callcenter/ai-knowledge/types';
 import type { CallQueueVO } from '@/api/callcenter/call-queue/types';
 import type { FormTemplate } from '@/api/callcenter/form-template/types';
 import type { AiWorkflowDefinition, AiWorkflowEdge, AiWorkflowNode } from '@/api/callcenter/ai-workflow/types';
+import { createLayeredFlowLayout } from '@/utils/logicflowLayout';
 import { aiWorkflowPaletteDefinitions, getAiWorkflowNodeDefinition, type AiWorkflowNodeDefinition } from './nodeRegistry';
 
 const props = withDefaults(
@@ -438,6 +440,7 @@ const customerFieldOptions = computed<StructuredFieldOption[]>(() => {
   const used = new Set(result.map((item) => item.value));
   props.customerTemplates.forEach((template) =>
     (template.fields || [])
+      .filter((field) => field.enabled !== false && field.aiFillEnabled !== false)
       .filter((field) => field.fieldType !== 'FILE')
       .forEach((field) => {
         const value = `customer.custom.${field.fieldCode}`;
@@ -637,6 +640,14 @@ const startDrag = (definition: AiWorkflowNodeDefinition) => {
 const fitCanvas = () => {
   lf?.fitView(40, 40);
   lf?.zoom(0.82);
+};
+const organizeLayout = () => {
+  if (!lf) return;
+  const graph = readGraph();
+  const nodes = createLayeredFlowLayout(graph.nodes, graph.edges);
+  nodes.forEach((node) => lf?.graphModel.moveNode2Coordinate(node.id, node.x, node.y, true));
+  syncGraph();
+  nextTick(fitCanvas);
 };
 const initialize = async () => {
   await nextTick();

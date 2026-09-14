@@ -8,9 +8,11 @@ import VoiceMailSelectEditor from './VoiceMailSelectEditor.vue';
 import AiAgentSelectEditor from './AiAgentSelectEditor.vue';
 import ExternalNumberGroupEditor from './ExternalNumberGroupEditor.vue';
 import TextAreaEditor from './TextAreaEditor.vue';
+import NumberInputEditor from './NumberInputEditor.vue';
 
 const propertyEditorRegistry: Record<IvrPropertyEditorType, Component> = {
   MEDIA_SELECT: MediaSelectEditor,
+  NUMBER_INPUT: NumberInputEditor,
   TEXTAREA: TextAreaEditor,
   EXTENSION_INPUT: ExtensionInputEditor,
   QUEUE_SELECT: QueueSelectEditor,

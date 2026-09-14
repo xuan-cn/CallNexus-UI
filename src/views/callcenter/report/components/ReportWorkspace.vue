@@ -11,29 +11,30 @@
             <p>{{ subtitle }}</p>
           </div>
         </div>
-        <el-form :inline="true" size="small" @submit.prevent>
-          <el-form-item>
-            <el-date-picker
-              v-model="dateRange"
-              type="daterange"
-              value-format="YYYY-MM-DD"
-              range-separator="至"
-              start-placeholder="开始日期"
-              end-placeholder="结束日期"
-              :clearable="false"
-            />
-          </el-form-item>
-          <el-form-item v-if="mode !== 'overview'">
-            <el-input v-model="query.keyword" clearable placeholder="号码、坐席或名称" @keyup.enter="load" />
-          </el-form-item>
-          <el-form-item v-if="mode === 'call'">
-            <el-select v-model="query.direction" clearable placeholder="通话方向" style="width: 110px">
-              <el-option label="呼入" value="INBOUND" /><el-option label="呼出" value="OUTBOUND" /><el-option label="内部" value="INTERNAL" />
-            </el-select>
-          </el-form-item>
-          <el-form-item><el-button type="primary" :loading="loading" @click="handleQuery">查询</el-button></el-form-item>
-        </el-form>
       </div>
+      <el-form class="filter-form" :inline="true" size="small" @submit.prevent>
+        <el-form-item>
+          <el-date-picker
+            v-model="dateRange"
+            class="date-range-picker"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            :clearable="false"
+          />
+        </el-form-item>
+        <el-form-item v-if="mode !== 'overview'">
+          <el-input v-model="query.keyword" clearable placeholder="号码、坐席或名称" @keyup.enter="load" />
+        </el-form-item>
+        <el-form-item v-if="mode === 'call'">
+          <el-select v-model="query.direction" clearable placeholder="通话方向" style="width: 110px">
+            <el-option label="呼入" value="INBOUND" /><el-option label="呼出" value="OUTBOUND" /><el-option label="内部" value="INTERNAL" />
+          </el-select>
+        </el-form-item>
+        <el-form-item><el-button type="primary" :loading="loading" @click="handleQuery">查询</el-button></el-form-item>
+      </el-form>
     </el-card>
 
     <template v-if="mode === 'overview' || mode === 'call'">
@@ -128,6 +129,9 @@
           <el-table-column label="利用率" width="78" align="center"
             ><template #default="{ row }">{{ percent(row.utilizationRate) }}</template></el-table-column
           >
+          <el-table-column label="操作" width="64" align="center" fixed="right">
+            <template #default="{ row }"><el-button link type="primary" @click="openAgentDetail(row)">详情</el-button></template>
+          </el-table-column>
         </el-table>
       </el-card>
     </template>
@@ -188,6 +192,88 @@
         </el-table>
       </el-card>
     </template>
+
+    <el-drawer v-model="agentDetailVisible" :title="agentDetailTitle" size="780px" append-to-body class="agent-report-drawer">
+      <template v-if="selectedAgent">
+        <div class="detail-period">统计周期：{{ dateRange[0] }} 至 {{ dateRange[1] }}</div>
+        <div class="detail-metrics">
+          <div>
+            <span>处理量</span><strong>{{ selectedAgent.handledCount }}</strong>
+          </div>
+          <div>
+            <span>呼入接听</span><strong>{{ selectedAgent.inboundAnsweredCount }}</strong>
+          </div>
+          <div>
+            <span>外呼接通</span><strong>{{ selectedAgent.outboundAnsweredCount }}</strong>
+          </div>
+          <div>
+            <span>未接</span><strong>{{ selectedAgent.missedCount }}</strong>
+          </div>
+          <div>
+            <span>平均响应</span><strong>{{ duration(selectedAgent.averageResponseSeconds) }}</strong>
+          </div>
+          <div>
+            <span>平均通话</span><strong>{{ duration(selectedAgent.averageTalkSeconds) }}</strong>
+          </div>
+          <div>
+            <span>在线时长</span><strong>{{ duration(selectedAgent.onlineSeconds) }}</strong>
+          </div>
+          <div>
+            <span>利用率</span><strong>{{ percent(selectedAgent.utilizationRate) }}</strong>
+          </div>
+        </div>
+
+        <el-tabs v-model="agentDetailTab" @tab-change="handleAgentDetailTabChange">
+          <el-tab-pane label="状态轨迹" name="presence">
+            <el-table v-loading="presenceLoading" :data="presenceRows" size="small" max-height="520">
+              <el-table-column label="状态" width="88">
+                <template #default="{ row }">{{ presenceStatusLabel(row.status) }}</template>
+              </el-table-column>
+              <el-table-column label="来源" width="92">
+                <template #default="{ row }">{{ presenceSourceLabel(row.source) }}</template>
+              </el-table-column>
+              <el-table-column label="开始时间" prop="startedAt" width="158" />
+              <el-table-column label="结束时间" width="158">
+                <template #default="{ row }">{{ row.endedAt || '进行中' }}</template>
+              </el-table-column>
+              <el-table-column label="持续时长" min-width="92" align="right">
+                <template #default="{ row }">{{ duration(row.durationSeconds) }}</template>
+              </el-table-column>
+            </el-table>
+            <pagination
+              v-show="presenceTotal > 0"
+              v-model:page="presenceQuery.pageNum"
+              v-model:limit="presenceQuery.pageSize"
+              :total="presenceTotal"
+              @pagination="loadAgentPresence"
+            />
+          </el-tab-pane>
+          <el-tab-pane label="近期通话" name="calls">
+            <el-table v-loading="agentCallsLoading" :data="agentCallRows" size="small" max-height="520">
+              <el-table-column label="开始时间" prop="startedAt" width="158" />
+              <el-table-column label="方向" width="66">
+                <template #default="{ row }">{{ directionLabel(row.direction) }}</template>
+              </el-table-column>
+              <el-table-column label="客户号码" prop="customerNumber" min-width="120" show-overflow-tooltip />
+              <el-table-column label="结果" width="76">
+                <template #default="{ row }">{{ row.answeredAt ? '已接通' : '未接通' }}</template>
+              </el-table-column>
+              <el-table-column label="通话时长" width="92" align="right">
+                <template #default="{ row }">{{ duration(row.talkSeconds) }}</template>
+              </el-table-column>
+              <el-table-column label="挂断原因" prop="hangupCause" min-width="110" show-overflow-tooltip />
+            </el-table>
+            <pagination
+              v-show="agentCallTotal > 0"
+              v-model:page="agentCallQuery.pageNum"
+              v-model:limit="agentCallQuery.pageSize"
+              :total="agentCallTotal"
+              @pagination="loadAgentCalls"
+            />
+          </el-tab-pane>
+        </el-tabs>
+      </template>
+    </el-drawer>
   </div>
 </template>
 
@@ -202,12 +288,15 @@ import {
   getReportOverview,
   getReportOverviewDistribution,
   getReportOverviewTrend,
+  listAgentReportCalls,
+  listAgentReportPresenceLogs,
   listAgentReports,
   listCallReportDetails,
   listQueueReports
 } from '@/api/callcenter/report';
 import type {
   AgentReportVO,
+  AgentPresenceLogVO,
   CallDetailVO,
   CallDistributionVO,
   OverviewKpiVO,
@@ -229,6 +318,17 @@ const trend = ref<ReportTrendPointVO[]>([]);
 const distribution = ref<CallDistributionVO[]>([]);
 const callRows = ref<CallDetailVO[]>([]);
 const agentRows = ref<AgentReportVO[]>([]);
+const selectedAgent = ref<AgentReportVO>();
+const agentDetailVisible = ref(false);
+const agentDetailTab = ref('presence');
+const presenceLoading = ref(false);
+const agentCallsLoading = ref(false);
+const presenceRows = ref<AgentPresenceLogVO[]>([]);
+const agentCallRows = ref<CallDetailVO[]>([]);
+const presenceTotal = ref(0);
+const agentCallTotal = ref(0);
+const presenceQuery = reactive<ReportQuery>({ pageNum: 1, pageSize: 10 });
+const agentCallQuery = reactive<ReportQuery>({ pageNum: 1, pageSize: 10 });
 const queueRows = ref<QueueReportVO[]>([]);
 const total = ref(0);
 const trendChartRef = ref<HTMLDivElement>();
@@ -248,6 +348,11 @@ const subtitles = {
 const title = computed(() => titles[props.mode]);
 const subtitle = computed(() => subtitles[props.mode]);
 const pageIcon = computed(() => ({ overview: DataAnalysis, call: Headset, agent: User, queue: Histogram })[props.mode]);
+const agentDetailTitle = computed(() => {
+  if (!selectedAgent.value) return '坐席详情';
+  const identity = selectedAgent.value.extension || selectedAgent.value.agentCode;
+  return `${selectedAgent.value.agentName}${identity ? `（${identity}）` : ''}`;
+});
 const metricItems = computed(() => {
   const value = kpis.value;
   return [
@@ -311,6 +416,47 @@ const loadCallDetails = async () => {
   const res = await listCallReportDetails(params());
   callRows.value = res.rows || [];
   total.value = res.total || 0;
+};
+const detailParams = (pageQuery: ReportQuery) => ({
+  ...pageQuery,
+  beginDate: dateRange.value[0],
+  endDate: dateRange.value[1]
+});
+const openAgentDetail = async (row: AgentReportVO) => {
+  selectedAgent.value = row;
+  presenceRows.value = [];
+  agentCallRows.value = [];
+  presenceQuery.pageNum = 1;
+  agentCallQuery.pageNum = 1;
+  agentDetailTab.value = 'presence';
+  agentDetailVisible.value = true;
+  await loadAgentPresence();
+};
+const loadAgentPresence = async () => {
+  if (!selectedAgent.value) return;
+  presenceLoading.value = true;
+  try {
+    const res = await listAgentReportPresenceLogs(selectedAgent.value.agentId, detailParams(presenceQuery));
+    presenceRows.value = res.rows || [];
+    presenceTotal.value = res.total || 0;
+  } finally {
+    presenceLoading.value = false;
+  }
+};
+const loadAgentCalls = async () => {
+  if (!selectedAgent.value) return;
+  agentCallsLoading.value = true;
+  try {
+    const res = await listAgentReportCalls(selectedAgent.value.agentId, detailParams(agentCallQuery));
+    agentCallRows.value = res.rows || [];
+    agentCallTotal.value = res.total || 0;
+  } finally {
+    agentCallsLoading.value = false;
+  }
+};
+const handleAgentDetailTabChange = (name: string | number) => {
+  if (name === 'presence') loadAgentPresence();
+  if (name === 'calls') loadAgentCalls();
 };
 const chartBase = () => ({
   textStyle: { fontFamily: 'inherit', fontSize: 11 },
@@ -376,6 +522,10 @@ const percent = (value?: number) => (value == null ? '--' : `${Number(value).toF
 const directionLabel = (value: string) => ({ INBOUND: '呼入', OUTBOUND: '呼出', INTERNAL: '内部' })[value] || value;
 const resultLabel = (value: string) =>
   ({ ANSWERED: '已接通', NO_ANSWER: '无人接听', BUSY: '忙线', REJECTED: '拒接', FAILED: '失败' })[value] || value;
+const presenceStatusLabel = (value: string) =>
+  ({ IDLE: '空闲', NOT_READY: '示忙', BUSY: '通话中', AFTER_CALL: '话后整理', OFFLINE: '离线' })[value] || value;
+const presenceSourceLabel = (value: string) =>
+  ({ SIGN_IN: '签入', SIGN_OUT: '签出', MANUAL: '人工', API: '接口', TELEPHONY_EVENT: '电话事件', SYSTEM_AUTO: '系统自动' })[value] || value;
 const resize = () => {
   trendChart?.resize();
   distributionChart?.resize();
@@ -411,13 +561,17 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 12px;
 }
+.filter-card {
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+}
 .filter-card :deep(.el-card__body) {
   padding: 12px 14px;
 }
 .page-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 16px;
 }
 .page-title {
@@ -446,8 +600,26 @@ onBeforeUnmount(() => {
   color: var(--el-text-color-secondary);
   font-size: 11px;
 }
-.page-head :deep(.el-form-item) {
+.filter-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+.filter-form :deep(.el-form-item) {
+  min-width: 0;
   margin-bottom: 0;
+  margin-right: 0;
+}
+.filter-form :deep(.el-input) {
+  width: 180px;
+}
+.date-range-picker {
+  width: 260px !important;
 }
 .metric-grid {
   display: grid;
@@ -558,12 +730,56 @@ onBeforeUnmount(() => {
   line-height: 16px;
   white-space: nowrap;
 }
+:global(.agent-report-drawer .el-drawer__body) {
+  padding: 10px 16px 16px;
+  font-size: 12px;
+}
+.detail-period {
+  margin-bottom: 8px;
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+}
+.detail-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.detail-metrics div {
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: var(--el-fill-color-lighter);
+}
+.detail-metrics span,
+.detail-metrics strong {
+  display: block;
+}
+.detail-metrics span {
+  color: var(--el-text-color-secondary);
+  font-size: 10px;
+}
+.detail-metrics strong {
+  margin-top: 4px;
+  color: var(--el-text-color-primary);
+  font-size: 15px;
+  font-weight: 500;
+}
+:global(.agent-report-drawer .el-table) {
+  font-size: 11px;
+}
 @media (max-width: 1200px) {
   .metric-grid {
     grid-template-columns: repeat(3, 1fr);
   }
   .chart-grid {
     grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 760px) {
+  .filter-form :deep(.el-form-item),
+  .filter-form :deep(.el-input),
+  .date-range-picker {
+    width: 100% !important;
   }
 }
 </style>

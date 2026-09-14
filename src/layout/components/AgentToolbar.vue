@@ -87,11 +87,7 @@
 
       <div class="soft-actions">
         <!-- 电话框：未通话可拨打；通话中显示号码 + 挂断（沿用原 soft-dial 形态） -->
-        <div
-          v-if="!(incomingCall && !callActive)"
-          class="soft-dial"
-          :class="{ 'is-live': callActive }"
-        >
+        <div v-if="!(incomingCall && !callActive)" class="soft-dial" :class="{ 'is-live': callActive }">
           <span class="soft-dial-lead" aria-hidden="true">
             <el-icon><Phone /></el-icon>
           </span>
@@ -104,24 +100,10 @@
             @input="onSoftDialInput"
             @keyup.enter="makeCall"
           />
-          <button
-            v-if="callActive"
-            type="button"
-            class="soft-call-btn is-hangup"
-            title="挂断"
-            :disabled="callActionLoading"
-            @click="hangup"
-          >
+          <button v-if="callActive" type="button" class="soft-call-btn is-hangup" title="挂断" :disabled="callActionLoading" @click="hangup">
             <el-icon><PhoneFilled /></el-icon>
           </button>
-          <button
-            v-else
-            type="button"
-            class="soft-call-btn"
-            :class="{ 'is-ready': canDial }"
-            :title="dialButtonTitle"
-            @click="makeCall"
-          >
+          <button v-else type="button" class="soft-call-btn" :class="{ 'is-ready': canDial }" :title="dialButtonTitle" @click="makeCall">
             <el-icon><PhoneFilled /></el-icon>
           </button>
         </div>
@@ -495,6 +477,7 @@ let suppressTriggerClick = false;
 let dockedPhoneHideTimer: ReturnType<typeof setTimeout> | undefined;
 let suppressActiveCallUntil = 0;
 let suppressIncomingCallUntil = 0;
+let lastAutoScreenPopCallId = '';
 const recentlyEndedCallIds = new Map<string, number>();
 const WEBRTC_ENDED_CALL_SUPPRESS_MS = 120000;
 const WEBRTC_FIRST_LEG_ANSWER_TIMEOUT_MS = 30000;
@@ -1399,6 +1382,13 @@ const openScreenPop = () => {
   });
 };
 
+const openScreenPopOnce = (callId: string) => {
+  const normalizedCallId = callId.trim();
+  if (normalizedCallId && normalizedCallId === lastAutoScreenPopCallId) return;
+  if (normalizedCallId) lastAutoScreenPopCallId = normalizedCallId;
+  openScreenPop();
+};
+
 const simulateIncomingCall = () => {
   if (callActive.value || incomingCall.value) {
     openScreenPop();
@@ -1523,7 +1513,6 @@ const startCallTimer = () => {
   callSeconds.value = 0;
   callTimer = setInterval(() => {
     callSeconds.value++;
-    if (callSeconds.value % 3 === 0) void syncActiveCallPresence();
   }, 1000);
 };
 
@@ -1584,7 +1573,8 @@ const showIncomingCall = (event: Record<string, unknown>) => {
   dialNumber.value = incomingNumber.value;
   resetCallControls();
   stopCallTimer();
-  // 外置软电话：振铃阶段只更新顶栏，接通后再打开工作台
+  // 呼入振铃即打开工作台；同一业务通话的后续 progress 事件不重复跳转。
+  openScreenPopOnce(eventCallId);
   if (webRtcIncoming.value) {
     panelOpen.value = true;
   }
@@ -1612,9 +1602,9 @@ const showActiveCall = (event: Record<string, unknown>, fallbackPhase: AgentCall
   callActive.value = true;
   // 通话中保留顶栏操作即可；面板已开则不动，未开不强制弹出
   startCallTimer();
-  // 仅接通后自动打开工作台（振铃/外呼拨号中不跳转）
+  // 外呼在接通后打开工作台；呼入已在振铃阶段打开，这里按业务通话去重。
   if (fallbackPhase === 'CONNECTED') {
-    openScreenPop();
+    openScreenPopOnce(eventCallId);
   }
   nextTick(constrainPosition);
 };
@@ -1799,7 +1789,7 @@ watch(incomingCall, (incoming) => {
     return;
   }
   revealDockedPhone();
-  // 仅 WebRTC 待接听时自动展开面板；外置软电话靠顶栏提示，接通后再打开工作台
+  // WebRTC 待接听时同时展开浏览器软电话操作面板。
   if (webRtcIncoming.value) {
     panelOpen.value = true;
   }
@@ -2184,8 +2174,10 @@ button {
 .soft-dial-incoming {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 8px 0 12px;
+  gap: 0;
+  width: auto;
+  min-width: 0;
+  padding: 0 0 0 12px;
   height: 32px;
   border: 1px solid #fecdd3;
   border-radius: 10px;
@@ -2193,6 +2185,7 @@ button {
 }
 
 .soft-incoming-label {
+  padding-right: 12px;
   font-size: 12px;
   font-weight: 700;
   color: #be123c;

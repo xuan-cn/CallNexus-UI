@@ -20,6 +20,7 @@
           <el-button icon="ZoomIn" title="放大" @click="lf?.zoom(true)" />
           <el-button icon="ZoomOut" title="缩小" @click="lf?.zoom(false)" />
           <el-button icon="FullScreen" title="适应画布" @click="fitCanvas" />
+          <el-button v-if="!readonly" icon="Rank" title="整理布局" @click="organizeLayout">整理</el-button>
         </el-button-group>
         <span class="toolbar-tip">点击节点或连线编辑属性，选中后按 Delete 可删除</span>
       </div>
@@ -31,6 +32,13 @@
         <div class="property-title">节点配置</div>
         <el-tag :color="selectedDefinition.color" effect="dark">{{ selectedDefinition.label }}</el-tag>
         <p class="property-description">{{ selectedDefinition.description }}</p>
+        <el-alert
+          v-if="selectedNode.type === 'DTMF'"
+          class="property-alert"
+          type="info"
+          :closable="false"
+          title="数字按键进入对应分支；错误或超时会自动重试，达到最大次数后进入“失败处理”分支。"
+        />
         <el-form label-position="top">
           <el-form-item label="节点名称">
             <el-input v-model="selectedNode.name" @input="updateSelectedNode" />
@@ -51,6 +59,9 @@
               :voicemail-options="voicemailOptions"
               :ai-agent-options="aiAgentOptions"
               :placeholder="property.placeholder"
+              :min="property.min"
+              :max="property.max"
+              :unit="property.unit"
               @update:model-value="updateNodeProperty(property.key, $event)"
             />
             <el-alert v-else type="error" :closable="false" :title="`未注册的属性编辑器：${property.component}`" />
@@ -70,6 +81,22 @@
             >
               <el-option label="工作时间内" value="IN_HOURS" />
               <el-option label="工作时间外" value="OUT_OF_HOURS" />
+            </el-select>
+            <el-select
+              v-else-if="sourceDefinition.edgeSchema.component === 'DTMF_DIGIT'"
+              v-model="selectedEdge.condition"
+              style="width: 100%"
+              placeholder="请选择按键或失败处理"
+              @change="updateSelectedEdge"
+            >
+              <el-option
+                v-for="digit in dtmfDigitOptions"
+                :key="digit"
+                :label="`按键 ${digit}`"
+                :value="digit"
+                :disabled="isDtmfConditionUsed(digit)"
+              />
+              <el-option label="失败处理（错误或超时耗尽）" value="FAILURE" :disabled="isDtmfConditionUsed('FAILURE')" />
             </el-select>
             <el-input
               v-else
@@ -97,6 +124,7 @@ import { CallQueueVO } from '@/api/callcenter/call-queue/types';
 import type { BusinessHoursPlan } from '@/api/callcenter/business-hours/types';
 import type { VoiceMailBoxVO } from '@/api/callcenter/voicemail/types';
 import type { AiAgentVO } from '@/api/callcenter/ai-knowledge/types';
+import { createLayeredFlowLayout } from '@/utils/logicflowLayout';
 import { getIvrNodeDefinition, IvrNodeDefinition, ivrPaletteDefinitions } from './nodeRegistry';
 import { getIvrPropertyEditor } from './propertyEditors';
 
@@ -156,6 +184,8 @@ class IvrCardModel extends RectNodeModel {
 }
 
 const selectedDefinition = computed(() => getIvrNodeDefinition(selectedNode.value?.type || 'START'));
+const dtmfDigitOptions = Array.from({ length: 10 }, (_, index) => String(index));
+const edgeLabel = (condition?: string) => (condition === 'FAILURE' ? '失败处理' : condition || '');
 const sourceDefinition = computed(() => {
   const source = props.modelValue.nodes.find((node) => node.id === selectedEdge.value?.source);
   return getIvrNodeDefinition(source?.type || 'START');
@@ -178,7 +208,7 @@ const toLogicFlowData = (graph: IvrGraph) => ({
     type: 'bezier',
     sourceNodeId: edge.source,
     targetNodeId: edge.target,
-    text: edge.condition || '',
+    text: edgeLabel(edge.condition),
     properties: { condition: edge.condition || '' }
   }))
 });
@@ -205,6 +235,8 @@ const readGraph = (): IvrGraph => {
 };
 
 const syncGraph = () => emit('update:modelValue', readGraph());
+const isDtmfConditionUsed = (condition: string) =>
+  readGraph().edges.some((edge) => edge.id !== selectedEdge.value?.id && edge.source === selectedEdge.value?.source && edge.condition === condition);
 const toIvrEdge = (data: any): IvrEdge | undefined => {
   if (!data?.id) return undefined;
   const graphEdge = readGraph().edges.find((item) => item.id === data.id);
@@ -217,7 +249,15 @@ const toIvrEdge = (data: any): IvrEdge | undefined => {
 };
 const selectNode = (id: string) => {
   const node = readGraph().nodes.find((item) => item.id === id);
-  selectedNode.value = node ? reactive(node) : undefined;
+  if (!node) {
+    selectedNode.value = undefined;
+  } else {
+    const definition = getIvrNodeDefinition(node.type);
+    const defaults = Object.fromEntries(
+      definition.propertySchema.filter((item) => item.defaultValue !== undefined).map((item) => [item.key, item.defaultValue])
+    );
+    selectedNode.value = reactive({ ...node, config: { ...defaults, ...node.config } });
+  }
   selectedEdge.value = undefined;
 };
 const selectEdge = (id: string, data?: any) => {
@@ -246,10 +286,10 @@ const updateSelectedEdge = () => {
   if (!lf || !selectedEdge.value) return;
   let condition = selectedEdge.value.condition || '';
   if (sourceDefinition.value.edgeSchema?.component === 'DTMF_DIGIT') {
-    condition = condition.replace(/\D/g, '').slice(0, 1);
+    condition = condition === 'FAILURE' ? condition : condition.replace(/\D/g, '').slice(0, 1);
     selectedEdge.value.condition = condition;
   }
-  lf.updateText(selectedEdge.value.id, condition);
+  lf.updateText(selectedEdge.value.id, edgeLabel(condition));
   lf.setProperties(selectedEdge.value.id, { condition });
   syncGraph();
 };
@@ -263,16 +303,27 @@ const removeSelection = () => {
 };
 const startDrag = (definition: IvrNodeDefinition) => {
   if (props.readonly) return;
+  const config = Object.fromEntries(
+    definition.propertySchema.filter((item) => item.defaultValue !== undefined).map((item) => [item.key, item.defaultValue])
+  );
   lf?.dnd.startDrag({
     type: 'ivr-card',
     text: definition.label,
-    properties: { ivrType: definition.type, name: definition.label, config: {}, color: definition.color }
+    properties: { ivrType: definition.type, name: definition.label, config, color: definition.color }
   });
 };
 const fitCanvas = () => {
   if (!lf) return;
   lf.fitView(40, 40);
   lf.zoom(DEFAULT_CANVAS_ZOOM);
+};
+const organizeLayout = () => {
+  if (!lf) return;
+  const graph = readGraph();
+  const nodes = createLayeredFlowLayout(graph.nodes, graph.edges);
+  nodes.forEach((node) => lf?.graphModel.moveNode2Coordinate(node.id, node.x, node.y, true));
+  syncGraph();
+  nextTick(fitCanvas);
 };
 const initialize = async () => {
   await nextTick();
