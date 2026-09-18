@@ -167,7 +167,7 @@ service.interceptors.response.use(
   (error: any) => {
     let { message } = error;
     if (message == 'Network Error') {
-      message = '服务异常，请检查后台服务是否正常启动';
+      message = '服务启动异常，请检查前端或后台服务是否正常启动，启动后重新尝试';
     } else if (message.includes('timeout')) {
       message = '系统接口请求超时';
     } else if (message.includes('Request failed with status code')) {

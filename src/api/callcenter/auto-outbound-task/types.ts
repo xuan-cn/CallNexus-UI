@@ -59,6 +59,12 @@ export interface AutoOutboundTaskVO extends AutoOutboundTaskForm {
   createTime?: string;
 }
 
+export interface AutoOutboundTaskQuery extends PageQuery {
+  keyword?: string;
+  dialMode?: AutoOutboundDialMode;
+  status?: AutoOutboundStatus;
+}
+
 export interface AutoOutboundSourceForm {
   importTaskId?: string | number;
   importBatchId?: string | number;

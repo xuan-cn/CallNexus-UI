@@ -1,5 +1,5 @@
 <template>
-  <div class="audio-waveform" :class="{ 'is-compact': compact }">
+  <div class="audio-waveform" :class="{ 'is-compact': compact, 'has-playback-rate': showPlaybackRate }">
     <button class="play-button" type="button" :disabled="loading || failed" :aria-label="playing ? '暂停' : '播放'" @click="togglePlayback">
       {{ playing ? '❚❚' : '▶' }}
     </button>
@@ -8,7 +8,12 @@
       <span v-if="loading" class="waveform-message">正在加载录音波形...</span>
       <span v-else-if="failed" class="waveform-message error">录音波形加载失败</span>
     </div>
-    <span class="time-label">{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</span>
+    <div class="playback-meta">
+      <span class="time-label">{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</span>
+      <select v-if="showPlaybackRate" v-model.number="playbackRate" class="rate-select" aria-label="播放倍速" @change="changePlaybackRate">
+        <option v-for="rate in playbackRates" :key="rate" :value="rate">{{ rate }}x</option>
+      </select>
+    </div>
   </div>
 </template>
 
@@ -20,10 +25,12 @@ const props = withDefaults(
     src: string;
     height?: number;
     compact?: boolean;
+    showPlaybackRate?: boolean;
   }>(),
   {
     height: 76,
-    compact: false
+    compact: false,
+    showPlaybackRate: false
   }
 );
 
@@ -33,6 +40,8 @@ const currentTime = ref(0);
 const playing = ref(false);
 const loading = ref(true);
 const failed = ref(false);
+const playbackRate = ref(1);
+const playbackRates = [0.5, 1, 1.25, 1.5, 2];
 let waveSurfer: WaveSurfer | undefined;
 
 const waveformMinHeight = computed(() => `${props.height}px`);
@@ -75,6 +84,7 @@ const createWaveSurfer = () => {
 
   waveSurfer.on('ready', (value) => {
     duration.value = value;
+    waveSurfer?.setPlaybackRate(playbackRate.value, true);
     loading.value = false;
   });
   waveSurfer.on('timeupdate', (value) => {
@@ -100,6 +110,15 @@ const togglePlayback = () => {
   waveSurfer?.playPause();
 };
 
+const changePlaybackRate = () => {
+  waveSurfer?.setPlaybackRate(playbackRate.value, true);
+};
+
+const seekTo = (milliseconds: number) => {
+  if (!waveSurfer || !Number.isFinite(milliseconds)) return;
+  waveSurfer.setTime(Math.max(0, milliseconds) / 1000);
+};
+
 watch(
   () => props.src,
   () => nextTick(createWaveSurfer)
@@ -107,6 +126,7 @@ watch(
 
 onMounted(createWaveSurfer);
 onBeforeUnmount(destroyWaveSurfer);
+defineExpose({ seekTo });
 </script>
 
 <style scoped>
@@ -155,13 +175,34 @@ onBeforeUnmount(destroyWaveSurfer);
 .waveform-message.error {
   color: #f56c6c;
 }
+.playback-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
 .time-label {
   color: #475569;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
+.rate-select {
+  height: 28px;
+  padding: 0 5px;
+  color: #475569;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid #dcdfe6;
+  border-radius: 5px;
+  outline: none;
+  background: #fff;
+}
+.rate-select:focus {
+  border-color: var(--el-color-primary);
+}
 .audio-waveform.is-compact {
-  grid-template-columns: 34px minmax(0, 1fr) 92px;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
   gap: 10px;
   padding: 10px 12px;
 }
@@ -171,16 +212,17 @@ onBeforeUnmount(destroyWaveSurfer);
   font-size: 12px;
   box-shadow: 0 4px 12px rgb(5 59 112 / 18%);
 }
-.audio-waveform.is-compact .time-label {
+.audio-waveform.is-compact .time-label,
+.audio-waveform.is-compact .rate-select {
   font-size: 12px;
 }
 @media (width <= 768px) {
   .audio-waveform {
     grid-template-columns: 42px minmax(0, 1fr);
   }
-  .time-label {
+  .playback-meta {
     grid-column: 2;
-    text-align: left;
+    justify-content: flex-start;
   }
 }
 </style>

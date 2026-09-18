@@ -157,4 +157,8 @@ export interface CallRecordQuery extends PageQuery {
   callStatus?: CallStatus;
   answerResult?: 'ANSWERED' | 'MISSED';
   hangupCause?: string;
+  startedAtFrom?: string;
+  startedAtTo?: string;
+  minRecordingDurationSeconds?: number;
+  maxRecordingDurationSeconds?: number;
 }

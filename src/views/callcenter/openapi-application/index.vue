@@ -242,7 +242,7 @@
                   </el-checkbox>
                 </el-checkbox-group>
               </div>
-              <el-alert type="info" :closable="false" show-icon> WebSocket 断线后，可通过事件查询接口按 event_id 补拉，避免漏掉业务事件。 </el-alert>
+<!--              <el-alert type="info" :closable="false" show-icon> WebSocket 断线后，可通过事件查询接口按 event_id 补拉，避免漏掉业务事件。 </el-alert>-->
             </div>
           </el-tab-pane>
 

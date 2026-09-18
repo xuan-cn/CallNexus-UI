@@ -25,8 +25,16 @@
             :clearable="false"
           />
         </el-form-item>
-        <el-form-item v-if="mode !== 'overview'">
-          <el-input v-model="query.keyword" clearable placeholder="号码、坐席或名称" @keyup.enter="load" />
+        <el-form-item v-if="mode === 'call'">
+          <el-input v-model="query.keyword" clearable placeholder="号码或队列" @keyup.enter="handleQuery" />
+        </el-form-item>
+        <el-form-item v-else-if="mode === 'queue'">
+          <el-input v-model="query.keyword" clearable placeholder="队列名称或编码" @keyup.enter="handleQuery" />
+        </el-form-item>
+        <el-form-item v-if="mode === 'call' || mode === 'agent'">
+          <el-select v-model="query.agentId" clearable filterable placeholder="全部坐席" class="agent-filter">
+            <el-option v-for="agent in agentOptions" :key="agent.id" :label="agentOptionLabel(agent)" :value="agent.id" />
+          </el-select>
         </el-form-item>
         <el-form-item v-if="mode === 'call'">
           <el-select v-model="query.direction" clearable placeholder="通话方向" style="width: 110px">
@@ -110,6 +118,9 @@
             </template>
           </el-table-column>
           <el-table-column label="未接" prop="missedCount" sortable width="68" align="center" />
+          <el-table-column label="总通话时长" prop="totalTalkSeconds" sortable width="108" align="center">
+            <template #default="{ row }">{{ duration(row.totalTalkSeconds) }}</template>
+          </el-table-column>
           <el-table-column label="响应 / 通话" min-width="142">
             <template #default="{ row }">
               <div class="stacked-metric">
@@ -291,6 +302,7 @@ import {
   listAgentReportCalls,
   listAgentReportPresenceLogs,
   listAgentReports,
+  listReportAgentOptions,
   listCallReportDetails,
   listQueueReports
 } from '@/api/callcenter/report';
@@ -301,6 +313,7 @@ import type {
   CallDistributionVO,
   OverviewKpiVO,
   QueueReportVO,
+  ReportAgentOptionVO,
   ReportQuery,
   ReportTrendPointVO
 } from '@/api/callcenter/report/types';
@@ -312,6 +325,7 @@ const start = new Date(now);
 start.setDate(start.getDate() - 6);
 const dateRange = ref<[string, string]>([formatDate(start), formatDate(now)]);
 const query = reactive<ReportQuery>({ pageNum: 1, pageSize: 20 });
+const agentOptions = ref<ReportAgentOptionVO[]>([]);
 const loading = ref(false);
 const kpis = ref<OverviewKpiVO>();
 const trend = ref<ReportTrendPointVO[]>([]);
@@ -373,6 +387,14 @@ const metricItems = computed(() => {
 });
 
 const params = () => ({ ...query, beginDate: dateRange.value[0], endDate: dateRange.value[1] });
+const agentOptionLabel = (agent: ReportAgentOptionVO) => {
+  const identity = agent.extension || agent.agentCode;
+  return `${agent.agentName}${identity ? `（${identity}）` : ''}${agent.enabled ? '' : '（已停用）'}`;
+};
+const loadAgentOptions = async () => {
+  if (props.mode !== 'call' && props.mode !== 'agent') return;
+  agentOptions.value = (await listReportAgentOptions()).data || [];
+};
 const handleQuery = () => {
   query.pageNum = 1;
   load();
@@ -532,6 +554,7 @@ const resize = () => {
   rankChart?.resize();
 };
 onMounted(() => {
+  loadAgentOptions();
   load();
   window.addEventListener('resize', resize);
 });
@@ -620,6 +643,9 @@ onBeforeUnmount(() => {
 }
 .date-range-picker {
   width: 260px !important;
+}
+.agent-filter {
+  width: 190px;
 }
 .metric-grid {
   display: grid;
@@ -778,6 +804,7 @@ onBeforeUnmount(() => {
 @media (max-width: 760px) {
   .filter-form :deep(.el-form-item),
   .filter-form :deep(.el-input),
+  .agent-filter,
   .date-range-picker {
     width: 100% !important;
   }

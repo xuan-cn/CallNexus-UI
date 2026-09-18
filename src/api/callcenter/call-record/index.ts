@@ -6,3 +6,6 @@ export const listCallRecords = (query: CallRecordQuery): AxiosPromise<CallRecord
   request({ url: '/api/v1/call-records', method: 'get', params: query });
 
 export const getCallRecord = (id: string | number): AxiosPromise<CallRecordVO> => request({ url: `/api/v1/call-records/${id}`, method: 'get' });
+
+export const downloadCallRecording = (id: string | number): Promise<Blob> =>
+  request({ url: `/api/v1/call-records/${id}/recording/download`, method: 'get', responseType: 'blob' });

@@ -7,12 +7,14 @@ import type {
   AutoOutboundSourceForm,
   AutoOutboundSourceVO,
   AutoOutboundTaskForm,
+  AutoOutboundTaskQuery,
   AutoOutboundTaskVO
 } from './types';
 
 const root = '/api/v1/auto-outbound-tasks';
 
-export const listAutoOutboundTasks = () => request<AutoOutboundTaskVO[]>({ url: root, method: 'get' });
+export const listAutoOutboundTasks = (params: AutoOutboundTaskQuery) =>
+  request<{ rows: AutoOutboundTaskVO[]; total: number }>({ url: root, method: 'get', params });
 export const getAutoOutboundTask = (id: string | number) => request<AutoOutboundTaskVO>({ url: `${root}/${id}`, method: 'get' });
 export const createAutoOutboundTask = (data: AutoOutboundTaskForm) => request<string | number>({ url: root, method: 'post', data });
 export const updateAutoOutboundTask = (id: string | number, data: AutoOutboundTaskForm) => request({ url: `${root}/${id}`, method: 'put', data });

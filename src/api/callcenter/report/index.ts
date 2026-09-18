@@ -11,9 +11,34 @@ import type {
   OutboundTaskReportVO,
   OutboundTrendPointVO,
   QueueReportVO,
+  ReportAgentOptionVO,
+  ReportQueueOptionVO,
   ReportQuery,
-  ReportTrendPointVO
+  ReportTrendPointVO,
+  SatisfactionDetailVO,
+  SatisfactionRankingVO,
+  SatisfactionScoreDistributionVO,
+  SatisfactionSummaryVO,
+  SatisfactionTrendPointVO
 } from './types';
+
+export const listReportAgentOptions = (): AxiosPromise<ReportAgentOptionVO[]> =>
+  request({ url: '/api/v1/reports/agent-options', method: 'get' });
+export const listReportQueueOptions = (): AxiosPromise<ReportQueueOptionVO[]> =>
+  request({ url: '/api/v1/reports/queue-options', method: 'get' });
+
+export const getSatisfactionReportSummary = (params: ReportQuery): AxiosPromise<SatisfactionSummaryVO> =>
+  request({ url: '/api/v1/reports/satisfaction/summary', method: 'get', params });
+export const getSatisfactionReportTrend = (params: ReportQuery): AxiosPromise<SatisfactionTrendPointVO[]> =>
+  request({ url: '/api/v1/reports/satisfaction/trend', method: 'get', params });
+export const getSatisfactionReportDistribution = (params: ReportQuery): AxiosPromise<SatisfactionScoreDistributionVO[]> =>
+  request({ url: '/api/v1/reports/satisfaction/distribution', method: 'get', params });
+export const listSatisfactionQueueRankings = (params: ReportQuery): AxiosPromise<SatisfactionRankingVO[]> =>
+  request({ url: '/api/v1/reports/satisfaction/queues', method: 'get', params });
+export const listSatisfactionAgentRankings = (params: ReportQuery): AxiosPromise<SatisfactionRankingVO[]> =>
+  request({ url: '/api/v1/reports/satisfaction/agents', method: 'get', params });
+export const listSatisfactionDetails = (params: ReportQuery): AxiosPromise<SatisfactionDetailVO[]> =>
+  request({ url: '/api/v1/reports/satisfaction/details', method: 'get', params });
 
 export const getReportOverview = (params: ReportQuery): AxiosPromise<OverviewKpiVO> =>
   request({ url: '/api/v1/reports/overview/kpis', method: 'get', params });

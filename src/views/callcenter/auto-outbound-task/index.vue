@@ -15,28 +15,28 @@
         <div class="sidebar-heading">
           <div>
             <strong>外呼任务</strong>
-            <span>共 {{ filteredTasks.length }} 项</span>
+            <span>共 {{ taskTotal }} 项</span>
           </div>
           <el-button circle plain title="刷新任务" :loading="loading" @click="load"
             ><el-icon><Refresh /></el-icon
           ></el-button>
         </div>
-        <el-input v-model="query.keyword" clearable placeholder="搜索任务名称或编码" @input="applyFilter">
+        <el-input v-model="query.keyword" clearable placeholder="搜索任务名称或编码" @input="handleQueryChange">
           <template #prefix
             ><el-icon><Search /></el-icon
           ></template>
         </el-input>
         <div class="sidebar-filters">
-          <el-select v-model="query.dialMode" clearable placeholder="全部模式" @change="applyFilter">
+          <el-select v-model="query.dialMode" clearable placeholder="全部模式" @change="handleQueryChange">
             <el-option v-for="item in dialModeOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
-          <el-select v-model="query.status" clearable placeholder="全部状态" @change="applyFilter">
+          <el-select v-model="query.status" clearable placeholder="全部状态" @change="handleQueryChange">
             <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </div>
         <div v-loading="loading" class="task-list">
           <button
-            v-for="task in filteredTasks"
+            v-for="task in tasks"
             :key="task.id"
             type="button"
             class="task-item"
@@ -54,8 +54,20 @@
               <span>{{ task.completedCount }}/{{ task.totalCount }}</span>
             </div>
           </button>
-          <el-empty v-if="!loading && filteredTasks.length === 0" :image-size="74" description="暂无自动外呼任务" />
+          <el-empty v-if="!loading && tasks.length === 0" :image-size="74" description="暂无自动外呼任务" />
         </div>
+        <el-pagination
+          v-if="taskTotal > query.pageSize"
+          v-model:current-page="query.pageNum"
+          class="task-pagination"
+          small
+          background
+          layout="prev, pager, next"
+          :page-size="query.pageSize"
+          :total="taskTotal"
+          :pager-count="5"
+          @current-change="load"
+        />
       </aside>
 
       <main v-if="selectedTask" class="task-detail">
@@ -436,6 +448,7 @@ import type {
   AutoOutboundRetryResult,
   AutoOutboundStatus,
   AutoOutboundTaskForm,
+  AutoOutboundTaskQuery,
   AutoOutboundTaskVO
 } from '@/api/callcenter/auto-outbound-task/types';
 import { listAiAgents } from '@/api/callcenter/ai-knowledge';
@@ -448,7 +461,7 @@ import { listOutboundLinePolicies } from '@/api/callcenter/outbound-line-policy'
 const { proxy } = getCurrentInstance()!;
 const loading = ref(false);
 const tasks = ref<AutoOutboundTaskVO[]>([]);
-const filteredTasks = ref<AutoOutboundTaskVO[]>([]);
+const taskTotal = ref(0);
 const selectedTaskId = ref<string | number>();
 const detailTab = ref('overview');
 const monitorLoading = ref(false);
@@ -456,7 +469,7 @@ const monitor = ref<AutoOutboundMonitorVO>();
 const formRef = ref<FormInstance>();
 const memberDrawerRef = ref<InstanceType<typeof MemberDrawer>>();
 const monitorDrawerRef = ref<InstanceType<typeof MonitorDrawer>>();
-const query = reactive<{ keyword: string; dialMode?: AutoOutboundDialMode; status?: AutoOutboundStatus }>({ keyword: '' });
+const query = reactive<AutoOutboundTaskQuery>({ keyword: '', pageNum: 1, pageSize: 10 });
 const drawer = reactive({ visible: false, saving: false, title: '', tab: 'base', id: undefined as string | number | undefined });
 const aiOptions = ref<Array<{ label: string; value: string | number }>>([]);
 const ivrOptions = ref<Array<{ label: string; value: string | number }>>([]);
@@ -602,8 +615,17 @@ const selectTask = async (task: AutoOutboundTaskVO) => {
 const load = async () => {
   loading.value = true;
   try {
-    tasks.value = (await listAutoOutboundTasks()).data;
-    applyFilter();
+    let response = await listAutoOutboundTasks(query);
+    if (!response.rows.length && response.total > 0 && query.pageNum > 1) {
+      query.pageNum -= 1;
+      response = await listAutoOutboundTasks(query);
+    }
+    tasks.value = response.rows || [];
+    taskTotal.value = response.total || 0;
+    if (!tasks.value.some((item) => String(item.id) === String(selectedTaskId.value))) {
+      selectedTaskId.value = tasks.value[0]?.id;
+      monitor.value = undefined;
+    }
     await loadSelectedMonitor();
   } finally {
     loading.value = false;
@@ -643,25 +665,11 @@ const loadOptions = async () => {
     nodeId: item.nodeId
   }));
 };
-const applyFilter = () => {
-  const keyword = query.keyword.trim().toLowerCase();
-  filteredTasks.value = tasks.value.filter(
-    (item) =>
-      (!keyword || item.taskName.toLowerCase().includes(keyword) || item.taskCode.toLowerCase().includes(keyword)) &&
-      (!query.dialMode || item.dialMode === query.dialMode) &&
-      (!query.status || item.status === query.status)
-  );
-  if (!filteredTasks.value.some((item) => String(item.id) === String(selectedTaskId.value))) {
-    selectedTaskId.value = filteredTasks.value[0]?.id;
-    monitor.value = undefined;
-    void loadSelectedMonitor();
-  }
-};
-const resetQuery = () => {
-  query.keyword = '';
-  query.dialMode = undefined;
-  query.status = undefined;
-  applyFilter();
+let queryTimer: ReturnType<typeof setTimeout> | undefined;
+const handleQueryChange = () => {
+  query.pageNum = 1;
+  if (queryTimer) clearTimeout(queryTimer);
+  queryTimer = setTimeout(() => void load(), 250);
 };
 const resetForm = () => Object.assign(form, emptyForm());
 const handleAdd = async () => {
@@ -776,6 +784,7 @@ onMounted(async () => {
 });
 onBeforeUnmount(() => {
   if (monitorRefreshTimer) clearInterval(monitorRefreshTimer);
+  if (queryTimer) clearTimeout(queryTimer);
 });
 </script>
 
@@ -854,6 +863,10 @@ onBeforeUnmount(() => {
   gap: 10px;
   flex: 1;
   flex-direction: column;
+}
+.task-pagination {
+  justify-content: center;
+  padding-top: 10px;
 }
 .task-item {
   position: relative;

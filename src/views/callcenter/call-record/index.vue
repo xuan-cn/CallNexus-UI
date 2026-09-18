@@ -1,38 +1,62 @@
 <template>
   <div class="p-2 call-record-page">
-    <el-card class="mb-2 filter-card" shadow="hover">
-      <el-form ref="queryFormRef" :model="queryParams" :inline="true" class="filter-form">
-        <el-form-item label="主叫号码" prop="callerNumber">
-          <el-input v-model="queryParams.callerNumber" clearable @keyup.enter="handleQuery" />
-        </el-form-item>
-        <el-form-item label="被叫号码" prop="calledNumber">
-          <el-input v-model="queryParams.calledNumber" clearable @keyup.enter="handleQuery" />
-        </el-form-item>
-        <el-form-item v-if="!props.missedOnly" label="呼叫方向" prop="direction">
-          <el-select v-model="queryParams.direction" clearable style="width: 130px">
-            <el-option v-for="item in directionOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item v-if="!props.missedOnly" label="状态" prop="callStatus">
-          <el-select v-model="queryParams.callStatus" clearable style="width: 130px">
-            <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item v-if="!props.missedOnly" label="接听结果" prop="answerResult">
-          <el-select v-model="queryParams.answerResult" clearable placeholder="全部" style="width: 130px">
-            <el-option label="已接听" value="ANSWERED" />
-            <el-option label="未接来电" value="MISSED" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="挂断原因" prop="hangupCause">
-          <el-select v-model="queryParams.hangupCause" clearable filterable placeholder="全部原因" style="width: 180px">
-            <el-option v-for="item in hangupCauseOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
-          <el-button icon="Refresh" @click="resetQuery">重置</el-button>
-        </el-form-item>
+    <el-card class="mb-2 filter-card" shadow="never">
+      <el-form ref="queryFormRef" :model="queryParams" class="filter-form" size="small" label-position="top" @submit.prevent>
+        <div class="filter-basic-grid">
+          <el-form-item label="主叫号码" prop="callerNumber">
+            <el-input v-model="queryParams.callerNumber" clearable placeholder="请输入主叫号码" @keyup.enter="handleQuery" />
+          </el-form-item>
+          <el-form-item label="被叫号码" prop="calledNumber">
+            <el-input v-model="queryParams.calledNumber" clearable placeholder="请输入被叫号码" @keyup.enter="handleQuery" />
+          </el-form-item>
+          <el-form-item v-if="!props.missedOnly" label="呼叫方向" prop="direction">
+            <el-select v-model="queryParams.direction" clearable placeholder="全部方向">
+              <el-option v-for="item in directionOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="!props.missedOnly" label="状态" prop="callStatus">
+            <el-select v-model="queryParams.callStatus" clearable placeholder="全部状态">
+              <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="!props.missedOnly" label="接听结果" prop="answerResult">
+            <el-select v-model="queryParams.answerResult" clearable placeholder="全部结果">
+              <el-option label="已接听" value="ANSWERED" />
+              <el-option label="未接来电" value="MISSED" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="挂断原因" prop="hangupCause">
+            <el-select v-model="queryParams.hangupCause" clearable filterable placeholder="全部原因">
+              <el-option v-for="item in hangupCauseOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+          </el-form-item>
+        </div>
+        <div class="filter-range-row">
+          <div class="filter-range-fields">
+            <el-form-item label="开始时间">
+              <el-date-picker
+                v-model="startedAtRange"
+                type="datetimerange"
+                range-separator="至"
+                start-placeholder="开始时间"
+                end-placeholder="结束时间"
+                value-format="YYYY-MM-DD HH:mm:ss"
+              />
+            </el-form-item>
+            <el-form-item label="录音时长">
+              <div class="duration-range">
+                <el-input-number v-model="queryParams.minRecordingDurationSeconds" :min="0" :max="86400" :controls="false" placeholder="最短秒数" />
+                <span>至</span>
+                <el-input-number v-model="queryParams.maxRecordingDurationSeconds" :min="0" :max="86400" :controls="false" placeholder="最长秒数" />
+                <span>秒</span>
+              </div>
+            </el-form-item>
+          </div>
+          <div class="filter-actions">
+            <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
+            <el-button icon="Refresh" @click="resetQuery">重置</el-button>
+          </div>
+        </div>
       </el-form>
     </el-card>
 
@@ -74,9 +98,16 @@
         <el-table-column label="挂断原因" min-width="220" show-overflow-tooltip>
           <template #default="{ row }">{{ hangupCauseLabel(row.hangupCause) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="80" align="center" fixed="right">
+        <el-table-column label="操作" width="140" align="center" fixed="right">
           <template #default="{ row }">
             <el-button v-hasPermi="['callcenter:call-record:query']" link type="primary" @click="handleDetail(row)">详情</el-button>
+            <el-button
+              v-if="row.recordingOssId && row.recordingStatus === 'UPLOADED'"
+              v-hasPermi="['callcenter:call-record:query']"
+              link
+              type="primary"
+              @click="handleDownloadRecording(row)"
+            >下载录音</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -198,6 +229,9 @@
           </div>
         </el-tab-pane>
         <el-tab-pane label="通话录音" name="recording">
+          <div v-if="detail.recordingOssId && detail.recordingStatus === 'UPLOADED'" class="recording-toolbar">
+            <el-button type="primary" :icon="Download" @click="handleDownloadRecording(detail)">下载录音</el-button>
+          </div>
           <div v-if="detail.recordingUrl" class="recording-player">
             <AudioWaveform :src="detail.recordingUrl" />
           </div>
@@ -445,7 +479,7 @@
 </template>
 
 <script setup name="CallRecord" lang="ts">
-import { getCallRecord, listCallRecords } from '@/api/callcenter/call-record';
+import { downloadCallRecording, getCallRecord, listCallRecords } from '@/api/callcenter/call-record';
 import { hangupCauseLabel } from '@/api/callcenter/call-record/display';
 import { getCallTranscript, streamCallTranscript, transcribeCallRecording } from '@/api/callcenter/ai-speech';
 import { AiCallTranscriptSegmentVO, AiCallTranscriptStreamEvent, AiCallTranscriptVO } from '@/api/callcenter/ai-speech/types';
@@ -455,6 +489,7 @@ import CallCenterBusinessDetail from '@/components/CallCenterBusinessDetail/inde
 import { CallDirection, CallRecordQuery, CallRecordVO, CallStatus } from '@/api/callcenter/call-record/types';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Connection, Bell, CircleCheck, SwitchButton, Download, Upload, Warning, CircleClose } from '@element-plus/icons-vue';
+import FileSaver from 'file-saver';
 
 const props = withDefaults(defineProps<{ missedOnly?: boolean }>(), {
   missedOnly: false
@@ -562,8 +597,11 @@ const queryParams = reactive<CallRecordQuery>({
   direction: undefined,
   callStatus: undefined,
   answerResult: props.missedOnly ? 'MISSED' : undefined,
-  hangupCause: ''
+  hangupCause: '',
+  minRecordingDurationSeconds: undefined,
+  maxRecordingDurationSeconds: undefined
 });
+const startedAtRange = ref<[string, string]>();
 
 const directionLabel = (value: CallDirection) => directionOptions.find((item) => item.value === value)?.label || value;
 const statusLabel = (value: CallStatus) => statusOptions.find((item) => item.value === value)?.label || value;
@@ -792,7 +830,12 @@ const eventTone = (eventType: string) => {
 const getList = async () => {
   loading.value = true;
   try {
-    const res = await listCallRecords(props.missedOnly ? { ...queryParams, answerResult: 'MISSED' } : queryParams);
+    const rangeQuery = {
+      ...queryParams,
+      startedAtFrom: startedAtRange.value?.[0],
+      startedAtTo: startedAtRange.value?.[1]
+    };
+    const res = await listCallRecords(props.missedOnly ? { ...rangeQuery, answerResult: 'MISSED' } : rangeQuery);
     recordList.value = res.rows;
     total.value = res.total;
   } finally {
@@ -805,7 +848,14 @@ const handleQuery = () => {
 };
 const resetQuery = () => {
   queryFormRef.value?.resetFields();
+  startedAtRange.value = undefined;
+  queryParams.minRecordingDurationSeconds = undefined;
+  queryParams.maxRecordingDurationSeconds = undefined;
   handleQuery();
+};
+const handleDownloadRecording = async (record: CallRecordVO) => {
+  const blob = await downloadCallRecording(record.id);
+  FileSaver.saveAs(blob, record.recordingFileName || `通话录音_${record.businessCallId || record.id}.wav`);
 };
 const stopRecordingPoll = () => {
   if (recordingPollTimer) clearTimeout(recordingPollTimer);
@@ -985,14 +1035,75 @@ onBeforeUnmount(() => {
   flex: none;
 
   :deep(.el-card__body) {
-    padding: 12px 16px 2px;
+    padding: 14px 16px;
   }
 }
 
 .filter-form {
   :deep(.el-form-item) {
-    margin-bottom: 12px;
+    margin: 0;
   }
+
+  :deep(.el-form-item__label) {
+    height: 26px;
+    padding: 0;
+    color: #5f6b7a;
+    font-size: 12px;
+    line-height: 20px;
+  }
+
+  :deep(.el-input),
+  :deep(.el-select),
+  :deep(.el-date-editor) {
+    width: 100%;
+  }
+}
+
+.filter-basic-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(130px, 1fr));
+  gap: 10px 12px;
+}
+
+.filter-range-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #edf0f5;
+}
+
+.filter-range-fields {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(320px, 440px) minmax(260px, 320px);
+  gap: 12px;
+}
+
+.filter-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  padding-bottom: 1px;
+}
+
+.duration-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+
+  :deep(.el-input-number) {
+    width: 112px;
+  }
+}
+
+.recording-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
 }
 
 .table-card {
@@ -1666,6 +1777,23 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1100px) {
+  .filter-basic-grid {
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+  }
+
+  .filter-range-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .filter-range-fields {
+    grid-template-columns: minmax(320px, 1fr) minmax(260px, 1fr);
+  }
+
+  .filter-actions {
+    justify-content: flex-end;
+  }
+
   .info-grid,
   .time-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1677,6 +1805,17 @@ onBeforeUnmount(() => {
 
   .detail-hero {
     flex-direction: column;
+  }
+}
+
+@media (max-width: 720px) {
+  .filter-basic-grid,
+  .filter-range-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-actions {
+    justify-content: flex-start;
   }
 }
 </style>

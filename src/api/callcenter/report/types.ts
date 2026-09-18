@@ -11,6 +11,78 @@ export interface ReportQuery extends PageQuery {
   taskId?: string | number;
   taskType?: 'PREVIEW' | 'AUTO';
   resultCode?: string;
+  satisfactionStatus?: 'SUBMITTED' | 'NO_INPUT';
+  satisfactionScore?: number;
+}
+
+export interface ReportAgentOptionVO {
+  id: string | number;
+  agentCode: string;
+  agentName: string;
+  extension?: string;
+  enabled: boolean;
+}
+
+export interface ReportQueueOptionVO {
+  id: string | number;
+  queueCode: string;
+  queueName: string;
+  enabled: boolean;
+}
+
+export interface SatisfactionSummaryVO {
+  invitationCount: number;
+  submittedCount: number;
+  noInputCount: number;
+  averageScore: number;
+  participationRate: number;
+  satisfactionRate: number;
+  dissatisfactionRate: number;
+  noInputRate: number;
+}
+
+export interface SatisfactionTrendPointVO {
+  bucket: string;
+  invitationCount: number;
+  submittedCount: number;
+  satisfiedCount: number;
+  averageScore: number;
+  participationRate: number;
+  satisfactionRate: number;
+}
+
+export interface SatisfactionScoreDistributionVO {
+  score: number;
+  count: number;
+}
+
+export interface SatisfactionRankingVO {
+  dimensionId?: string | number;
+  dimensionName: string;
+  invitationCount: number;
+  submittedCount: number;
+  averageScore: number;
+  participationRate: number;
+  satisfactionRate: number;
+}
+
+export interface SatisfactionDetailVO {
+  id: string | number;
+  sessionId: string | number;
+  businessCallId: string;
+  evaluatedAt: string;
+  callStartedAt?: string;
+  queueId: string | number;
+  queueName?: string;
+  skillGroupName?: string;
+  agentId?: string | number;
+  agentName?: string;
+  agentExtension?: string;
+  customerNumber?: string;
+  score?: number;
+  digit?: string;
+  status: 'SUBMITTED' | 'NO_INPUT';
+  talkSeconds: number;
 }
 
 export interface OverviewKpiVO {

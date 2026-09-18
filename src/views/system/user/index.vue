@@ -114,22 +114,31 @@
               </template>
             </el-table-column>
 
-            <el-table-column label="操作" fixed="right" width="180" class-name="small-padding fixed-width">
+            <el-table-column label="操作" fixed="right" width="150" class-name="small-padding fixed-width">
               <template #default="scope">
-                <el-tooltip v-if="scope.row.userId !== 1" content="修改" placement="top">
-                  <el-button v-hasPermi="['system:user:edit']" link type="primary" icon="Edit" @click="handleUpdate(scope.row)"></el-button>
-                </el-tooltip>
-                <el-tooltip v-if="scope.row.userId !== 1" content="删除" placement="top">
-                  <el-button v-hasPermi="['system:user:remove']" link type="primary" icon="Delete" @click="handleDelete(scope.row)"></el-button>
-                </el-tooltip>
-
-                <el-tooltip v-if="scope.row.userId !== 1" content="重置密码" placement="top">
-                  <el-button v-hasPermi="['system:user:resetPwd']" link type="primary" icon="Key" @click="handleResetPwd(scope.row)"></el-button>
-                </el-tooltip>
-
-                <el-tooltip v-if="scope.row.userId !== 1" content="分配角色" placement="top">
-                  <el-button v-hasPermi="['system:user:edit']" link type="primary" icon="CircleCheck" @click="handleAuthRole(scope.row)"></el-button>
-                </el-tooltip>
+                <div class="user-action-cell">
+                  <el-button v-if="scope.row.userId != 1" v-hasPermi="['system:user:edit']" link type="primary" @click="handleUpdate(scope.row)">
+                    修改
+                  </el-button>
+                  <el-dropdown v-if="scope.row.userId != 1" trigger="click">
+                    <el-button link type="primary"
+                      >更多<el-icon class="el-icon--right"><ArrowDown /></el-icon
+                    ></el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item v-hasPermi="['system:user:resetPwd']" @click="handleResetPwd(scope.row)">
+                          <el-icon><Key /></el-icon>重置密码
+                        </el-dropdown-item>
+                        <el-dropdown-item v-hasPermi="['system:user:edit']" @click="handleAuthRole(scope.row)">
+                          <el-icon><CircleCheck /></el-icon>分配角色
+                        </el-dropdown-item>
+                        <el-dropdown-item v-hasPermi="['system:user:remove']" divided @click="handleDelete(scope.row)">
+                          <el-icon><Delete /></el-icon>删除用户
+                        </el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -615,9 +624,7 @@ const handleUpdate = async (row?: UserForm) => {
   dialog.title = '修改用户';
   Object.assign(form.value, data.user);
   postOptions.value = data.posts;
-  roleOptions.value = Array.from(
-    new Map([...data.roles, ...data.user.roles].map(role => [role.roleId, role])).values()
-  );
+  roleOptions.value = Array.from(new Map([...data.roles, ...data.user.roles].map((role) => [role.roleId, role])).values());
   form.value.postIds = data.postIds;
   form.value.roleIds = data.roleIds;
   form.value.password = '';
@@ -677,3 +684,22 @@ async function handleDeptChange(value: number | string) {
   form.value.postIds = [];
 }
 </script>
+
+<style scoped>
+.user-action-cell {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.user-action-cell :deep(.el-button--small) {
+  width: auto !important;
+  margin: 0;
+}
+
+.user-action-cell :deep(.el-dropdown) {
+  display: inline-flex;
+}
+</style>
