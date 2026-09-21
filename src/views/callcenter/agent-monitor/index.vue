@@ -65,14 +65,28 @@
 
       <div v-loading="initialLoading" class="agent-card-scroll">
         <div v-if="agents.length" class="agent-card-grid">
-          <article v-for="agent in agents" :key="agent.agentId" class="agent-monitor-card">
+          <article
+            v-for="agent in agents"
+            :key="agent.agentId"
+            class="agent-monitor-card"
+            :class="{
+              'is-offline': agent.status === 'OFFLINE',
+              'is-online': agent.status !== 'OFFLINE',
+              'is-busy': agent.status === 'BUSY'
+            }"
+          >
             <div class="agent-card-head">
               <div class="agent-avatar">{{ agentInitial(agent) }}</div>
               <div class="agent-identity">
                 <span class="agent-name">{{ agent.agentName || '-' }}</span>
                 <small>{{ agent.agentCode }}<template v-if="agent.extension"> · 分机 {{ agent.extension }}</template></small>
               </div>
-              <el-tag :type="statusTagType(agent.status)" effect="light" size="small">{{ agent.statusText }}</el-tag>
+              <div class="agent-status-group">
+                <span class="presence-status"><i></i>{{ agent.status === 'OFFLINE' ? '离线' : '在线' }}</span>
+                <el-tag v-if="agent.status !== 'OFFLINE'" :type="statusTagType(agent.status)" effect="light" size="small">
+                  {{ agent.statusText }}
+                </el-tag>
+              </div>
             </div>
 
             <div class="agent-skill" :title="agent.skillGroupNames || ''">
@@ -473,18 +487,31 @@ onBeforeUnmount(() => {
 
 .agent-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
 }
 
 .agent-monitor-card {
   position: relative;
-  padding: 10px;
+  padding: 7px;
   overflow: hidden;
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--el-fill-color-lighter);
   transition: background-color 0.2s, transform 0.2s;
+}
+
+.agent-monitor-card.is-online {
+  background: var(--el-bg-color);
+  box-shadow: 0 0 0 2px var(--el-color-success-light-5), 0 3px 10px rgb(103 194 58 / 14%);
+}
+
+.agent-monitor-card.is-busy {
+  box-shadow: 0 0 0 2px var(--el-color-primary-light-5), 0 3px 12px rgb(64 158 255 / 18%);
+}
+
+.agent-monitor-card.is-offline {
+  background: var(--el-fill-color-light);
 }
 
 .agent-monitor-card:hover {
@@ -495,18 +522,64 @@ onBeforeUnmount(() => {
 .agent-card-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .agent-avatar {
   display: grid;
-  flex: 0 0 32px;
-  height: 32px;
+  flex: 0 0 26px;
+  height: 26px;
   place-items: center;
-  border-radius: 8px;
+  border-radius: 7px;
   color: #fff;
   font-size: 13px;
   background: #8b97a8;
+}
+
+.is-online .agent-avatar {
+  background: var(--el-color-primary);
+}
+
+.is-offline .agent-avatar,
+.is-offline .agent-identity,
+.is-offline .agent-skill,
+.is-offline .call-panel,
+.is-offline .agent-metrics,
+.is-offline .agent-card-foot {
+  opacity: 0.62;
+}
+
+.agent-status-group {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+}
+
+.presence-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--el-color-success-dark-2);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.presence-status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--el-color-success);
+  box-shadow: 0 0 0 3px var(--el-color-success-light-9);
+}
+
+.is-offline .presence-status {
+  color: var(--el-text-color-secondary);
+}
+
+.is-offline .presence-status i {
+  background: var(--el-text-color-placeholder);
+  box-shadow: 0 0 0 3px var(--el-fill-color-darker);
 }
 
 .agent-identity {
@@ -536,8 +609,8 @@ onBeforeUnmount(() => {
 .agent-skill {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 7px;
+  gap: 6px;
+  margin-top: 4px;
   min-width: 0;
 }
 
@@ -554,10 +627,10 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  min-height: 34px;
-  margin-top: 7px;
-  padding: 6px 8px;
+  gap: 7px;
+  min-height: 28px;
+  margin-top: 4px;
+  padding: 4px 6px;
   border: 0;
   border-radius: 9px;
   background: var(--el-fill-color-lighter);
@@ -571,14 +644,14 @@ onBeforeUnmount(() => {
 .agent-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin-top: 7px;
-  gap: 4px;
+  margin-top: 4px;
+  gap: 2px;
 }
 
 .agent-metrics div {
   display: grid;
   gap: 3px;
-  padding: 5px 3px;
+  padding: 3px 1px;
   border: 0;
   border-radius: 6px;
   background: var(--el-bg-color);
@@ -593,7 +666,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 10px;
   min-height: 20px;
-  margin-top: 5px;
+  margin-top: 3px;
 }
 
 .agent-card-foot > span {
@@ -613,7 +686,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1200px) {
   .overview-grid { grid-template-columns: repeat(3, 1fr); }
-  .agent-card-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  .agent-card-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 }
 
 @media (max-width: 760px) {
