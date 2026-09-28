@@ -18,6 +18,11 @@ export interface FreeSwitchGatewayVO {
   registerEnabled: boolean;
   transport: GatewayTransport;
   callerIdNumber?: string;
+  localAreaCode?: string;
+  addLocalAreaCode: boolean;
+  addMissingAreaCodeZero: boolean;
+  stripChinaCountryCode: boolean;
+  outboundPrefix?: string;
   ping: number;
   expireSeconds: number;
   retrySeconds: number;
@@ -51,6 +56,11 @@ export interface FreeSwitchGatewayForm {
   registerEnabled: boolean;
   transport: GatewayTransport;
   callerIdNumber?: string;
+  localAreaCode?: string;
+  addLocalAreaCode: boolean;
+  addMissingAreaCodeZero: boolean;
+  stripChinaCountryCode: boolean;
+  outboundPrefix?: string;
   ping: number;
   expireSeconds: number;
   retrySeconds: number;

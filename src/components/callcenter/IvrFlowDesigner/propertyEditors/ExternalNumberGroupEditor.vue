@@ -92,7 +92,14 @@
             <span class="collapse-tip">座机区号、出局前缀和 +86 处理</span>
           </template>
           <div class="normalize-box">
-            <div class="field-stack">
+            <div class="switch-item rule-source-switch">
+              <div>
+                <div>使用线路拨号规范</div>
+                <div class="field-tip">关闭后，当前节点配置将覆盖线路管理中的规则</div>
+              </div>
+              <el-switch :model-value="form.useLineDialingRule" @change="updateField('useLineDialingRule', Boolean($event))" />
+            </div>
+            <div v-if="!form.useLineDialingRule" class="field-stack">
               <el-form-item label="本地区号">
                 <el-input
                   :model-value="form.localAreaCode"
@@ -110,10 +117,17 @@
                 />
               </el-form-item>
             </div>
-            <div class="switch-stack">
+            <div v-if="!form.useLineDialingRule" class="switch-stack">
               <div class="switch-item">
                 <span>本地固话补区号</span>
                 <el-switch :model-value="form.addLocalAreaCode" @change="updateField('addLocalAreaCode', Boolean($event))" />
+              </div>
+              <div class="switch-item">
+                <span>异地区号缺0自动补0</span>
+                <el-switch
+                  :model-value="form.addMissingAreaCodeZero !== false"
+                  @change="updateField('addMissingAreaCodeZero', Boolean($event))"
+                />
               </div>
               <div class="switch-item">
                 <span>+86 手机号转国内号码</span>
@@ -155,8 +169,10 @@ const defaultValue = (): IvrExternalNumberGroupConfig => ({
   outboundPolicyId: '',
   ringTimeoutSeconds: 20,
   failoverEnabled: true,
+  useLineDialingRule: true,
   localAreaCode: '',
   addLocalAreaCode: false,
+  addMissingAreaCodeZero: true,
   stripChinaCountryCode: true,
   outboundPrefix: '',
   numbers: []
@@ -360,6 +376,15 @@ onMounted(loadOutboundPolicies);
   background: #fff;
   font-size: 12px;
   color: #606266;
+}
+
+.rule-source-switch {
+  margin-bottom: 10px;
+}
+
+.field-tip {
+  margin-top: 2px;
+  color: #909399;
 }
 
 @media (max-width: 560px) {

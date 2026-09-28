@@ -25,8 +25,10 @@ export interface IvrExternalNumberGroupConfig {
   failoverEnabled?: boolean;
   localAreaCode?: string;
   addLocalAreaCode?: boolean;
+  addMissingAreaCodeZero?: boolean;
   stripChinaCountryCode?: boolean;
   outboundPrefix?: string;
+  useLineDialingRule?: boolean;
   numbers?: IvrExternalNumberTarget[];
 }
 

@@ -186,7 +186,7 @@
               <el-form-item label="语音打断">
                 <div class="barge-in-setting">
                   <el-switch v-model="form.bargeInEnabled" active-text="允许用户在 AI 播报时插话" />
-                  <p class="field-hint">开启后播放与 ASR 并行；检测到用户说话会停止当前播放并取消该轮剩余 TTS。默认关闭，不影响现有半双工流程。</p>
+                  <p class="field-hint">开启后播放与 ASR 并行；可选择立即停止回答，或先播放控场话术再恢复原回答。</p>
                 </div>
               </el-form-item>
               <template v-if="form.bargeInEnabled">
@@ -194,6 +194,14 @@
                   <el-col :span="8">
                     <el-form-item label="开场白打断">
                       <el-switch v-model="form.openingBargeInEnabled" active-text="允许" inactive-text="禁止" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="8">
+                    <el-form-item label="处理方式">
+                      <el-select v-model="form.bargeInStrategy" style="width: 100%">
+                        <el-option label="立即打断并响应用户" value="INTERRUPT" />
+                        <el-option label="控场后继续原播报" value="CONTROL_RESUME" />
+                      </el-select>
                     </el-form-item>
                   </el-col>
                   <el-col :span="8">
@@ -205,13 +213,55 @@
                       </el-select>
                     </el-form-item>
                   </el-col>
+                </el-row>
+                <el-row :gutter="16">
                   <el-col :span="8">
                     <el-form-item label="开播保护">
                       <el-input-number v-model="form.bargeInGraceMs" :min="0" :max="5000" :step="100" style="width: 100%" />
                       <p class="field-hint">毫秒；保护期内的 begin-speaking 不立即截断播放。</p>
                     </el-form-item>
                   </el-col>
+                  <template v-if="form.bargeInStrategy === 'CONTROL_RESUME'">
+                    <el-col :span="8">
+                      <el-form-item label="单通话上限">
+                        <el-input-number v-model="form.bargeInControlMaxCount" :min="1" :max="20" style="width: 100%" />
+                        <p class="field-hint">达到次数后不再播放控场话术，后续插话按普通打断处理并正常回复客户。</p>
+                      </el-form-item>
+                    </el-col>
+                    <el-col :span="8">
+                      <el-form-item label="控场冷却">
+                        <el-input-number
+                          v-model="form.bargeInControlCooldownMs"
+                          :min="0"
+                          :max="60000"
+                          :step="1000"
+                          style="width: 100%"
+                        />
+                        <p class="field-hint">毫秒；冷却期内的插话降级为普通打断，不重复播放控场话术。</p>
+                      </el-form-item>
+                    </el-col>
+                  </template>
                 </el-row>
+                <el-form-item v-if="form.bargeInStrategy === 'CONTROL_RESUME'" label="控场话术">
+                  <el-input
+                    v-model="form.bargeInControlText"
+                    type="textarea"
+                    :rows="2"
+                    maxlength="500"
+                    show-word-limit
+                    placeholder="例如：您先别急，请让我把这段内容说明完，很快就好。"
+                  />
+                  <div class="prompt-variable-list">
+                    <span class="field-hint">可用变量（点击插入）：</span>
+                    <el-tooltip v-for="variable in controlTextVariables" :key="variable.value" :content="variable.description" placement="top">
+                      <el-tag class="variable-tag" type="info" @click="insertControlTextVariable(variable.value)">
+                        {{ formatPromptVariable(variable.value) }}
+                      </el-tag>
+                    </el-tooltip>
+                  </div>
+                  <p class="field-hint">插话时立即停止当前音频，播放该话术，然后从被打断句子的开头继续播报。</p>
+                  <p class="field-hint">客户自定义字段可直接写成 <code>&#123;&#123;customer.custom.字段编码&#125;&#125;</code>；变量无值时替换为空。</p>
+                </el-form-item>
                 <el-alert
                   type="warning"
                   :closable="false"
@@ -628,6 +678,14 @@ const promptVariableDescriptions: Record<string, string> = {
   policyDefaults: '自动工单策略配置的默认字段值和业务默认项。',
   callContext: '通话 ID、呼入呼出方向、号码、时间、时长、线路及转人工情况。'
 };
+const controlTextVariables = [
+  { value: 'agent.name', description: '当前 AI 助手名称' },
+  { value: 'customer.name', description: '客户姓名' },
+  { value: 'customer.salutation', description: '根据客户姓名和性别生成的称呼，例如张先生' },
+  { value: 'customer.phone', description: '客户电话号码' },
+  { value: 'task.name', description: '当前外呼任务名称' },
+  { value: 'call.direction', description: '通话方向：INBOUND 或 OUTBOUND' }
+];
 const defaults = (): AiAgentForm => ({
   agentCode: '',
   agentName: '',
@@ -660,6 +718,10 @@ const defaults = (): AiAgentForm => ({
   openingBargeInEnabled: false,
   bargeInMode: 'STANDARD',
   bargeInGraceMs: 500,
+  bargeInStrategy: 'INTERRUPT',
+  bargeInControlText: '您先别急，请让我把这段内容说明完，很快就好。',
+  bargeInControlMaxCount: 2,
+  bargeInControlCooldownMs: 5000,
   knowledgeBaseIds: []
 });
 const form = ref(defaults());
@@ -686,6 +748,10 @@ const edit = async (row?: AiAgentVO) => {
         openingBargeInEnabled: Boolean(row.openingBargeInEnabled),
         bargeInMode: row.bargeInMode || 'STANDARD',
         bargeInGraceMs: numericValue(row.bargeInGraceMs, 500),
+        bargeInStrategy: row.bargeInStrategy || 'INTERRUPT',
+        bargeInControlText: row.bargeInControlText || '您先别急，请让我把这段内容说明完，很快就好。',
+        bargeInControlMaxCount: numericValue(row.bargeInControlMaxCount, 2),
+        bargeInControlCooldownMs: numericValue(row.bargeInControlCooldownMs, 5000),
         knowledgeBaseIds: [...row.knowledgeBaseIds]
       }
     : defaults();
@@ -815,6 +881,9 @@ const insertPromptVariable = (variable: string) => {
   ticketPrompt.value.promptContent = `${ticketPrompt.value.promptContent}${ticketPrompt.value.promptContent.endsWith('\n') ? '' : '\n'}${token}`;
 };
 const formatPromptVariable = (variable: string) => `{{${variable}}}`;
+const insertControlTextVariable = (variable: string) => {
+  form.value.bargeInControlText = `${form.value.bargeInControlText || ''}{{${variable}}}`;
+};
 const promptStatusLabel = (status: string) =>
   ({ DEFAULT: '系统默认', DRAFT: '未发布草稿', PUBLISHED: '已发布', ARCHIVED: '历史版本' })[status] || status;
 const openTest = (row: AiAgentVO) => {
@@ -831,7 +900,9 @@ const save = async () => {
     scoreThreshold: numericValue(form.value.scoreThreshold, 0.5),
     faqScoreThreshold: numericValue(form.value.faqScoreThreshold, 0.8),
     temperature: numericValue(form.value.temperature, 0.2),
-    bargeInGraceMs: numericValue(form.value.bargeInGraceMs, 500)
+    bargeInGraceMs: numericValue(form.value.bargeInGraceMs, 500),
+    bargeInControlMaxCount: numericValue(form.value.bargeInControlMaxCount, 2),
+    bargeInControlCooldownMs: numericValue(form.value.bargeInControlCooldownMs, 5000)
   };
   if (payload.retrievalFailurePolicy !== 'FALLBACK_MODEL') {
     payload.faqLearningEnabled = false;

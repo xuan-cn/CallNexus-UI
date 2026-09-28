@@ -74,6 +74,9 @@ export interface FormTemplate {
   templateName: string;
   businessType: FormBusinessType;
   workflowCode?: string;
+  deadlineEnabled?: boolean;
+  resolutionLimitMinutes?: number;
+  remindBeforeMinutes?: number;
   enabled: boolean;
   version?: number;
   fields: FormField[];

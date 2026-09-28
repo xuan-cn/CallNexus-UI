@@ -102,7 +102,7 @@
         v-loading="extensionLoading"
         :data="extensions"
         row-key="sipAccountId"
-        max-height="calc((100vh - 390px) / 2)"
+        max-height="320"
         class="dispatch-table"
         @selection-change="handleExtensionSelectionChange"
       >
@@ -185,7 +185,7 @@
           </div>
         </div>
       </template>
-      <el-table v-loading="taskLoading" :data="tasks" row-key="id" max-height="calc((100vh - 390px) / 2)" class="dispatch-table">
+      <el-table v-loading="taskLoading" :data="tasks" row-key="id" max-height="320" class="dispatch-table">
         <el-table-column label="类型" width="90">
           <template #default="{ row }">{{ taskTypeLabel(row.taskType) }}</template>
         </el-table-column>
@@ -1025,8 +1025,8 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   height: 100%;
   padding: 10px 12px;
-  overflow: hidden;
-  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .overview-card,
@@ -1052,9 +1052,9 @@ onBeforeUnmount(() => {
 .extension-card,
 .task-card {
   display: flex;
-  flex: 1;
+  flex: none;
   flex-direction: column;
-  min-height: 0;
+  min-height: 170px;
   overflow: hidden;
 
   :deep(.el-card__header) {
@@ -1066,9 +1066,8 @@ onBeforeUnmount(() => {
 
   :deep(.el-card__body) {
     display: flex;
-    flex: 1;
+    flex: none;
     flex-direction: column;
-    min-height: 0;
     padding: 10px 12px;
     overflow: hidden;
   }

@@ -24,6 +24,7 @@
 
 <script setup lang="ts" name="layoutBreadcrumbUserNews">
 import { useNoticeStore } from '@/store/modules/notice';
+import router from '@/router';
 
 const noticeStore = useNoticeStore();
 const { readAll } = useNoticeStore();
@@ -49,6 +50,9 @@ const onNewsClick = (item: any) => {
   newsList.value[item].read = true;
   //并且写入pinia
   noticeStore.state.notices = newsList.value;
+  if (newsList.value[item].path) {
+    void router.push(newsList.value[item].path);
+  }
 };
 
 // 前往通知中心点击
@@ -90,6 +94,7 @@ onMounted(() => {
     .content-box-item {
       padding-top: 12px;
       display: flex;
+      cursor: pointer;
       &:last-of-type {
         padding-bottom: 12px;
       }

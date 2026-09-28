@@ -19,6 +19,11 @@ export interface OutboundLinePolicyVO {
   policyCode: string;
   policyName: string;
   policyType: OutboundLinePolicyType;
+  localAreaCode?: string;
+  addLocalAreaCode: boolean;
+  addMissingAreaCodeZero: boolean;
+  stripChinaCountryCode: boolean;
+  outboundPrefix?: string;
   defaultPolicy: boolean;
   enabled: boolean;
   remark?: string;
@@ -33,6 +38,11 @@ export interface OutboundLinePolicyForm {
   policyCode: string;
   policyName: string;
   policyType: OutboundLinePolicyType;
+  localAreaCode?: string;
+  addLocalAreaCode: boolean;
+  addMissingAreaCodeZero: boolean;
+  stripChinaCountryCode: boolean;
+  outboundPrefix?: string;
   defaultPolicy: boolean;
   enabled: boolean;
   remark?: string;

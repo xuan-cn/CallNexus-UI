@@ -5,6 +5,7 @@ export interface CreateCustomerForm {
   primaryPhone: string;
   customerName?: string;
   templateId?: string | number;
+  importTaskId?: string | number;
   sourceCallId?: string;
   formData: Record<string, unknown>;
 }
@@ -13,6 +14,7 @@ export interface UpdateCustomerForm {
   customerName?: string;
   sourceCallId?: string;
   templateId?: string | number;
+  importTaskId?: string | number;
   formData: Record<string, unknown>;
 }
 
@@ -192,7 +194,7 @@ export const getCustomer = (id: string | number) => request<CustomerVO>({ url: `
 export const getCustomerByPhone = (primaryPhone: string) =>
   request<CustomerVO | null>({ url: '/api/v1/customers/by-phone', method: 'get', params: { primaryPhone } });
 
-export const createCustomer = (data: CreateCustomerForm) => request({ url: '/api/v1/customers', method: 'post', data });
+export const createCustomer = (data: CreateCustomerForm) => request<string | number>({ url: '/api/v1/customers', method: 'post', data });
 
 export const assignCustomers = (data: CustomerAssignmentForm) => request<void>({ url: '/api/v1/customers/assignments', method: 'post', data });
 

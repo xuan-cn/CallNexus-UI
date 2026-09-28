@@ -222,6 +222,10 @@ export interface AiAgentVO {
   openingBargeInEnabled: boolean;
   bargeInMode: 'SENSITIVE' | 'STANDARD' | 'NOISY';
   bargeInGraceMs: number;
+  bargeInStrategy: 'INTERRUPT' | 'CONTROL_RESUME';
+  bargeInControlText?: string;
+  bargeInControlMaxCount: number;
+  bargeInControlCooldownMs: number;
   knowledgeBaseIds: Id[];
   knowledgeBaseNames: string[];
 }

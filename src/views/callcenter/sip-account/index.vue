@@ -43,9 +43,16 @@
           <template #default="{ row }">{{ row.nodeName || '未绑定' }}</template>
         </el-table-column>
         <el-table-column label="SIP 域" prop="domain" min-width="180" />
-        <el-table-column label="状态" width="90" align="center">
+        <el-table-column label="配置状态" width="90" align="center">
           <template #default="{ row }">
             <el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="注册状态" width="110" align="center">
+          <template #default="{ row }">
+            <el-tag :type="registrationTagType(row.registrationStatus)" effect="light">
+              {{ registrationLabel(row.registrationStatus) }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="创建时间" prop="createTime" width="180" />
@@ -105,6 +112,8 @@ import { createSipAccount, deleteSipAccount, getSipAccount, listSipAccounts, upd
 import { SipAccountForm, SipAccountQuery, SipAccountVO } from '@/api/callcenter/sip-account/types';
 import { listFreeSwitchNodes } from '@/api/callcenter/freeswitch-node';
 import { FreeSwitchNodeVO } from '@/api/callcenter/freeswitch-node/types';
+import { listDispatchExtensionStatuses } from '@/api/callcenter/dispatch-monitor';
+import type { DispatchRegistrationStatus } from '@/api/callcenter/dispatch-monitor/types';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const loading = ref(false);
@@ -172,13 +181,22 @@ const { form, queryParams, rules } = toRefs(data);
 const getList = async () => {
   loading.value = true;
   try {
-    const res = await listSipAccounts(queryParams.value);
-    accountList.value = res.rows;
-    total.value = res.total;
+    const [accountRes, statusRes] = await Promise.all([listSipAccounts(queryParams.value), listDispatchExtensionStatuses()]);
+    const statusMap = new Map(statusRes.data.map((item) => [String(item.sipAccountId), item.registrationStatus]));
+    accountList.value = accountRes.rows.map((item) => ({
+      ...item,
+      registrationStatus: statusMap.get(String(item.id)) || (item.enabled ? 'NODE_UNAVAILABLE' : 'DISABLED')
+    }));
+    total.value = accountRes.total;
   } finally {
     loading.value = false;
   }
 };
+
+const registrationLabel = (value?: DispatchRegistrationStatus) =>
+  ({ REGISTERED: '已注册', UNREGISTERED: '未注册', DISABLED: '已停用', NODE_UNAVAILABLE: '节点不可达' })[value || ''] || '未知';
+const registrationTagType = (value?: DispatchRegistrationStatus) =>
+  value === 'REGISTERED' ? 'success' : value === 'UNREGISTERED' ? 'danger' : value === 'NODE_UNAVAILABLE' ? 'warning' : 'info';
 
 const handleQuery = () => {
   queryParams.value.pageNum = 1;

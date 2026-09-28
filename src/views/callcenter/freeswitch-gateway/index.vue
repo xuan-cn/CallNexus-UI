@@ -75,17 +75,20 @@
       <pagination v-show="total > 0" v-model:page="queryParams.pageNum" v-model:limit="queryParams.pageSize" :total="total" @pagination="getList" />
     </el-card>
 
-    <el-dialog
+    <el-drawer
       v-model="dialog.visible"
       :title="dialog.title"
-      width="860px"
+      size="760px"
       append-to-body
       :close-on-click-modal="!submitting"
       :close-on-press-escape="!submitting"
       :show-close="!submitting"
+      class="gateway-drawer"
     >
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="110px" :disabled="submitting">
-        <el-row :gutter="16">
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="120px" :disabled="submitting" class="gateway-form">
+        <el-tabs v-model="activeTab" class="gateway-tabs" stretch>
+          <el-tab-pane label="基础信息" name="basic">
+            <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="所属节点" prop="nodeId">
               <el-select v-model="form.nodeId" filterable style="width: 100%">
@@ -186,13 +189,10 @@
               <el-switch v-model="form.enabled" active-text="启用" inactive-text="停用" />
             </el-form-item>
           </el-col>
-          <el-col :span="24">
-            <el-collapse v-model="expandedSections" class="gateway-options">
-              <el-collapse-item name="keepalive">
-                <template #title>
-                  <span class="font-medium">注册与保活</span>
-                  <span class="ml-2 text-xs text-gray-400">REGISTER 续期、重试与 OPTIONS 探测</span>
-                </template>
+            </el-row>
+          </el-tab-pane>
+          <el-tab-pane label="注册与保活" name="keepalive">
+            <div class="tab-description">REGISTER 续期、重试与 OPTIONS 探测</div>
                 <el-row :gutter="16">
                   <el-col :span="12">
                     <el-form-item label="探测间隔" prop="ping">
@@ -238,12 +238,45 @@
                     </el-form-item>
                   </el-col>
                 </el-row>
-              </el-collapse-item>
-              <el-collapse-item name="advanced">
-                <template #title>
-                  <span class="font-medium">高级配置</span>
-                  <span class="ml-2 text-xs text-gray-400">SIP From、Contact 与呼入路由参数</span>
-                </template>
+          </el-tab-pane>
+          <el-tab-pane label="拨号规范" name="dialing">
+                <el-alert
+                  title="该规则用于所有经本线路发起的外呼；外呼线路策略单独配置拨号规范时，以策略配置为准。"
+                  type="info"
+                  :closable="false"
+                  show-icon
+                  class="mb-3"
+                />
+                <el-row :gutter="16">
+                  <el-col :span="12">
+                    <el-form-item label="本地区号" prop="localAreaCode">
+                      <el-input v-model="form.localAreaCode" placeholder="例如 010 或 0451" clearable />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="12">
+                    <el-form-item label="出局前缀" prop="outboundPrefix">
+                      <el-input v-model="form.outboundPrefix" placeholder="例如 9，留空不添加" clearable />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="12">
+                    <el-form-item label="本地固话补区号" prop="addLocalAreaCode">
+                      <el-switch v-model="form.addLocalAreaCode" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="12">
+                    <el-form-item label="异地区号补0" prop="addMissingAreaCodeZero">
+                      <el-switch v-model="form.addMissingAreaCodeZero" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="12">
+                    <el-form-item label="去除中国国家码" prop="stripChinaCountryCode">
+                      <el-switch v-model="form.stripChinaCountryCode" />
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+          </el-tab-pane>
+          <el-tab-pane label="高级配置" name="advanced">
+            <div class="tab-description">SIP From、Contact 与呼入路由参数</div>
                 <el-row :gutter="16">
                   <el-col :span="12">
                     <el-form-item label="呼入 Context" prop="dialplanContext">
@@ -281,16 +314,14 @@
                     </el-form-item>
                   </el-col>
                 </el-row>
-              </el-collapse-item>
-            </el-collapse>
-          </el-col>
-        </el-row>
+          </el-tab-pane>
+        </el-tabs>
       </el-form>
       <template #footer>
         <el-button :disabled="submitting" @click="dialog.visible = false">取消</el-button>
         <el-button type="primary" :loading="submitting" @click="submitForm">{{ submitting ? '同步中' : '确定' }}</el-button>
       </template>
-    </el-dialog>
+    </el-drawer>
   </div>
 </template>
 
@@ -309,7 +340,7 @@ import { FreeSwitchNodeVO } from '@/api/callcenter/freeswitch-node/types';
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const loading = ref(false);
 const submitting = ref(false);
-const expandedSections = ref<string[]>([]);
+const activeTab = ref('basic');
 const total = ref(0);
 const gatewayList = ref<FreeSwitchGatewayVO[]>([]);
 const nodeOptions = ref<FreeSwitchNodeVO[]>([]);
@@ -336,6 +367,11 @@ const initialForm: FreeSwitchGatewayForm = {
   registerEnabled: false,
   transport: 'UDP',
   callerIdNumber: '',
+  localAreaCode: '',
+  addLocalAreaCode: false,
+  addMissingAreaCodeZero: false,
+  stripChinaCountryCode: false,
+  outboundPrefix: '',
   ping: 0,
   expireSeconds: 60,
   retrySeconds: 30,
@@ -393,6 +429,8 @@ const data = reactive<PageData<FreeSwitchGatewayForm, FreeSwitchGatewayQuery>>({
       }
     ],
     transport: [{ required: true, message: '请选择传输协议', trigger: 'change' }],
+    localAreaCode: [{ pattern: /^$|^0[1-9]\d{1,2}$/, message: '请输入正确区号，例如 010 或 0451', trigger: 'blur' }],
+    outboundPrefix: [{ pattern: /^$|^[0-9*#]+$/, message: '出局前缀只能包含数字、* 或 #', trigger: 'blur' }],
     ping: [{ required: true, message: '请输入探测间隔', trigger: 'blur' }],
     expireSeconds: [{ required: true, message: '请输入注册续期间隔', trigger: 'blur' }],
     retrySeconds: [{ required: true, message: '请输入注册重试间隔', trigger: 'blur' }],
@@ -439,7 +477,7 @@ const resetQuery = () => {
 };
 const reset = () => {
   form.value = { ...initialForm };
-  expandedSections.value = [];
+  activeTab.value = 'basic';
   formRef.value?.resetFields();
 };
 const handleAdd = () => {
@@ -457,8 +495,18 @@ const handleUpdate = async (row: FreeSwitchGatewayVO) => {
 };
 const submitForm = () => {
   if (submitting.value) return;
-  formRef.value?.validate(async (valid) => {
-    if (!valid) return;
+  formRef.value?.validate(async (valid, invalidFields) => {
+    if (!valid) {
+      const firstInvalidField = Object.keys(invalidFields || {})[0];
+      const dialingFields = ['localAreaCode', 'outboundPrefix', 'addLocalAreaCode', 'addMissingAreaCodeZero', 'stripChinaCountryCode'];
+      const keepaliveFields = ['ping', 'expireSeconds', 'retrySeconds', 'pingMax', 'pingMin'];
+      const advancedFields = ['dialplanContext', 'extension', 'fromUser', 'fromDomain', 'callerIdInFrom', 'contactParams', 'description'];
+      if (dialingFields.includes(firstInvalidField)) activeTab.value = 'dialing';
+      else if (keepaliveFields.includes(firstInvalidField)) activeTab.value = 'keepalive';
+      else if (advancedFields.includes(firstInvalidField)) activeTab.value = 'advanced';
+      else activeTab.value = 'basic';
+      return;
+    }
     submitting.value = true;
     try {
       form.value.id ? await updateFreeSwitchGateway(form.value) : await createFreeSwitchGateway(form.value);
@@ -486,5 +534,34 @@ onMounted(async () => {
 .gateway-mode-radio {
   display: flex;
   flex-wrap: wrap;
+}
+
+.gateway-tabs {
+  min-height: 420px;
+}
+
+.tab-description {
+  margin-bottom: 18px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+:global(.gateway-drawer .el-drawer__header) {
+  margin-bottom: 0;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+:global(.gateway-drawer .el-drawer__body) {
+  padding: 0 22px 20px;
+}
+
+:global(.gateway-drawer .el-drawer__footer) {
+  padding: 14px 22px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
+:global(.gateway-drawer .el-tabs__header) {
+  margin-bottom: 22px;
 }
 </style>

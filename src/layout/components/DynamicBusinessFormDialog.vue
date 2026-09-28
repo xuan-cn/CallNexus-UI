@@ -1,5 +1,12 @@
 <template>
-  <el-dialog v-model="visible" :title="dialogTitle" width="760px" append-to-body>
+  <component
+    :is="ElDrawer"
+    v-model="visible"
+    :title="dialogTitle"
+    :size="businessType === 'CUSTOMER' ? 'min(680px, 92vw)' : 'min(760px, 92vw)'"
+    append-to-body
+    destroy-on-close
+  >
     <el-form label-position="top">
       <div class="default-field-section">
         <div class="section-title">默认信息</div>
@@ -35,6 +42,21 @@
               </el-select>
             </el-form-item>
           </el-col>
+          <el-col v-if="businessType === 'CUSTOMER' && canAssociateImportTask" :span="24">
+            <el-form-item label="关联资料导入任务">
+              <el-select
+                v-model="importTaskId"
+                clearable
+                filterable
+                :loading="importTasksLoading"
+                style="width: 100%"
+                placeholder="可选，保存后归入资料导入任务"
+              >
+                <el-option v-for="task in importTasks" :key="String(task.id)" :label="task.taskName" :value="task.id" />
+              </el-select>
+              <div class="field-tip">关联后可在资料导入任务和资料分配中查询该客户。</div>
+            </el-form-item>
+          </el-col>
         </el-row>
       </div>
       <div v-if="selectedTemplate" class="custom-field-section">
@@ -50,12 +72,7 @@
                 :placeholder="field.placeholder"
               />
               <el-input-number v-else-if="field.fieldType === 'NUMBER'" v-model="formData[field.fieldCode]" />
-              <file-upload
-                v-else-if="field.fieldType === 'FILE'"
-                v-model="formData[field.fieldCode]"
-                :limit="5"
-                :file-size="20"
-              />
+              <file-upload v-else-if="field.fieldType === 'FILE'" v-model="formData[field.fieldCode]" :limit="5" :file-size="20" />
               <el-date-picker
                 v-else-if="field.fieldType === 'DATE' || field.fieldType === 'DATETIME'"
                 v-model="formData[field.fieldCode]"
@@ -80,15 +97,17 @@
       <el-button @click="visible = false">取消</el-button>
       <el-button type="primary" :loading="submitting" @click="submit">{{ existingCustomer ? '更新客户' : '保存' }}</el-button>
     </template>
-  </el-dialog>
+  </component>
 </template>
 
 <script setup lang="ts">
-import { ElMessage } from 'element-plus';
+import { ElDrawer, ElMessage } from 'element-plus';
 import { createCustomer, CustomerVO, getCustomerByPhone, updateCustomer } from '@/api/callcenter/customer';
 import { listFormTemplates } from '@/api/callcenter/form-template';
 import { FormBusinessType, FormTemplate } from '@/api/callcenter/form-template/types';
 import { createTicket } from '@/api/callcenter/ticket';
+import { pageImportTasks, type CustomerImportTaskVO } from '@/api/callcenter/customer-import-task';
+import { checkPermi } from '@/utils/permission';
 
 const props = withDefaults(defineProps<{ businessType: FormBusinessType; phoneNumber?: string; callId?: string }>(), {
   phoneNumber: '',
@@ -103,8 +122,12 @@ const customerName = ref('');
 const formData = reactive<Record<string, any>>({});
 const submitting = ref(false);
 const existingCustomer = ref<CustomerVO>();
+const importTasks = ref<CustomerImportTaskVO[]>([]);
+const importTaskId = ref<string | number>();
+const importTasksLoading = ref(false);
 const selectedTemplate = computed(() => templates.value.find((template) => String(template.id) === String(templateId.value)));
 const enabledTemplates = computed(() => templates.value.filter((template) => template.enabled));
+const canAssociateImportTask = computed(() => checkPermi(['callcenter:customer-import-task:list']));
 const dialogTitle = computed(() => {
   if (props.businessType !== 'CUSTOMER') {
     return '创建工单';
@@ -112,6 +135,17 @@ const dialogTitle = computed(() => {
   return existingCustomer.value ? '编辑客户' : '新建客户';
 });
 let lookupTimer: ReturnType<typeof setTimeout> | undefined;
+
+const loadImportTasks = async () => {
+  if (props.businessType !== 'CUSTOMER' || !canAssociateImportTask.value) return;
+  importTasksLoading.value = true;
+  try {
+    const response = await pageImportTasks({ pageNum: 1, pageSize: 200, status: 'ENABLED' });
+    importTasks.value = response.rows || [];
+  } finally {
+    importTasksLoading.value = false;
+  }
+};
 
 const populateFormData = (template?: FormTemplate) => {
   Object.keys(formData).forEach((key) => delete formData[key]);
@@ -149,8 +183,10 @@ watch(visible, async (opened) => {
   customerName.value = '';
   existingCustomer.value = undefined;
   templateId.value = undefined;
+  importTaskId.value = undefined;
+  importTasks.value = [];
   Object.keys(formData).forEach((key) => delete formData[key]);
-  const response = await listFormTemplates(props.businessType);
+  const [response] = await Promise.all([listFormTemplates(props.businessType), loadImportTasks()]);
   templates.value = response.data;
   if (enabledTemplates.value.length === 1) templateId.value = enabledTemplates.value[0].id;
   await lookupCustomer();
@@ -179,6 +215,7 @@ const submit = async () => {
           customerName: customerName.value || undefined,
           sourceCallId: props.callId || existingCustomer.value.sourceCallId,
           templateId: templateId.value,
+          importTaskId: importTaskId.value,
           formData
         });
       } else {
@@ -186,6 +223,7 @@ const submit = async () => {
           primaryPhone: phone.value,
           customerName: customerName.value || undefined,
           templateId: templateId.value,
+          importTaskId: importTaskId.value,
           sourceCallId: props.callId || undefined,
           formData
         });
@@ -199,7 +237,11 @@ const submit = async () => {
         formData
       });
     }
-    ElMessage.success(props.businessType === 'CUSTOMER' ? (existingCustomer.value ? '客户更新成功' : '客户创建成功') : '工单创建成功');
+    if (props.businessType !== 'CUSTOMER') {
+      ElMessage.success('工单创建成功');
+    } else {
+      ElMessage.success(`${existingCustomer.value ? '客户更新成功' : '客户创建成功'}${importTaskId.value ? '，已关联资料导入任务' : ''}`);
+    }
     visible.value = false;
     emit('saved');
   } finally {
@@ -229,5 +271,11 @@ const submit = async () => {
 }
 .existing-customer-alert {
   margin-bottom: 14px;
+}
+.field-tip {
+  margin-top: 5px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 18px;
 }
 </style>

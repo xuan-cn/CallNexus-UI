@@ -5,6 +5,7 @@
         <span class="title-icon"><el-icon><DataAnalysis /></el-icon></span>
         <div><h2>满意度分析</h2><p>查看挂机评价参与情况、评分趋势以及队列和坐席表现</p></div>
       </div>
+      <el-button class="export-button" :icon="Download" :loading="exporting" @click="handleExport">导出</el-button>
       <el-form class="filter-form" :inline="true" size="small" @submit.prevent>
         <el-form-item label="统计日期">
           <el-date-picker v-model="dateRange" class="date-range" type="daterange" value-format="YYYY-MM-DD"
@@ -107,8 +108,8 @@
 
 <script setup lang="ts">
 import * as echarts from 'echarts';
-import { DataAnalysis } from '@element-plus/icons-vue';
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { DataAnalysis, Download } from '@element-plus/icons-vue';
+import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import {
   getSatisfactionReportDistribution, getSatisfactionReportSummary, getSatisfactionReportTrend,
   listReportAgentOptions, listReportQueueOptions, listSatisfactionAgentRankings,
@@ -121,12 +122,14 @@ import type {
 import CallRecordDetailDrawer from '@/components/CallRecordDetailDrawer/index.vue';
 
 const formatDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const today = new Date();
 const begin = new Date(today);
 begin.setDate(begin.getDate() - 6);
 const dateRange = ref<[string, string]>([formatDate(begin), formatDate(today)]);
 const query = reactive<ReportQuery>({ pageNum: 1, pageSize: 20 });
 const loading = ref(false);
+const exporting = ref(false);
 const summary = ref<SatisfactionSummaryVO>();
 const trendRows = ref<SatisfactionTrendPointVO[]>([]);
 const distributionRows = ref<SatisfactionScoreDistributionVO[]>([]);
@@ -172,6 +175,16 @@ const applyQuickRange = (days: number) => {
   handleQuery();
 };
 const handleQuery = () => { query.pageNum = 1; load(); };
+const handleExport = async () => {
+  exporting.value = true;
+  try {
+    await proxy?.download(
+      'api/v1/reports/satisfaction/export',
+      params(),
+      `满意度分析_${dateRange.value[0]}_${dateRange.value[1]}.xlsx`
+    );
+  } finally { exporting.value = false; }
+};
 const openCallDetail = (row: SatisfactionDetailVO) => {
   callDetailSessionId.value = row.sessionId;
   callDetailVisible.value = true;
@@ -241,7 +254,8 @@ onBeforeUnmount(() => { window.removeEventListener('resize', resize); trendChart
 <style scoped lang="scss">
 .satisfaction-page { display: flex; flex-direction: column; gap: 10px; min-height: 100%; padding: 10px 12px; box-sizing: border-box; overflow: auto; font-size: 12px; }
 .filter-panel, .metric-item, .chart-grid .el-card, .ranking-grid .el-card, .detail-card { border: 0; border-radius: 12px; background: var(--el-bg-color); }
-.filter-panel { padding: 12px 14px; }
+.filter-panel { position: relative; padding: 12px 14px; }
+.export-button { position: absolute; top: 12px; right: 14px; }
 .page-title { display: flex; align-items: center; gap: 10px; }
 .title-icon { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 9px; color: var(--el-color-primary); background: var(--el-color-primary-light-9); font-size: 18px; }
 .page-title h2 { margin: 0 0 3px; font-size: 17px; font-weight: 500; }

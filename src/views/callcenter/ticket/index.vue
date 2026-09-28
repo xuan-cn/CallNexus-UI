@@ -15,6 +15,15 @@
             <el-option label="已解决" value="RESOLVED" /><el-option label="已关闭" value="CLOSED" />
           </el-select>
         </el-form-item>
+        <el-form-item label="办结时限">
+          <el-select v-model="query.deadlineStatus" clearable placeholder="全部" style="width: 150px">
+            <el-option label="正常" value="NORMAL" />
+            <el-option label="即将到期" value="DUE_SOON" />
+            <el-option label="已超时" value="OVERDUE" />
+            <el-option label="按时办结" value="COMPLETED" />
+            <el-option label="超时办结" value="COMPLETED_OVERDUE" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="工单模板">
           <el-select v-model="query.templateId" clearable filterable placeholder="全部模板" style="width: 180px" @change="handleTemplateChange">
             <el-option v-for="template in ticketTemplates" :key="template.id" :label="template.templateName" :value="template.id" />
@@ -50,12 +59,24 @@
         </el-table-column>
         <el-table-column label="来电号码" prop="callerNumber" min-width="140" />
         <el-table-column label="来源通话" prop="sourceCallId" min-width="240" show-overflow-tooltip />
+        <el-table-column label="办结时限" min-width="210">
+          <template #default="{ row }">
+            <el-tooltip v-if="row.dueAt" :content="`截止时间：${formatDeadline(row.dueAt)}`" placement="top">
+              <div class="deadline-cell">
+                <el-tag :type="deadlineTagType(row)" effect="plain" size="small">{{ deadlineStatusLabel(row) }}</el-tag>
+                <span class="deadline-time">{{ formatDeadlineCompact(row.dueAt) }}</span>
+              </div>
+            </el-tooltip>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
         <el-table-column v-for="field in listVisibleTicketFields" :key="field.fieldCode" :label="field.fieldName" min-width="110" show-overflow-tooltip>
           <template #default="{ row }">{{ formatDynamicFieldValue(row.formData?.[field.fieldCode], field) }}</template>
         </el-table-column>
         <el-table-column label="创建时间" prop="createTime" min-width="170" />
-        <el-table-column label="操作" fixed="right" width="260">
+        <el-table-column label="操作" fixed="right" width="220" class-name="ticket-operation-column">
           <template #default="{ row }">
+            <el-button v-if="canEditDeadline(row)" v-hasPermi="['callcenter:ticket:create']" link type="primary" @click="openDeadlineDialog(row)">设置时限</el-button>
             <el-button v-if="canSubmit(row)" link type="primary" @click="submit(row)">提交</el-button>
             <el-button
               v-if="canResolveDirectly(row)"
@@ -75,6 +96,7 @@
       <template #footer="{ detail }">
         <div class="ticket-detail-actions">
           <el-button @click="detailVisible = false">关闭窗口</el-button>
+          <el-button v-if="canEditDeadline(detail)" v-hasPermi="['callcenter:ticket:create']" @click="openDeadlineDialog(detail)">设置时限</el-button>
           <el-button v-if="detail?.flowInstanceId" @click="showProgress(detail)">流程进度</el-button>
           <el-button v-if="canSubmit(detail)" type="primary" @click="submit(detail)">提交工单</el-button>
           <el-button v-if="isApprovalDetail(detail)" type="primary" @click="openApproval">办理当前任务</el-button>
@@ -85,13 +107,41 @@
     <SubmitVerify ref="submitVerifyRef" :task-variables="taskVariables" @submit-callback="handleWorkflowUpdated" />
     <ApprovalRecord ref="approvalRecordRef" />
     <DynamicBusinessFormDialog v-model="createVisible" business-type="TICKET" @saved="handleCreated" />
+    <el-dialog v-model="deadlineDialogVisible" title="设置工单办结时限" width="500px" append-to-body destroy-on-close>
+      <el-form label-width="110px">
+        <el-form-item label="启用时限">
+          <el-switch v-model="deadlineForm.enabled" />
+        </el-form-item>
+        <template v-if="deadlineForm.enabled">
+          <el-form-item label="截止时间" required>
+            <el-date-picker
+              v-model="deadlineForm.dueAt"
+              type="datetime"
+              value-format="YYYY-MM-DD HH:mm:ss"
+              placeholder="选择该工单的截止时间"
+              style="width: 100%"
+            />
+          </el-form-item>
+          <el-form-item label="提前提醒">
+            <el-input-number v-model="deadlineForm.remindBeforeMinutes" :min="0" :max="525600" :step="10" />
+            <span class="deadline-unit">分钟</span>
+          </el-form-item>
+          <div class="deadline-dialog-tip">设置后仅覆盖当前工单。填写 0 分钟表示不发送临期提醒，逾期提醒仍会发送。</div>
+        </template>
+        <el-alert v-else type="warning" :closable="false" title="关闭后，该工单将不再进行临期或逾期提醒。" />
+      </el-form>
+      <template #footer>
+        <el-button @click="deadlineDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="deadlineSubmitting" @click="saveDeadline">保存</el-button>
+      </template>
+    </el-dialog>
     </template>
     <AiTicketDraftReview v-else @open-ticket="openCreatedTicket" />
   </div>
 </template>
 
 <script setup name="TicketManagement" lang="ts">
-import { closeTicket, exportTickets, resolveTicketDirectly, searchTickets, submitTicket, TicketQuery, TicketVO } from '@/api/callcenter/ticket';
+import { closeTicket, exportTickets, resolveTicketDirectly, searchTickets, submitTicket, TicketQuery, TicketVO, updateTicketDeadline } from '@/api/callcenter/ticket';
 import { getFormQuerySchema, listFormTemplates } from '@/api/callcenter/form-template';
 import type { FormQueryField, FormTemplate } from '@/api/callcenter/form-template/types';
 import DynamicQueryFields from '@/components/callcenter/DynamicQueryFields.vue';
@@ -125,6 +175,10 @@ const listVisibleTicketFields = computed(() =>
     .sort((first, second) => (first.sortOrder || 0) - (second.sortOrder || 0))
 );
 const activeTab = ref('tickets');
+const deadlineDialogVisible = ref(false);
+const deadlineSubmitting = ref(false);
+const deadlineTicket = ref<TicketVO>();
+const deadlineForm = reactive({ enabled: true, dueAt: '', remindBeforeMinutes: 120 });
 const load = async () => {
   loading.value = true;
   try {
@@ -161,6 +215,7 @@ const resetQuery = () => {
   query.ticketNo = '';
   query.callerNumber = '';
   query.ticketStatus = undefined;
+  query.deadlineStatus = undefined;
   query.templateId = undefined;
   query.dynamicFilters = [];
   querySchemaFields.value = [];
@@ -188,6 +243,77 @@ const processStatusLabel = (status?: string) =>
       termination: '已终止'
     }) as Record<string, string>
   )[status || ''] || '-';
+const formatDeadline = (value?: string) => (value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '-');
+const formatDeadlineCompact = (value?: string) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+const formatDateTimeValue = (value: Date | string) => {
+  const date = new Date(value);
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+};
+const canEditDeadline = (ticket?: TicketVO) => ticket?.ticketStatus === 'OPEN' || ticket?.ticketStatus === 'PROCESSING';
+const openDeadlineDialog = (ticket: TicketVO) => {
+  deadlineTicket.value = ticket;
+  deadlineForm.enabled = Boolean(ticket.dueAt);
+  deadlineForm.dueAt = ticket.dueAt ? formatDateTimeValue(ticket.dueAt) : formatDateTimeValue(new Date(Date.now() + 24 * 60 * 60 * 1000));
+  deadlineForm.remindBeforeMinutes = ticket.dueAt && ticket.remindAt
+    ? Math.max(0, Math.round((new Date(ticket.dueAt).getTime() - new Date(ticket.remindAt).getTime()) / 60_000))
+    : 120;
+  deadlineDialogVisible.value = true;
+};
+const saveDeadline = async () => {
+  if (!deadlineTicket.value) return;
+  if (deadlineForm.enabled && !deadlineForm.dueAt) {
+    ElMessage.warning('请选择工单截止时间');
+    return;
+  }
+  if (deadlineForm.enabled && new Date(deadlineForm.dueAt).getTime() <= Date.now()) {
+    ElMessage.warning('工单截止时间必须晚于当前时间');
+    return;
+  }
+  deadlineSubmitting.value = true;
+  try {
+    await updateTicketDeadline(deadlineTicket.value.id, {
+      enabled: deadlineForm.enabled,
+      dueAt: deadlineForm.enabled ? deadlineForm.dueAt : undefined,
+      remindBeforeMinutes: deadlineForm.enabled ? deadlineForm.remindBeforeMinutes : undefined
+    });
+    ElMessage.success(deadlineForm.enabled ? '工单办结时限已更新' : '工单办结时限已取消');
+    deadlineDialogVisible.value = false;
+    await load();
+    if (detailVisible.value) await detailRef.value?.reload();
+  } finally {
+    deadlineSubmitting.value = false;
+  }
+};
+const compactDuration = (seconds: number) => {
+  const totalMinutes = Math.max(0, Math.ceil(Math.abs(seconds) / 60));
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  if (days > 0) return `${days}天${hours}小时`;
+  if (hours > 0) return `${hours}小时${minutes}分钟`;
+  return `${minutes}分钟`;
+};
+const deadlineStatusLabel = (ticket: TicketVO) => {
+  if (ticket.deadlineStatus === 'COMPLETED') return '按时办结';
+  if (ticket.deadlineStatus === 'COMPLETED_OVERDUE') return '超时办结';
+  if (ticket.deadlineStatus === 'CANCELLED') return '已停止';
+  const remaining = Number(ticket.remainingSeconds || 0);
+  if (ticket.deadlineStatus === 'OVERDUE' || remaining < 0) return `已超时 ${compactDuration(remaining)}`;
+  if (ticket.deadlineStatus === 'DUE_SOON') return `剩余 ${compactDuration(remaining)}`;
+  return `剩余 ${compactDuration(remaining)}`;
+};
+const deadlineTagType = (ticket: TicketVO) => {
+  if (ticket.deadlineStatus === 'COMPLETED') return 'success';
+  if (ticket.deadlineStatus === 'OVERDUE' || ticket.deadlineStatus === 'COMPLETED_OVERDUE' || Number(ticket.remainingSeconds || 0) < 0) return 'danger';
+  if (ticket.deadlineStatus === 'DUE_SOON') return 'warning';
+  return 'info';
+};
 const isApprovalDetail = (ticket?: TicketVO) =>
   Boolean(ticket && route.query.type === 'approval' && route.query.taskId && String(ticket.id) === String(detailId.value));
 const submit = async (ticket: TicketVO) => {
@@ -236,6 +362,15 @@ onMounted(async () => {
     detailVisible.value = true;
   }
 });
+watch(
+  () => route.query.id,
+  (id) => {
+    if (!id) return;
+    activeTab.value = 'tickets';
+    detailId.value = String(id);
+    detailVisible.value = true;
+  }
+);
 </script>
 
 <style scoped>
@@ -243,6 +378,41 @@ onMounted(async () => {
   margin-bottom: 12px;
 }
 .ticket-tabs { margin-bottom: 10px; }
+
+:deep(.ticket-operation-column .cell) {
+  white-space: nowrap;
+}
+
+.deadline-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.deadline-cell :deep(.el-tag) {
+  flex: none;
+}
+
+.deadline-time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deadline-unit {
+  margin-left: 8px;
+  color: #606266;
+}
+
+.deadline-dialog-tip {
+  margin: -4px 0 0 110px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 18px;
+}
 
 .ticket-detail-actions {
   display: flex;

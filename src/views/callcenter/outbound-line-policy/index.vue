@@ -66,6 +66,17 @@
             </div>
           </template>
         </el-table-column>
+        <el-table-column label="拨号规范" min-width="240">
+          <template #default="{ row }">
+            <div class="rule-list">
+              <el-tag v-if="row.addMissingAreaCodeZero" type="success" effect="plain">异地区号补0</el-tag>
+              <el-tag v-if="row.addLocalAreaCode" type="success" effect="plain">本地固话补{{ row.localAreaCode || '区号' }}</el-tag>
+              <el-tag v-if="row.stripChinaCountryCode" type="info" effect="plain">去中国国家码</el-tag>
+              <el-tag v-if="row.outboundPrefix" type="warning" effect="plain">出局前缀 {{ row.outboundPrefix }}</el-tag>
+              <span v-if="!hasDialingRule(row)" class="muted">原样拨号</span>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="备注" prop="remark" min-width="180" show-overflow-tooltip />
         <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
@@ -108,6 +119,38 @@
             <el-form-item label="状态"><el-switch v-model="form.enabled" active-text="启用" inactive-text="停用" /></el-form-item>
           </el-col>
         </el-row>
+
+        <div class="form-section">
+          <div class="form-section__title">拨号规范</div>
+          <div class="form-section__hint">选中该策略后，在号码送入 FreeSWITCH 前统一处理；未启用的规则不会修改号码。</div>
+          <el-row :gutter="16">
+            <el-col :span="12">
+              <el-form-item label="本地区号" prop="localAreaCode">
+                <el-input v-model="form.localAreaCode" clearable placeholder="例如 0451" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="出局前缀" prop="outboundPrefix">
+                <el-input v-model="form.outboundPrefix" clearable placeholder="例如 9，SIP 中继通常留空" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="本地固话">
+                <el-switch v-model="form.addLocalAreaCode" active-text="自动补本地区号" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="异地固话">
+                <el-switch v-model="form.addMissingAreaCodeZero" active-text="区号缺0时自动补0" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="中国国家码">
+                <el-switch v-model="form.stripChinaCountryCode" active-text="去除 +86 / 0086" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </div>
 
         <el-divider content-position="left">线路明细</el-divider>
         <div class="item-actions">
@@ -178,6 +221,11 @@ const form = reactive<OutboundLinePolicyForm>({
   policyCode: '',
   policyName: '',
   policyType: 'ROUND_ROBIN',
+  localAreaCode: '',
+  addLocalAreaCode: false,
+  addMissingAreaCodeZero: false,
+  stripChinaCountryCode: false,
+  outboundPrefix: '',
   defaultPolicy: true,
   enabled: true,
   items: []
@@ -186,9 +234,13 @@ const rules = {
   nodeId: [{ required: true, message: '请选择 FreeSWITCH 节点' }],
   policyCode: [{ required: true, message: '请输入策略编码' }],
   policyName: [{ required: true, message: '请输入策略名称' }],
-  policyType: [{ required: true, message: '请选择策略类型' }]
+  policyType: [{ required: true, message: '请选择策略类型' }],
+  localAreaCode: [{ pattern: /^$|^0\d{2,3}$/, message: '请输入包含前导0的3至4位区号', trigger: 'blur' }],
+  outboundPrefix: [{ pattern: /^$|^\d{1,16}$/, message: '出局前缀只能包含数字', trigger: 'blur' }]
 };
 const policyTypeLabel = (value: OutboundLinePolicyType) => ({ FIXED: '固定', ROUND_ROBIN: '轮询', WEIGHT: '权重' })[value] || value;
+const hasDialingRule = (row: OutboundLinePolicyVO) =>
+  row.addLocalAreaCode || row.addMissingAreaCodeZero || row.stripChinaCountryCode || Boolean(row.outboundPrefix);
 const phoneNumberLabel = (item: PhoneNumberVO) => `${item.number} - ${item.numberName || item.gatewayName || '主叫号码'}`;
 
 const loadNodes = async () => {
@@ -223,6 +275,11 @@ const resetForm = () => {
     policyCode: '',
     policyName: '',
     policyType: 'ROUND_ROBIN',
+    localAreaCode: '',
+    addLocalAreaCode: false,
+    addMissingAreaCodeZero: false,
+    stripChinaCountryCode: false,
+    outboundPrefix: '',
     defaultPolicy: true,
     enabled: true,
     remark: '',
@@ -290,6 +347,30 @@ onMounted(async () => {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+.rule-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.muted,
+.form-section__hint {
+  color: #8792a2;
+}
+.form-section {
+  padding: 14px 16px 2px;
+  margin: 4px 0 18px 110px;
+  background: var(--el-fill-color-lighter);
+  border-radius: 6px;
+}
+.form-section__title {
+  margin-bottom: 4px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+.form-section__hint {
+  margin-bottom: 14px;
+  font-size: 12px;
 }
 :deep(.el-divider) {
   display: none;

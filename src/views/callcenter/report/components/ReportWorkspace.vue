@@ -11,6 +11,7 @@
             <p>{{ subtitle }}</p>
           </div>
         </div>
+        <el-button :icon="Download" :loading="exporting" @click="handleExport">导出</el-button>
       </div>
       <el-form class="filter-form" :inline="true" size="small" @submit.prevent>
         <el-form-item>
@@ -290,8 +291,8 @@
 
 <script setup lang="ts">
 import * as echarts from 'echarts';
-import { DataAnalysis, Headset, Histogram, TrendCharts, User } from '@element-plus/icons-vue';
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { DataAnalysis, Download, Headset, Histogram, TrendCharts, User } from '@element-plus/icons-vue';
+import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import {
   getCallReportDistribution,
   getCallReportSummary,
@@ -319,6 +320,7 @@ import type {
 } from '@/api/callcenter/report/types';
 
 const props = defineProps<{ mode: 'overview' | 'call' | 'agent' | 'queue' }>();
+const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const now = new Date();
 const formatDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const start = new Date(now);
@@ -327,6 +329,7 @@ const dateRange = ref<[string, string]>([formatDate(start), formatDate(now)]);
 const query = reactive<ReportQuery>({ pageNum: 1, pageSize: 20 });
 const agentOptions = ref<ReportAgentOptionVO[]>([]);
 const loading = ref(false);
+const exporting = ref(false);
 const kpis = ref<OverviewKpiVO>();
 const trend = ref<ReportTrendPointVO[]>([]);
 const distribution = ref<CallDistributionVO[]>([]);
@@ -398,6 +401,20 @@ const loadAgentOptions = async () => {
 const handleQuery = () => {
   query.pageNum = 1;
   load();
+};
+const handleExport = async () => {
+  const config = {
+    overview: { url: 'api/v1/reports/overview/export', name: '运营总览' },
+    call: { url: 'api/v1/reports/calls/export', name: '通话分析' },
+    agent: { url: 'api/v1/reports/agents/export', name: '坐席分析' },
+    queue: { url: 'api/v1/reports/queues/export', name: '队列分析' }
+  }[props.mode];
+  exporting.value = true;
+  try {
+    await proxy?.download(config.url, params(), `${config.name}_${dateRange.value[0]}_${dateRange.value[1]}.xlsx`);
+  } finally {
+    exporting.value = false;
+  }
 };
 const load = async () => {
   loading.value = true;

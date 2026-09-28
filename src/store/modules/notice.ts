@@ -2,10 +2,12 @@ import { defineStore } from 'pinia';
 import { reactive } from 'vue';
 
 interface NoticeItem {
+  eventId?: string;
   title?: string;
   read: boolean;
   message: any;
   time: string;
+  path?: string;
 }
 
 export const useNoticeStore = defineStore('notice', () => {

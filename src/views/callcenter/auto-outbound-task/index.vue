@@ -90,6 +90,15 @@
             <el-button v-hasPermi="['callcenter:auto-outbound-task:query']" type="primary" plain @click="memberDrawerRef?.open(selectedTask)"
               >名单管理</el-button
             >
+            <el-button
+              v-if="selectedTask.status !== 'DRAFT'"
+              v-hasPermi="['callcenter:auto-outbound-task:execute']"
+              type="warning"
+              plain
+              :loading="retryingFailed"
+              @click="handleRetryFailed(selectedTask)"
+              >重试失败号码</el-button
+            >
             <el-tooltip :disabled="selectedTask.totalCount > 0 || selectedTask.status === 'RUNNING'" content="请先生成外呼名单">
               <span>
                 <el-button
@@ -438,6 +447,7 @@ import {
   pauseAutoOutboundTask,
   resumeAutoOutboundTask,
   rerunAutoOutboundTask,
+  retryFailedAutoOutboundMembers,
   startAutoOutboundTask,
   stopAutoOutboundTask,
   updateAutoOutboundTask
@@ -466,6 +476,7 @@ const selectedTaskId = ref<string | number>();
 const detailTab = ref('overview');
 const monitorLoading = ref(false);
 const monitor = ref<AutoOutboundMonitorVO>();
+const retryingFailed = ref(false);
 const formRef = ref<FormInstance>();
 const memberDrawerRef = ref<InstanceType<typeof MemberDrawer>>();
 const monitorDrawerRef = ref<InstanceType<typeof MonitorDrawer>>();
@@ -746,6 +757,23 @@ const handleStop = async (row: AutoOutboundTaskVO) => {
   await proxy?.$modal.confirm(`确认停止任务“${row.taskName}”吗？停止后可修改配置或重新启动。`);
   await stopAutoOutboundTask(row.id);
   await load();
+};
+const handleRetryFailed = async (row: AutoOutboundTaskVO) => {
+  await proxy?.$modal.confirm(
+    `确认重试任务“${row.taskName}”中的失败号码吗？无人接听、用户忙和呼叫失败号码将重新进入待拨队列，历史拨打记录会保留。`
+  );
+  retryingFailed.value = true;
+  try {
+    const count = (await retryFailedAutoOutboundMembers(row.id)).data || 0;
+    if (count === 0) {
+      proxy?.$modal.msgWarning('当前任务没有可重试的失败号码');
+    } else {
+      proxy?.$modal.msgSuccess(`已将 ${count} 个失败号码加入待拨队列`);
+    }
+    await load();
+  } finally {
+    retryingFailed.value = false;
+  }
 };
 const primaryActionLabel = (row: AutoOutboundTaskVO) =>
   row.status === 'RUNNING' ? '暂停' : row.status === 'PAUSED' ? '继续' : ['STOPPED', 'COMPLETED'].includes(row.status) ? '重新执行' : '启动';

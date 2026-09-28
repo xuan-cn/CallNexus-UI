@@ -7,6 +7,7 @@ export interface SipAccountVO {
   displayName: string;
   domain: string;
   enabled: boolean;
+  registrationStatus?: 'REGISTERED' | 'UNREGISTERED' | 'DISABLED' | 'NODE_UNAVAILABLE';
   version: number;
   createTime: string;
 }

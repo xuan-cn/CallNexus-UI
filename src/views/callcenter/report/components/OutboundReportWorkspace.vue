@@ -11,6 +11,7 @@
             <p>统一查看预览外呼与自动外呼的拨打、接通和业务转化</p>
           </div>
         </div>
+        <el-button :icon="Download" :loading="exporting" @click="handleExport">导出</el-button>
       </div>
       <el-form class="filter-form" :inline="true" size="small" label-position="left" @submit.prevent>
         <el-form-item label="统计日期">
@@ -120,8 +121,8 @@
 
 <script setup lang="ts">
 import * as echarts from 'echarts';
-import { TrendCharts } from '@element-plus/icons-vue';
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { Download, TrendCharts } from '@element-plus/icons-vue';
+import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import {
   getOutboundReportDistribution,
   getOutboundReportSummary,
@@ -139,12 +140,14 @@ import type {
 } from '@/api/callcenter/report/types';
 
 const now = new Date();
+const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const formatDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const start = new Date(now);
 start.setDate(start.getDate() - 6);
 const dateRange = ref<[string, string]>([formatDate(start), formatDate(now)]);
 const query = reactive<ReportQuery>({ pageNum: 1, pageSize: 20 });
 const loading = ref(false);
+const exporting = ref(false);
 const summary = ref<OutboundReportSummaryVO>();
 const trendRows = ref<OutboundTrendPointVO[]>([]);
 const distributionRows = ref<CallDistributionVO[]>([]);
@@ -176,6 +179,18 @@ const params = () => ({ ...query, beginDate: dateRange.value[0], endDate: dateRa
 const handleQuery = () => {
   query.pageNum = 1;
   load();
+};
+const handleExport = async () => {
+  exporting.value = true;
+  try {
+    await proxy?.download(
+      'api/v1/reports/outbound/export',
+      params(),
+      `外呼分析_${dateRange.value[0]}_${dateRange.value[1]}.xlsx`
+    );
+  } finally {
+    exporting.value = false;
+  }
 };
 const applyQuickRange = (days: number) => {
   const endDate = new Date();

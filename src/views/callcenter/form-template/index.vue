@@ -43,6 +43,12 @@
             <span v-else class="empty-chip">-</span>
           </template>
         </el-table-column>
+        <el-table-column label="办结时限" width="120">
+          <template #default="{ row }">
+            <span v-if="row.businessType === 'TICKET' && row.deadlineEnabled">{{ deadlineDurationLabel(row.resolutionLimitMinutes) }}</span>
+            <span v-else class="empty-chip">-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="字段 / 列表列" width="140">
           <template #default="{ row }">
             <div class="count-cell">
@@ -109,6 +115,19 @@
               />
             </el-select>
             <div class="workflow-tip">工单创建后固化流程编码；流程表单路径请配置为 /callcenter/ticket。</div>
+          </el-form-item>
+          <el-form-item label="办结时限">
+            <div class="deadline-config">
+              <el-switch v-model="form.deadlineEnabled" active-text="启用" />
+              <template v-if="form.deadlineEnabled">
+                <span class="deadline-label">创建后</span>
+                <el-input-number v-model="form.resolutionLimitMinutes" :min="1" :max="525600" controls-position="right" />
+                <span>分钟内办结，提前</span>
+                <el-input-number v-model="form.remindBeforeMinutes" :min="0" :max="525599" controls-position="right" />
+                <span>分钟提醒</span>
+              </template>
+            </div>
+            <div class="workflow-tip">仅统计工单办结时限，不改变工作流节点和流转规则；进入“已解决”即停止计时。</div>
           </el-form-item>
         </el-form>
 
@@ -453,6 +472,9 @@ const emptyForm = (): EditableTemplate => ({
   templateName: '',
   businessType: 'CUSTOMER',
   workflowCode: undefined,
+  deadlineEnabled: false,
+  resolutionLimitMinutes: 1440,
+  remindBeforeMinutes: 120,
   enabled: true,
   fields: []
 });
@@ -615,6 +637,12 @@ const workflowLabel = (workflowCode?: string) => {
   const definition = workflowOptions.value.find((item) => item.flowCode === workflowCode);
   return definition ? `${definition.flowName}（${workflowCode}）` : workflowCode;
 };
+const deadlineDurationLabel = (minutes?: number) => {
+  if (!minutes) return '-';
+  if (minutes % 1440 === 0) return `${minutes / 1440} 天`;
+  if (minutes % 60 === 0) return `${minutes / 60} 小时`;
+  return `${minutes} 分钟`;
+};
 const submit = async () => {
   if (!form.value.templateCode || !form.value.templateName) {
     ElMessage.warning('请填写模板编码和模板名称');
@@ -627,6 +655,16 @@ const submit = async () => {
   if (form.value.fields.some((field) => optionTypes.includes(field.fieldType) && !validOptions(field).length)) {
     ElMessage.warning('单选、多选和下拉字段至少需要一个完整选项');
     return;
+  }
+  if (form.value.businessType === 'TICKET' && form.value.deadlineEnabled) {
+    if (!form.value.resolutionLimitMinutes || form.value.resolutionLimitMinutes <= 0) {
+      ElMessage.warning('请配置有效的办结时限');
+      return;
+    }
+    if ((form.value.remindBeforeMinutes || 0) >= form.value.resolutionLimitMinutes) {
+      ElMessage.warning('提前提醒时间必须小于办结时限');
+      return;
+    }
   }
   const data: FormTemplate = {
     ...form.value,
@@ -675,7 +713,10 @@ const remove = async (template: FormTemplate) => {
 watch(
   () => form.value.businessType,
   (businessType) => {
-    if (businessType !== 'TICKET') form.value.workflowCode = undefined;
+    if (businessType !== 'TICKET') {
+      form.value.workflowCode = undefined;
+      form.value.deadlineEnabled = false;
+    }
     if (businessType !== 'CUSTOMER') form.value.fields.forEach((field) => (field.dialEnabled = false));
   }
 );
@@ -840,6 +881,23 @@ onMounted(async () => {
   color: #94a3b8;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.deadline-config {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.deadline-config :deep(.el-input-number) {
+  width: 130px;
+}
+
+.deadline-label {
+  margin-left: 6px;
 }
 
 .editor-grid {

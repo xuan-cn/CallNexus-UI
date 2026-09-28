@@ -1,11 +1,10 @@
 <template>
   <component
-    :is="businessType === 'CUSTOMER' ? ElDrawer : ElDialog"
+    :is="ElDrawer"
     v-model="visible"
     :title="businessType === 'CUSTOMER' ? '客户详情' : '工单详情'"
-    :width="businessType === 'TICKET' ? '1180px' : undefined"
-    :size="businessType === 'CUSTOMER' ? 'min(1120px, 92vw)' : undefined"
-    :class="{ 'customer-detail-drawer': businessType === 'CUSTOMER' }"
+    :size="businessType === 'CUSTOMER' ? 'min(1120px, 92vw)' : 'min(1180px, 94vw)'"
+    :class="{ 'customer-detail-drawer': businessType === 'CUSTOMER', 'ticket-detail-drawer': businessType === 'TICKET' }"
     append-to-body
   >
     <div
@@ -32,6 +31,9 @@
             <el-descriptions-item label="工单状态">{{ ticketStatusLabel(ticketDetail?.ticketStatus) }}</el-descriptions-item>
             <el-descriptions-item label="流程状态">{{ processStatusLabel(ticketDetail?.processStatus) }}</el-descriptions-item>
             <el-descriptions-item label="当前节点">{{ ticketDetail?.currentNodeName || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="办结时限">
+              {{ ticketDetail?.dueAt ? `${deadlineStatusLabel(ticketDetail.deadlineStatus)} · ${formatDateTime(ticketDetail.dueAt)}` : '-' }}
+            </el-descriptions-item>
             <el-descriptions-item label="绑定流程">{{ ticketDetail?.workflowCode || '-' }}</el-descriptions-item>
             <el-descriptions-item label="来电号码">{{ ticketDetail?.callerNumber || '-' }}</el-descriptions-item>
             <el-descriptions-item label="关联客户ID">{{ ticketDetail?.customerId || '-' }}</el-descriptions-item>
@@ -366,7 +368,7 @@ import {
   setCustomerPrimaryPhone,
   updateCustomerPhone
 } from '@/api/callcenter/customer';
-import { ElDialog, ElDrawer, ElMessage, ElMessageBox } from 'element-plus';
+import { ElDrawer, ElMessage, ElMessageBox } from 'element-plus';
 import { getFormTemplate, listFormTemplates } from '@/api/callcenter/form-template';
 import { FormBusinessType, FormField, FormTemplate } from '@/api/callcenter/form-template/types';
 import { getTicket, TicketVO } from '@/api/callcenter/ticket';
@@ -752,6 +754,11 @@ const directionLabel = (direction: CallDirection) =>
   ({ INBOUND: '呼入', OUTBOUND: '呼出', INTERNAL: '内部通话', UNKNOWN: '未知' })[direction] || direction;
 const ticketStatusLabel = (status?: string) =>
   ({ OPEN: '待处理', PROCESSING: '处理中', RESOLVED: '已解决', CLOSED: '已关闭' })[status || ''] || status || '-';
+const deadlineStatusLabel = (status?: string) =>
+  ({ NORMAL: '正常', DUE_SOON: '即将到期', OVERDUE: '已超时', COMPLETED: '按时办结', COMPLETED_OVERDUE: '超时办结', CANCELLED: '已停止' })[
+    status || ''
+  ] || '-';
+const formatDateTime = (value?: string) => (value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '-');
 const processStatusLabel = (status?: string) =>
   (
     ({
@@ -857,6 +864,11 @@ defineExpose({ reload: loadDetail });
   padding: 16px 20px 20px;
   overflow: hidden;
   background: linear-gradient(180deg, #f7faff 0%, #ffffff 28%);
+}
+
+:deep(.ticket-detail-drawer .el-drawer__body) {
+  padding: 16px 20px 20px;
+  overflow-y: auto;
 }
 
 .detail-left {

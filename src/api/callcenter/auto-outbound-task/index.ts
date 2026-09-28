@@ -24,6 +24,8 @@ export const pauseAutoOutboundTask = (id: string | number) => request({ url: `${
 export const resumeAutoOutboundTask = (id: string | number) => request({ url: `${root}/${id}/resume`, method: 'post' });
 export const stopAutoOutboundTask = (id: string | number) => request({ url: `${root}/${id}/stop`, method: 'post' });
 export const rerunAutoOutboundTask = (id: string | number) => request({ url: `${root}/${id}/rerun`, method: 'post' });
+export const retryFailedAutoOutboundMembers = (id: string | number) =>
+  request<number>({ url: `${root}/${id}/members/retry-failed`, method: 'post' });
 export const listAutoOutboundSources = (id: string | number) => request<AutoOutboundSourceVO[]>({ url: `${root}/${id}/sources`, method: 'get' });
 export const addAutoOutboundSource = (id: string | number, data: AutoOutboundSourceForm) =>
   request<string | number>({ url: `${root}/${id}/sources`, method: 'post', data });

@@ -9,7 +9,14 @@ export interface CreateTicketForm {
   formData: Record<string, unknown>;
 }
 
+export interface UpdateTicketDeadlineForm {
+  enabled: boolean;
+  dueAt?: string;
+  remindBeforeMinutes?: number;
+}
+
 export type TicketStatus = 'OPEN' | 'PROCESSING' | 'RESOLVED' | 'CLOSED';
+export type TicketDeadlineStatus = 'NORMAL' | 'DUE_SOON' | 'OVERDUE' | 'COMPLETED' | 'COMPLETED_OVERDUE' | 'CANCELLED';
 
 export interface TicketVO {
   id: string | number;
@@ -27,6 +34,11 @@ export interface TicketVO {
   submittedAt?: string;
   resolvedAt?: string;
   closedAt?: string;
+  resolutionLimitMinutes?: number;
+  dueAt?: string;
+  remindAt?: string;
+  deadlineStatus?: TicketDeadlineStatus;
+  remainingSeconds?: number;
   createTime: string;
   formData?: Record<string, unknown>;
 }
@@ -35,6 +47,7 @@ export interface TicketQuery extends PageQuery {
   ticketNo?: string;
   callerNumber?: string;
   ticketStatus?: TicketStatus;
+  deadlineStatus?: TicketDeadlineStatus;
   templateId?: string | number;
   dynamicFilters?: DynamicFieldFilter[];
 }
@@ -55,3 +68,6 @@ export const submitTicket = (id: string | number) => request({ url: `/api/v1/tic
 export const resolveTicketDirectly = (id: string | number) => request({ url: `/api/v1/tickets/${id}/resolve`, method: 'post' });
 
 export const closeTicket = (id: string | number) => request({ url: `/api/v1/tickets/${id}/close`, method: 'post' });
+
+export const updateTicketDeadline = (id: string | number, data: UpdateTicketDeadlineForm) =>
+  request({ url: `/api/v1/tickets/${id}/deadline`, method: 'put', data });
