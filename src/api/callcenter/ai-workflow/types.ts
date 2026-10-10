@@ -69,6 +69,15 @@ export interface AiWorkflowValidationVO {
   warnings: string[];
 }
 
+export interface AiWorkflowMediaOptionVO {
+  id: Id;
+  assetName: string;
+  category: string;
+  sourceType: string;
+  durationMs?: number;
+  publishStatus: 'PUBLISHED' | 'PARTIAL';
+}
+
 export interface AiAgentWorkflowBindingVO {
   id: Id;
   aiAgentId: Id;

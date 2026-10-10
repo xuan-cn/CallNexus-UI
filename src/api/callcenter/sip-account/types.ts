@@ -30,3 +30,11 @@ export interface SipAccountQuery extends PageQuery {
   displayName?: string;
   enabled?: boolean;
 }
+
+export interface SipAccountBatchCreateForm {
+  nodeId?: string | number;
+  startExtension: string;
+  count: number;
+  displayNamePrefix: string;
+  password: string;
+}

@@ -4,6 +4,7 @@ import type {
   AiAgentWorkflowBindingForm,
   AiAgentWorkflowBindingVO,
   AiWorkflowForm,
+  AiWorkflowMediaOptionVO,
   AiWorkflowTestExecutionVO,
   AiWorkflowTestStartForm,
   AiWorkflowValidationVO,
@@ -15,6 +16,8 @@ import type {
 const root = '/api/v1/ai-workflows';
 
 export const listAiWorkflows = (): AxiosPromise<AiWorkflowVO[]> => request({ url: root, method: 'get' });
+export const listAiWorkflowMediaOptions = (): AxiosPromise<AiWorkflowMediaOptionVO[]> =>
+  request({ url: `${root}/media-options`, method: 'get' });
 export const getAiWorkflow = (id: Id): AxiosPromise<AiWorkflowVO> => request({ url: `${root}/${id}`, method: 'get' });
 export const createAiWorkflow = (data: AiWorkflowForm): AxiosPromise<Id> => request({ url: root, method: 'post', data });
 export const updateAiWorkflow = (id: Id, data: AiWorkflowForm) => request({ url: `${root}/${id}`, method: 'put', data });

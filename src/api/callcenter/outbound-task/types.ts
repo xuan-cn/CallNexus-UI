@@ -8,6 +8,8 @@ export interface OutboundTaskVO {
   taskType: 'PREVIEW';
   status: OutboundTaskStatus;
   description?: string;
+  assignmentMode: 'PUBLIC' | 'SPECIFIED';
+  assignedAgentIds: Array<string | number>;
   callerNumberId?: string | number;
   autoRetryEnabled: boolean;
   maxRetryCount: number;
@@ -29,6 +31,8 @@ export interface OutboundTaskForm {
   taskCode: string;
   taskName: string;
   description?: string;
+  assignmentMode: 'PUBLIC' | 'SPECIFIED';
+  assignedAgentIds: Array<string | number>;
   callerNumberId?: string | number;
   autoRetryEnabled: boolean;
   maxRetryCount: number;
@@ -45,9 +49,10 @@ export interface OutboundMemberVO {
   customerId: string | number;
   customerName?: string;
   phoneNumber: string;
-  sourceType?: 'MANUAL' | 'EXCEL';
+  sourceType?: 'MANUAL' | 'EXCEL' | 'FILTER';
   importBatchId?: string | number;
   status: OutboundMemberStatus;
+  assignedAgentId?: string | number;
   claimedAgentId?: string | number;
   claimedAt?: string;
   leaseExpiresAt?: string;
@@ -110,6 +115,7 @@ export interface OutboundTaskStatisticsVO {
 }
 
 export interface AddOutboundMembersResult {
+  matchedCount: number;
   addedCount: number;
   duplicateCount: number;
   blocked: Array<{ customerId: string | number; customerName?: string; phoneNumber: string; reason?: string; blacklistId: string | number }>;

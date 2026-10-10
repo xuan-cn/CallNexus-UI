@@ -12,6 +12,7 @@ import {
   OutboundTaskStatisticsVO,
   OutboundTaskVO
 } from './types';
+import type { CustomerQuery } from '@/api/callcenter/customer';
 
 export const listOutboundTasks = () => request<OutboundTaskVO[]>({ url: '/api/v1/outbound-tasks', method: 'get' });
 export const getOutboundTask = (id: string | number) => request<OutboundTaskVO>({ url: `/api/v1/outbound-tasks/${id}`, method: 'get' });
@@ -23,6 +24,8 @@ export const startOutboundTask = (id: string | number) => request({ url: `/api/v
 export const pauseOutboundTask = (id: string | number) => request({ url: `/api/v1/outbound-tasks/${id}/pause`, method: 'post' });
 export const addOutboundCustomers = (id: string | number, customerIds: Array<string | number>) =>
   request<AddOutboundMembersResult>({ url: `/api/v1/outbound-tasks/${id}/members`, method: 'post', data: { customerIds } });
+export const generateOutboundCustomers = (id: string | number, selectionQuery: CustomerQuery) =>
+  request<AddOutboundMembersResult>({ url: `/api/v1/outbound-tasks/${id}/members/generate`, method: 'post', data: { selectionQuery } });
 export const listOutboundMembers = (id: string | number) =>
   request<OutboundMemberVO[]>({ url: `/api/v1/outbound-tasks/${id}/members`, method: 'get' });
 export const previewOutboundMemberImport = (id: string | number, file: File) => {
@@ -48,6 +51,10 @@ export const getOutboundTaskStatistics = (id: string | number) =>
   request<OutboundTaskStatisticsVO>({ url: `/api/v1/outbound-tasks/${id}/statistics`, method: 'get' });
 export const recoverExpiredOutboundMembers = (id: string | number) =>
   request<number>({ url: `/api/v1/outbound-tasks/${id}/recover-expired`, method: 'post' });
+export const pageAvailableOutboundMembers = (id: string | number, params: { pageNum: number; pageSize: number; keyword?: string }) =>
+  request<OutboundMemberVO[]>({ url: `/api/v1/outbound-tasks/${id}/available-members/page`, method: 'get', params });
+export const claimOutboundMember = (memberId: string | number) =>
+  request<OutboundMemberVO>({ url: `/api/v1/outbound-tasks/members/${memberId}/claim`, method: 'post' });
 export const claimNextOutboundMember = (id: string | number) =>
   request<OutboundMemberVO>({ url: `/api/v1/outbound-tasks/${id}/claim-next`, method: 'post' });
 export const getCurrentAssignedOutboundMember = () =>

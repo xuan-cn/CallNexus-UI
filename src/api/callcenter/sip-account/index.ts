@@ -1,6 +1,6 @@
 import request from '@/utils/request';
 import { AxiosPromise } from 'axios';
-import { SipAccountForm, SipAccountQuery, SipAccountVO } from './types';
+import { SipAccountBatchCreateForm, SipAccountForm, SipAccountQuery, SipAccountVO } from './types';
 
 export const listSipAccounts = (query: SipAccountQuery): AxiosPromise<SipAccountVO[]> =>
   request({ url: '/api/v1/sip-accounts', method: 'get', params: query });
@@ -9,6 +9,9 @@ export const getSipAccount = (id: string | number): AxiosPromise<SipAccountVO> =
 
 export const createSipAccount = (data: SipAccountForm) =>
   request({ url: '/api/v1/sip-accounts', method: 'post', data, headers: { isEncrypt: 'true' } });
+
+export const batchCreateSipAccounts = (data: SipAccountBatchCreateForm) =>
+  request<number>({ url: '/api/v1/sip-accounts/batch', method: 'post', data, headers: { isEncrypt: 'true' } });
 
 export const updateSipAccount = (data: SipAccountForm) =>
   request({ url: `/api/v1/sip-accounts/${data.id}`, method: 'put', data, headers: { isEncrypt: 'true' } });

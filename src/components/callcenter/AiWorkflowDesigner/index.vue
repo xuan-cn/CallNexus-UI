@@ -68,6 +68,13 @@
           :closable="false"
           title="只会写回这里勾选的字段。手机号和附件不允许由 AI 自动修改。"
         />
+        <el-alert
+          v-if="selectedNode.type === 'PLAY_MEDIA'"
+          class="property-alert"
+          type="info"
+          :closable="false"
+          title="这里只显示已发布的声音媒体。实际通话节点未同步成功时，流程会停止并记录失败原因。"
+        />
         <el-form label-position="top">
           <el-form-item label="节点名称"><el-input v-model="selectedNode.name" @input="updateSelectedNode" /></el-form-item>
           <el-form-item
@@ -247,6 +254,19 @@
               </el-option>
             </el-select>
             <el-select
+              v-else-if="property.type === 'MEDIA_SELECT'"
+              :model-value="selectedNode.config[property.key]"
+              filterable
+              placeholder="请选择已发布的声音媒体"
+              style="width: 100%"
+              @update:model-value="updateNodeProperty(property.key, $event)"
+            >
+              <el-option v-for="item in mediaOptions" :key="item.id" :label="item.assetName" :value="String(item.id)">
+                <span>{{ item.assetName }}</span
+                ><span class="option-extra">{{ mediaOptionExtra(item) }}</span>
+              </el-option>
+            </el-select>
+            <el-select
               v-else-if="property.type === 'RESULT_SELECT'"
               :model-value="selectedNode.config[property.key]"
               placeholder="请选择外呼结果"
@@ -315,6 +335,7 @@ import '@logicflow/core/lib/index.css';
 import type { AiIntentVO } from '@/api/callcenter/ai-knowledge/types';
 import type { CallQueueVO } from '@/api/callcenter/call-queue/types';
 import type { FormTemplate } from '@/api/callcenter/form-template/types';
+import type { AiWorkflowMediaOptionVO } from '@/api/callcenter/ai-workflow/types';
 import type { AiWorkflowDefinition, AiWorkflowEdge, AiWorkflowNode } from '@/api/callcenter/ai-workflow/types';
 import { createLayeredFlowLayout } from '@/utils/logicflowLayout';
 import { aiWorkflowPaletteDefinitions, getAiWorkflowNodeDefinition, type AiWorkflowNodeDefinition } from './nodeRegistry';
@@ -325,11 +346,13 @@ const props = withDefaults(
     intentOptions?: AiIntentVO[];
     queueOptions?: CallQueueVO[];
     customerTemplates?: FormTemplate[];
+    mediaOptions?: AiWorkflowMediaOptionVO[];
   }>(),
   {
     intentOptions: () => [],
     queueOptions: () => [],
-    customerTemplates: () => []
+    customerTemplates: () => [],
+    mediaOptions: () => []
   }
 );
 const emit = defineEmits<{
@@ -411,6 +434,10 @@ const outboundResultOptions = [
   { label: '待人工确认', value: 'PENDING_REVIEW' },
   { label: '编排执行失败', value: 'WORKFLOW_FAILED' }
 ];
+const mediaOptionExtra = (item: AiWorkflowMediaOptionVO) => {
+  const duration = item.durationMs ? `${Math.ceil(item.durationMs / 1000)}秒` : '时长未知';
+  return `${duration} / ${item.publishStatus === 'PARTIAL' ? '部分节点已同步' : '已发布'}`;
+};
 const advancedNodeTypes = ['SET_VARIABLE', 'CUSTOMER_QUERY', 'SLOT_EXTRACT', 'CUSTOMER_UPDATE'];
 const commonPaletteDefinitions = aiWorkflowPaletteDefinitions.filter((item) => !advancedNodeTypes.includes(item.type));
 const advancedPaletteDefinitions = aiWorkflowPaletteDefinitions.filter((item) => advancedNodeTypes.includes(item.type));

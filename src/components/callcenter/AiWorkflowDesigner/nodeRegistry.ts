@@ -12,6 +12,7 @@ export type AiWorkflowPropertyType =
   | 'SLOT_TARGET_MULTI_SELECT'
   | 'CUSTOMER_FIELD_MULTI_SELECT'
   | 'QUEUE_SELECT'
+  | 'MEDIA_SELECT'
   | 'RESULT_SELECT';
 
 export interface AiWorkflowPropertyDefinition {
@@ -49,6 +50,13 @@ export const aiWorkflowNodeDefinitions: AiWorkflowNodeDefinition[] = [
     color: '#0891b2',
     description: '等待最终 ASR 分句或文本消息',
     properties: [{ key: 'timeoutSeconds', label: '超时秒数', type: 'NUMBER', defaultValue: 15 }]
+  },
+  {
+    type: 'PLAY_MEDIA',
+    label: '播放声音媒体',
+    color: '#b45309',
+    description: '播放已发布并同步到当前语音节点的声音媒体',
+    properties: [{ key: 'mediaId', label: '声音媒体', type: 'MEDIA_SELECT' }]
   },
   {
     type: 'INTENT_ROUTE',

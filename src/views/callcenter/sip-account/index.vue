@@ -32,6 +32,9 @@
           <el-col :span="1.5">
             <el-button v-hasPermi="['callcenter:sip-account:create']" type="primary" plain icon="Plus" @click="handleAdd"> 新增 SIP 分机 </el-button>
           </el-col>
+          <el-col :span="1.5">
+            <el-button v-hasPermi="['callcenter:sip-account:create']" type="success" plain icon="DocumentAdd" @click="handleBatchAdd">批量新增</el-button>
+          </el-col>
           <right-toolbar v-model:show-search="showSearch" @query-table="getList" />
         </el-row>
       </template>
@@ -104,12 +107,42 @@
         <el-button type="primary" @click="submitForm">确定</el-button>
       </template>
     </el-dialog>
+
+    <el-drawer v-model="batchDialog.visible" title="批量新增 SIP 分机" size="520px" append-to-body :close-on-click-modal="false">
+      <el-alert class="mb-4" type="info" show-icon :closable="false" title="系统将从起始分机号开始连续生成，单次最多新增 200 个。任一号码重复时整批不会写入。" />
+      <el-form ref="batchFormRef" :model="batchForm" :rules="batchRules" label-width="110px">
+        <el-form-item label="节点" prop="nodeId">
+          <el-select v-model="batchForm.nodeId" filterable placeholder="请选择启用的 FreeSWITCH 节点" style="width: 100%">
+            <el-option v-for="node in nodeOptions" :key="node.id" :label="`${node.nodeName}（${node.sipDomain}）`" :value="node.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="起始分机号" prop="startExtension">
+          <el-input v-model="batchForm.startExtension" placeholder="例如 1001" />
+        </el-form-item>
+        <el-form-item label="新增数量" prop="count">
+          <el-input-number v-model="batchForm.count" :min="1" :max="200" controls-position="right" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="名称前缀" prop="displayNamePrefix">
+          <el-input v-model="batchForm.displayNamePrefix" placeholder="例如 客服分机" />
+        </el-form-item>
+        <el-form-item label="统一初始密码" prop="password">
+          <el-input v-model="batchForm.password" type="password" show-password placeholder="至少12位安全密码" />
+        </el-form-item>
+        <el-form-item label="生成预览">
+          <div class="batch-preview">{{ batchExtensionPreview }}</div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="batchDialog.visible = false">取消</el-button>
+        <el-button type="primary" :loading="batchDialog.submitting" @click="submitBatchForm">确认批量新增</el-button>
+      </template>
+    </el-drawer>
   </div>
 </template>
 
 <script setup name="SipAccount" lang="ts">
-import { createSipAccount, deleteSipAccount, getSipAccount, listSipAccounts, updateSipAccount } from '@/api/callcenter/sip-account';
-import { SipAccountForm, SipAccountQuery, SipAccountVO } from '@/api/callcenter/sip-account/types';
+import { batchCreateSipAccounts, createSipAccount, deleteSipAccount, getSipAccount, listSipAccounts, updateSipAccount } from '@/api/callcenter/sip-account';
+import { SipAccountBatchCreateForm, SipAccountForm, SipAccountQuery, SipAccountVO } from '@/api/callcenter/sip-account/types';
 import { listFreeSwitchNodes } from '@/api/callcenter/freeswitch-node';
 import { FreeSwitchNodeVO } from '@/api/callcenter/freeswitch-node/types';
 import { listDispatchExtensionStatuses } from '@/api/callcenter/dispatch-monitor';
@@ -123,7 +156,25 @@ const accountList = ref<SipAccountVO[]>([]);
 const nodeOptions = ref<FreeSwitchNodeVO[]>([]);
 const queryFormRef = ref<ElFormInstance>();
 const formRef = ref<ElFormInstance>();
+const batchFormRef = ref<ElFormInstance>();
 const dialog = reactive<DialogOption>({ visible: false, title: '' });
+const batchDialog = reactive({ visible: false, submitting: false });
+const batchForm = reactive<SipAccountBatchCreateForm>({ nodeId: undefined, startExtension: '1001', count: 10, displayNamePrefix: '客服分机', password: '' });
+const batchRules = {
+  nodeId: [{ required: true, message: '请选择 FreeSWITCH 节点', trigger: 'change' }],
+  startExtension: [{ required: true, pattern: /^[0-9]{2,16}$/, message: '请输入2到16位数字分机号', trigger: 'blur' }],
+  count: [{ required: true, type: 'number', min: 1, max: 200, message: '新增数量为1到200', trigger: 'change' }],
+  displayNamePrefix: [{ required: true, message: '请输入显示名称前缀', trigger: 'blur' }],
+  password: [{ required: true, min: 12, max: 128, message: '密码长度必须为12到128位', trigger: 'blur' }]
+};
+
+const batchExtensionPreview = computed(() => {
+  if (!/^\d{2,16}$/.test(batchForm.startExtension) || !batchForm.count) return '请输入有效的起始分机号和数量';
+  const start = BigInt(batchForm.startExtension);
+  const end = start + BigInt(batchForm.count - 1);
+  const width = batchForm.startExtension.length;
+  return `${batchForm.startExtension} - ${end.toString().padStart(width, '0')}（共 ${batchForm.count} 个）`;
+});
 
 const initialForm: SipAccountForm = {
   nodeId: undefined,
@@ -220,6 +271,28 @@ const handleAdd = () => {
   dialog.visible = true;
 };
 
+const handleBatchAdd = async () => {
+  await loadNodeOptions();
+  Object.assign(batchForm, { nodeId: undefined, startExtension: '1001', count: 10, displayNamePrefix: '客服分机', password: '' });
+  batchFormRef.value?.clearValidate();
+  batchDialog.visible = true;
+};
+
+const submitBatchForm = () =>
+  batchFormRef.value?.validate(async (valid) => {
+    if (!valid) return;
+    await proxy?.$modal.confirm(`确认批量新增 ${batchForm.count} 个分机（${batchExtensionPreview.value}）吗？`);
+    batchDialog.submitting = true;
+    try {
+      const res = await batchCreateSipAccounts({ ...batchForm });
+      proxy?.$modal.msgSuccess(`成功新增 ${res.data} 个 SIP 分机`);
+      batchDialog.visible = false;
+      await getList();
+    } finally {
+      batchDialog.submitting = false;
+    }
+  });
+
 const handleUpdate = async (row: SipAccountVO) => {
   reset();
   await loadNodeOptions();
@@ -264,3 +337,13 @@ const handleDelete = async (row: SipAccountVO) => {
 
 onMounted(getList);
 </script>
+
+<style scoped>
+.batch-preview {
+  width: 100%;
+  padding: 8px 12px;
+  color: var(--el-text-color-regular);
+  background: var(--el-fill-color-light);
+  border-radius: 4px;
+}
+</style>

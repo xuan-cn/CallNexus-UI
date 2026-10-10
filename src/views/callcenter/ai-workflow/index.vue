@@ -90,6 +90,7 @@
         :intent-options="intentOptions"
         :queue-options="queueOptions"
         :customer-templates="customerTemplates"
+        :media-options="mediaOptions"
         @manage-variables="openVariables(true)"
       />
     </el-drawer>
@@ -176,6 +177,7 @@ import {
   getAiWorkflowDraft,
   listAiWorkflows,
   listAiWorkflowVersions,
+  listAiWorkflowMediaOptions,
   publishAiWorkflow,
   saveAiWorkflowDraft,
   setAiWorkflowEnabled,
@@ -185,6 +187,7 @@ import {
 import type {
   AiWorkflowDefinition,
   AiWorkflowForm,
+  AiWorkflowMediaOptionVO,
   AiWorkflowScene,
   AiWorkflowValidationVO,
   AiWorkflowVersionVO,
@@ -218,6 +221,7 @@ const validation = ref<AiWorkflowValidationVO>({ valid: false, errors: [], warni
 const intentOptions = ref<AiIntentVO[]>([]);
 const queueOptions = ref<CallQueueVO[]>([]);
 const customerTemplates = ref<FormTemplate[]>([]);
+const mediaOptions = ref<AiWorkflowMediaOptionVO[]>([]);
 const agentOptions = ref<AiAgentVO[]>([]);
 const sceneOptions: Array<{ label: string; value: AiWorkflowScene }> = [
   { label: '呼入语音', value: 'VOICE_INBOUND' },
@@ -246,16 +250,18 @@ const load = async () => {
   }
 };
 const loadDesignerOptions = async () => {
-  const [intentResult, queueResult, agentResult, customerTemplateResult] = await Promise.all([
+  const [intentResult, queueResult, agentResult, customerTemplateResult, mediaResult] = await Promise.all([
     listAiIntents(),
     listCallQueues(),
     listAiAgents(),
-    listFormTemplates('CUSTOMER')
+    listFormTemplates('CUSTOMER'),
+    listAiWorkflowMediaOptions()
   ]);
   intentOptions.value = intentResult.data || [];
   queueOptions.value = queueResult.data || [];
   agentOptions.value = (agentResult.data || []).filter((item) => item.enabled !== false);
   customerTemplates.value = (customerTemplateResult.data || []).filter((item) => item.enabled !== false);
+  mediaOptions.value = mediaResult.data || [];
 };
 const openForm = (row?: AiWorkflowVO) => {
   formId.value = row?.id;
