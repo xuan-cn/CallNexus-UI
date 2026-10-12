@@ -15,6 +15,11 @@
             <el-option label="已解决" value="RESOLVED" /><el-option label="已关闭" value="CLOSED" />
           </el-select>
         </el-form-item>
+        <el-form-item label="紧急程度">
+          <el-select v-model="query.urgencyCode" clearable placeholder="全部" style="width: 130px">
+            <el-option v-for="level in urgencyLevels" :key="String(level.id)" :label="level.levelName" :value="level.levelCode" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="办结时限">
           <el-select v-model="query.deadlineStatus" clearable placeholder="全部" style="width: 150px">
             <el-option label="正常" value="NORMAL" />
@@ -43,12 +48,30 @@
           新增工单
         </el-button>
         <el-button plain @click="exportCurrentTickets">导出</el-button>
+        <el-button v-hasPermi="['callcenter:ticket-urgency:manage']" plain @click="urgencyManagerVisible = true">紧急程度配置</el-button>
       </div>
-      <el-table v-loading="loading" :data="rows">
+      <el-table v-loading="loading" :data="rows" :row-class-name="ticketRowClass" :row-style="ticketRowStyle">
         <el-table-column label="工单编号" min-width="190">
           <template #default="{ row }"
             ><el-button link type="primary" @click="showDetail(row)">{{ row.ticketNo }}</el-button></template
           >
+        </el-table-column>
+        <el-table-column label="紧急程度" width="110" align="center">
+          <template #default="{ row }">
+            <el-dropdown v-if="canChangeUrgency" trigger="click" @command="(levelId) => changeUrgency(row, levelId)">
+              <span class="urgency-trigger">
+                <el-tag effect="plain" size="small" :style="urgencyTagStyle(row)">{{ row.urgencyName || '普通' }}</el-tag>
+              </span>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item v-for="level in urgencyLevels" :key="String(level.id)" :command="level.id" :disabled="String(level.id) === String(row.urgencyLevelId)">
+                    <span class="urgency-menu-dot" :style="{ backgroundColor: level.tagColor }" />{{ level.levelName }}
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+            <el-tag v-else effect="plain" size="small" :style="urgencyTagStyle(row)">{{ row.urgencyName || '普通' }}</el-tag>
+          </template>
         </el-table-column>
         <el-table-column label="状态" prop="ticketStatus" width="110" />
         <el-table-column label="流程状态" width="110">
@@ -135,13 +158,26 @@
         <el-button type="primary" :loading="deadlineSubmitting" @click="saveDeadline">保存</el-button>
       </template>
     </el-dialog>
+    <TicketUrgencyManager v-model="urgencyManagerVisible" @changed="handleUrgencyConfigChanged" />
     </template>
     <AiTicketDraftReview v-else @open-ticket="openCreatedTicket" />
   </div>
 </template>
 
 <script setup name="TicketManagement" lang="ts">
-import { closeTicket, exportTickets, resolveTicketDirectly, searchTickets, submitTicket, TicketQuery, TicketVO, updateTicketDeadline } from '@/api/callcenter/ticket';
+import {
+  closeTicket,
+  exportTickets,
+  listTicketUrgencyLevels,
+  resolveTicketDirectly,
+  searchTickets,
+  submitTicket,
+  type TicketQuery,
+  type TicketUrgencyLevelVO,
+  type TicketVO,
+  updateTicketDeadline,
+  updateTicketUrgency
+} from '@/api/callcenter/ticket';
 import { getFormQuerySchema, listFormTemplates } from '@/api/callcenter/form-template';
 import type { FormQueryField, FormTemplate } from '@/api/callcenter/form-template/types';
 import DynamicQueryFields from '@/components/callcenter/DynamicQueryFields.vue';
@@ -153,12 +189,17 @@ import ApprovalRecord from '@/components/Process/approvalRecord.vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import AiTicketDraftReview from './AiTicketDraftReview.vue';
 import FileSaver from 'file-saver';
+import TicketUrgencyManager from './TicketUrgencyManager.vue';
+import { checkPermi } from '@/utils/permission';
 
 const route = useRoute();
 const loading = ref(false);
 const rows = ref<TicketVO[]>([]);
 const total = ref(0);
 const createVisible = ref(false);
+const urgencyManagerVisible = ref(false);
+const urgencyLevels = ref<TicketUrgencyLevelVO[]>([]);
+const canChangeUrgency = checkPermi(['callcenter:ticket:update-urgency']);
 const detailVisible = ref(false);
 const detailId = ref<string | number>();
 const detailRef = ref<{ reload: () => Promise<void> }>();
@@ -179,6 +220,10 @@ const deadlineDialogVisible = ref(false);
 const deadlineSubmitting = ref(false);
 const deadlineTicket = ref<TicketVO>();
 const deadlineForm = reactive({ enabled: true, dueAt: '', remindBeforeMinutes: 120 });
+const loadUrgencyLevels = async () => {
+  const response = await listTicketUrgencyLevels();
+  urgencyLevels.value = response.data || [];
+};
 const load = async () => {
   loading.value = true;
   try {
@@ -216,11 +261,27 @@ const resetQuery = () => {
   query.callerNumber = '';
   query.ticketStatus = undefined;
   query.deadlineStatus = undefined;
+  query.urgencyCode = undefined;
   query.templateId = undefined;
   query.dynamicFilters = [];
   querySchemaFields.value = [];
   dynamicQueryValues.value = {};
   load();
+};
+const urgencyTagStyle = (ticket: TicketVO) => {
+  const color = ticket.urgencyColor || '#909399';
+  return { color, borderColor: color, backgroundColor: `${color}14` };
+};
+const ticketRowClass = ({ row }: { row: TicketVO }) => (Number(row.urgencyWeight || 0) >= 60 ? 'ticket-urgent-row' : '');
+const ticketRowStyle = ({ row }: { row: TicketVO }) => ({ '--ticket-urgency-color': row.urgencyColor || '#E6A23C' });
+const changeUrgency = async (ticket: TicketVO, levelId: string | number) => {
+  await updateTicketUrgency(ticket.id, levelId);
+  ElMessage.success('工单紧急程度已更新');
+  await load();
+  if (detailVisible.value && String(detailId.value) === String(ticket.id)) await detailRef.value?.reload();
+};
+const handleUrgencyConfigChanged = async () => {
+  await Promise.all([loadUrgencyLevels(), load()]);
 };
 const showDetail = (row: TicketVO) => {
   detailId.value = row.id;
@@ -351,7 +412,7 @@ const openCreatedTicket = async (id: string | number) => {
   detailVisible.value = true;
 };
 onMounted(async () => {
-  const [templates] = await Promise.all([listFormTemplates('TICKET'), load()]);
+  const [templates] = await Promise.all([listFormTemplates('TICKET'), loadUrgencyLevels(), load()]);
   ticketTemplates.value = (templates.data || []).filter((template) => template.enabled);
   if (ticketTemplates.value.length === 1 && !query.templateId) {
     query.templateId = ticketTemplates.value[0].id;
@@ -376,8 +437,21 @@ watch(
 <style scoped>
 .table-toolbar {
   margin-bottom: 12px;
+  display: flex;
+  gap: 8px;
 }
 .ticket-tabs { margin-bottom: 10px; }
+.urgency-trigger { cursor: pointer; }
+.urgency-menu-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+  border-radius: 50%;
+}
+:deep(.ticket-urgent-row td:first-child) {
+  box-shadow: inset 4px 0 0 var(--ticket-urgency-color);
+}
 
 :deep(.ticket-operation-column .cell) {
   white-space: nowrap;

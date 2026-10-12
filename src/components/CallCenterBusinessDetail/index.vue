@@ -29,6 +29,9 @@
           <template v-else>
             <el-descriptions-item label="工单编号">{{ ticketDetail?.ticketNo }}</el-descriptions-item>
             <el-descriptions-item label="工单状态">{{ ticketStatusLabel(ticketDetail?.ticketStatus) }}</el-descriptions-item>
+            <el-descriptions-item label="紧急程度">
+              <el-tag v-if="ticketDetail" effect="plain" size="small" :style="urgencyTagStyle(ticketDetail)">{{ ticketDetail.urgencyName || '普通' }}</el-tag>
+            </el-descriptions-item>
             <el-descriptions-item label="流程状态">{{ processStatusLabel(ticketDetail?.processStatus) }}</el-descriptions-item>
             <el-descriptions-item label="当前节点">{{ ticketDetail?.currentNodeName || '-' }}</el-descriptions-item>
             <el-descriptions-item label="办结时限">
@@ -758,6 +761,10 @@ const deadlineStatusLabel = (status?: string) =>
   ({ NORMAL: '正常', DUE_SOON: '即将到期', OVERDUE: '已超时', COMPLETED: '按时办结', COMPLETED_OVERDUE: '超时办结', CANCELLED: '已停止' })[
     status || ''
   ] || '-';
+const urgencyTagStyle = (ticket: TicketVO) => {
+  const color = ticket.urgencyColor || '#909399';
+  return { color, borderColor: color, backgroundColor: `${color}14` };
+};
 const formatDateTime = (value?: string) => (value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '-');
 const processStatusLabel = (status?: string) =>
   (

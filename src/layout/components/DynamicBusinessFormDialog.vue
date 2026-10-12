@@ -24,6 +24,19 @@
               <el-input v-model="phone" :disabled="Boolean(existingCustomer)" />
             </el-form-item>
           </el-col>
+          <el-col v-if="businessType === 'TICKET'" :span="12">
+            <el-form-item label="紧急程度">
+              <el-select v-model="urgencyLevelId" style="width: 100%" placeholder="选择紧急程度">
+                <el-option v-for="level in urgencyLevels" :key="String(level.id)" :label="level.levelName" :value="level.id">
+                  <div class="urgency-option">
+                    <span class="urgency-dot" :style="{ backgroundColor: level.tagColor }" />
+                    <span>{{ level.levelName }}</span>
+                    <small>权重 {{ level.priorityWeight }}</small>
+                  </div>
+                </el-option>
+              </el-select>
+            </el-form-item>
+          </el-col>
           <el-col v-if="businessType === 'CUSTOMER'" :span="12">
             <el-form-item label="客户姓名">
               <el-input v-model="customerName" placeholder="可选，客户不提供时留空" />
@@ -105,7 +118,7 @@ import { ElDrawer, ElMessage } from 'element-plus';
 import { createCustomer, CustomerVO, getCustomerByPhone, updateCustomer } from '@/api/callcenter/customer';
 import { listFormTemplates } from '@/api/callcenter/form-template';
 import { FormBusinessType, FormTemplate } from '@/api/callcenter/form-template/types';
-import { createTicket } from '@/api/callcenter/ticket';
+import { createTicket, listTicketUrgencyLevels, type TicketUrgencyLevelVO } from '@/api/callcenter/ticket';
 import { pageImportTasks, type CustomerImportTaskVO } from '@/api/callcenter/customer-import-task';
 import { checkPermi } from '@/utils/permission';
 
@@ -125,6 +138,8 @@ const existingCustomer = ref<CustomerVO>();
 const importTasks = ref<CustomerImportTaskVO[]>([]);
 const importTaskId = ref<string | number>();
 const importTasksLoading = ref(false);
+const urgencyLevels = ref<TicketUrgencyLevelVO[]>([]);
+const urgencyLevelId = ref<string | number>();
 const selectedTemplate = computed(() => templates.value.find((template) => String(template.id) === String(templateId.value)));
 const enabledTemplates = computed(() => templates.value.filter((template) => template.enabled));
 const canAssociateImportTask = computed(() => checkPermi(['callcenter:customer-import-task:list']));
@@ -185,9 +200,16 @@ watch(visible, async (opened) => {
   templateId.value = undefined;
   importTaskId.value = undefined;
   importTasks.value = [];
+  urgencyLevelId.value = undefined;
   Object.keys(formData).forEach((key) => delete formData[key]);
-  const [response] = await Promise.all([listFormTemplates(props.businessType), loadImportTasks()]);
+  const [response, urgencyResponse] = await Promise.all([
+    listFormTemplates(props.businessType),
+    props.businessType === 'TICKET' ? listTicketUrgencyLevels() : Promise.resolve(undefined),
+    loadImportTasks()
+  ]);
   templates.value = response.data;
+  urgencyLevels.value = urgencyResponse?.data || [];
+  urgencyLevelId.value = urgencyLevels.value.find((level) => level.isDefault)?.id || urgencyLevels.value[0]?.id;
   if (enabledTemplates.value.length === 1) templateId.value = enabledTemplates.value[0].id;
   await lookupCustomer();
 });
@@ -233,6 +255,7 @@ const submit = async () => {
         customerId: existingCustomer.value?.id,
         callerNumber: phone.value,
         templateId: templateId.value,
+        urgencyLevelId: urgencyLevelId.value,
         sourceCallId: props.callId || undefined,
         formData
       });
@@ -277,5 +300,19 @@ const submit = async () => {
   color: #909399;
   font-size: 12px;
   line-height: 18px;
+}
+.urgency-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.urgency-option small {
+  margin-left: auto;
+  color: #909399;
+}
+.urgency-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 </style>
