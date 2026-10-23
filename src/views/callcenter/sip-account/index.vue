@@ -58,10 +58,35 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="安全状态" min-width="145" align="center">
+          <template #default="{ row }">
+            <el-tooltip :content="securityTooltip(row)" placement="top">
+              <el-tag :type="securityTagType(row.securityStatus)" effect="light">
+                {{ securityLabel(row.securityStatus) }}
+              </el-tag>
+            </el-tooltip>
+          </template>
+        </el-table-column>
         <el-table-column label="创建时间" prop="createTime" width="180" />
-        <el-table-column label="操作" width="120" align="center" fixed="right">
+        <el-table-column label="操作" width="170" align="center" fixed="right">
           <template #default="{ row }">
             <el-button v-hasPermi="['callcenter:sip-account:update']" link type="primary" icon="Edit" @click="handleUpdate(row)" />
+            <el-button
+              v-if="!isSecurityLocked(row.securityStatus)"
+              v-hasPermi="['callcenter:sip-security:block']"
+              link
+              type="warning"
+              icon="Lock"
+              @click="handleSecurityLock(row)"
+            />
+            <el-button
+              v-else
+              v-hasPermi="['callcenter:sip-security:unblock']"
+              link
+              type="success"
+              icon="Unlock"
+              @click="handleSecurityUnlock(row)"
+            />
             <el-button v-hasPermi="['callcenter:sip-account:delete']" link type="danger" icon="Delete" @click="handleDelete(row)" />
           </template>
         </el-table-column>
@@ -141,8 +166,17 @@
 </template>
 
 <script setup name="SipAccount" lang="ts">
-import { batchCreateSipAccounts, createSipAccount, deleteSipAccount, getSipAccount, listSipAccounts, updateSipAccount } from '@/api/callcenter/sip-account';
-import { SipAccountBatchCreateForm, SipAccountForm, SipAccountQuery, SipAccountVO } from '@/api/callcenter/sip-account/types';
+import {
+  batchCreateSipAccounts,
+  createSipAccount,
+  deleteSipAccount,
+  getSipAccount,
+  listSipAccounts,
+  lockSipAccount,
+  unlockSipAccount,
+  updateSipAccount
+} from '@/api/callcenter/sip-account';
+import { SipAccountBatchCreateForm, SipAccountForm, SipAccountQuery, SipAccountVO, SipSecurityStatus } from '@/api/callcenter/sip-account/types';
 import { listFreeSwitchNodes } from '@/api/callcenter/freeswitch-node';
 import { FreeSwitchNodeVO } from '@/api/callcenter/freeswitch-node/types';
 import { listDispatchExtensionStatuses } from '@/api/callcenter/dispatch-monitor';
@@ -249,6 +283,19 @@ const registrationLabel = (value?: DispatchRegistrationStatus) =>
 const registrationTagType = (value?: DispatchRegistrationStatus) =>
   value === 'REGISTERED' ? 'success' : value === 'UNREGISTERED' ? 'danger' : value === 'NODE_UNAVAILABLE' ? 'warning' : 'info';
 
+const securityLabel = (value?: SipSecurityStatus) =>
+  ({ NORMAL: '正常', WATCHING: '观察中', TEMP_LOCKED: '临时锁定', MANUAL_LOCKED: '手工锁定', DISABLED: '已停用' })[value || 'NORMAL'];
+const securityTagType = (value?: SipSecurityStatus) =>
+  value === 'WATCHING' || value === 'TEMP_LOCKED' ? 'warning' : value === 'MANUAL_LOCKED' ? 'danger' : value === 'DISABLED' ? 'info' : 'success';
+const isSecurityLocked = (value?: SipSecurityStatus) => value === 'TEMP_LOCKED' || value === 'MANUAL_LOCKED';
+const securityTooltip = (row: SipAccountVO) => {
+  const details = [`近10分钟失败 ${row.recentFailureCount || 0} 次`];
+  if (row.lastFailureIp) details.push(`最近来源 ${row.lastFailureIp}`);
+  if (row.lockedUntil) details.push(`锁定至 ${row.lockedUntil}`);
+  if (row.lockReason) details.push(row.lockReason);
+  return details.join('；');
+};
+
 const handleQuery = () => {
   queryParams.value.pageNum = 1;
   getList();
@@ -332,6 +379,30 @@ const handleDelete = async (row: SipAccountVO) => {
   await proxy?.$modal.confirm(`确认删除分机 ${row.extension} 吗？`);
   await deleteSipAccount(row.id);
   proxy?.$modal.msgSuccess('删除成功');
+  await getList();
+};
+
+const handleSecurityLock = async (row: SipAccountVO) => {
+  const { value } = await ElMessageBox.prompt(`确认手工锁定分机 ${row.extension} 吗？`, '锁定 SIP 分机', {
+    confirmButtonText: '锁定',
+    cancelButtonText: '取消',
+    inputPlaceholder: '请输入锁定原因（选填）',
+    inputValidator: (text) => !text || text.length <= 200 || '原因不能超过200个字符'
+  });
+  await lockSipAccount(row.id, { reason: value });
+  proxy?.$modal.msgSuccess('分机已锁定');
+  await getList();
+};
+
+const handleSecurityUnlock = async (row: SipAccountVO) => {
+  const { value } = await ElMessageBox.prompt(`确认解除分机 ${row.extension} 的注册锁定吗？`, '解除 SIP 锁定', {
+    confirmButtonText: '解除',
+    cancelButtonText: '取消',
+    inputPlaceholder: '请输入解除原因（选填）',
+    inputValidator: (text) => !text || text.length <= 200 || '原因不能超过200个字符'
+  });
+  await unlockSipAccount(row.id, { reason: value });
+  proxy?.$modal.msgSuccess('锁定已解除');
   await getList();
 };
 

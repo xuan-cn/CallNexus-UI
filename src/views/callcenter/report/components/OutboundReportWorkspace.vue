@@ -65,7 +65,7 @@
       /></el-card>
     </div>
 
-    <el-card class="table-card task-card" shadow="never">
+<!--    <el-card class="table-card task-card" shadow="never">
       <template #header
         ><div class="section-head"><span>任务排行</span><small>点击“聚焦”可查看单个任务的完整指标</small></div></template
       >
@@ -90,9 +90,9 @@
           ><template #default="{ row }"><el-button link type="primary" @click="focusTask(row)">聚焦</el-button></template></el-table-column
         >
       </el-table>
-    </el-card>
+    </el-card>-->
 
-    <el-card class="table-card attempt-card" shadow="never">
+<!--    <el-card class="table-card attempt-card" shadow="never">
       <template #header>拨打明细</template>
       <el-table v-loading="loading" :data="attemptRows" size="small">
         <el-table-column label="开始时间" prop="startedAt" width="158" />
@@ -115,7 +115,7 @@
         <el-table-column label="挂断原因" prop="hangupCause" min-width="116" show-overflow-tooltip />
       </el-table>
       <pagination v-show="total > 0" v-model:page="query.pageNum" v-model:limit="query.pageSize" :total="total" @pagination="loadAttempts" />
-    </el-card>
+    </el-card>-->
   </div>
 </template>
 

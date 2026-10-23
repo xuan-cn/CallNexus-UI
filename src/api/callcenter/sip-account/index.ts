@@ -1,6 +1,13 @@
 import request from '@/utils/request';
 import { AxiosPromise } from 'axios';
-import { SipAccountBatchCreateForm, SipAccountForm, SipAccountQuery, SipAccountVO } from './types';
+import {
+  SipAccountBatchCreateForm,
+  SipAccountForm,
+  SipAccountQuery,
+  SipAccountVO,
+  SipRegistrationLockForm,
+  SipRegistrationSecuritySummary
+} from './types';
 
 export const listSipAccounts = (query: SipAccountQuery): AxiosPromise<SipAccountVO[]> =>
   request({ url: '/api/v1/sip-accounts', method: 'get', params: query });
@@ -17,3 +24,12 @@ export const updateSipAccount = (data: SipAccountForm) =>
   request({ url: `/api/v1/sip-accounts/${data.id}`, method: 'put', data, headers: { isEncrypt: 'true' } });
 
 export const deleteSipAccount = (id: string | number) => request({ url: `/api/v1/sip-accounts/${id}`, method: 'delete' });
+
+export const getSipRegistrationSecuritySummary = (id: string | number): AxiosPromise<SipRegistrationSecuritySummary> =>
+  request({ url: `/api/v1/sip-accounts/${id}/security-summary`, method: 'get' });
+
+export const lockSipAccount = (id: string | number, data: SipRegistrationLockForm) =>
+  request({ url: `/api/v1/sip-accounts/${id}/security-lock`, method: 'post', data });
+
+export const unlockSipAccount = (id: string | number, data: SipRegistrationLockForm) =>
+  request({ url: `/api/v1/sip-accounts/${id}/security-unlock`, method: 'post', data });

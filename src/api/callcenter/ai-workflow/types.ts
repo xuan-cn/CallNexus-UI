@@ -47,6 +47,20 @@ export interface AiWorkflowDefinition {
   variables: Array<Record<string, any>>;
   nodes: AiWorkflowNode[];
   edges: AiWorkflowEdge[];
+  settings?: {
+    intentFallback?: AiWorkflowIntentFallbackPolicy;
+  };
+}
+
+export interface AiWorkflowIntentFallbackPolicy {
+  fallbackMode: 'EDGE' | 'FIXED_RETRY' | 'AI_RETRY' | 'FIXED_CONTINUE' | 'AI_CONTINUE';
+  fallbackText?: string;
+  fallbackPrompt?: string;
+  maxRetries?: number;
+  retryLimitAction?: 'EDGE' | 'CONTINUE' | 'TRANSFER_QUEUE' | 'TRANSFER_EXTENSION' | 'HANGUP' | 'END';
+  limitText?: string;
+  limitQueueCode?: string;
+  limitExtension?: string;
 }
 
 export interface AiWorkflowVersionVO {

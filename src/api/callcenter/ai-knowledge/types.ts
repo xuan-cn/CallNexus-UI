@@ -318,7 +318,7 @@ export interface AiMessageVO {
 }
 export interface AiConversationStartVO {
   conversation: AiConversationVO;
-  message: AiMessageVO;
+  message?: AiMessageVO | null;
 }
 export interface AiStreamEvent {
   event: 'conversation' | 'retrieval' | 'delta' | 'citation' | 'completed' | 'error';

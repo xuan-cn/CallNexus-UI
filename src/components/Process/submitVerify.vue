@@ -1,5 +1,14 @@
 <template>
-  <el-dialog v-model="dialog.visible" :title="dialog.title" width="50%" draggable :before-close="cancel" center :close-on-click-modal="false">
+  <el-dialog
+    v-model="dialog.visible"
+    :title="dialog.title"
+    width="50%"
+    draggable
+    append-to-body
+    :before-close="cancel"
+    center
+    :close-on-click-modal="false"
+  >
     <el-form v-loading="loading" :model="form" label-width="120px">
       <el-form-item label="消息提醒">
         <el-checkbox-group v-model="form.messageType">
@@ -262,24 +271,26 @@ const openDialog = async (id?: string) => {
   dialog.visible = true;
   loading.value = true;
   buttonDisabled.value = true;
-  const response = await getTask(taskId.value);
-  task.value = response.data;
-  buttonObj.value = {};
-  task.value.buttonList?.forEach((e) => {
-    buttonObj.value[e.code] = e.show;
-  });
-  selectCopyUserList.value = task.value.copyList;
-  selectCopyUserIds.value = task.value.copyList.map((e) => e.userId).join(',');
-  varNodeList.value = task.value.varList;
-  console.log('varNodeList', varNodeList.value);
-  buttonDisabled.value = false;
   try {
+    const response = await getTask(taskId.value);
+    task.value = response.data;
+    buttonObj.value = {};
+    task.value.buttonList?.forEach((e) => {
+      buttonObj.value[e.code] = e.show;
+    });
+    selectCopyUserList.value = task.value.copyList;
+    selectCopyUserIds.value = task.value.copyList.map((e) => e.userId).join(',');
+    varNodeList.value = task.value.varList;
     const data = {
       taskId: taskId.value,
       variables: props.taskVariables
     };
     const nextData = await getNextNodeList(data);
     nestNodeList.value = nextData.data;
+    buttonDisabled.value = false;
+  } catch (error) {
+    dialog.visible = false;
+    throw error;
   } finally {
     loading.value = false;
   }

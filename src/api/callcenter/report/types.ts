@@ -1,7 +1,7 @@
 export interface ReportQuery extends PageQuery {
   beginDate?: string;
   endDate?: string;
-  granularity?: 'HOUR' | 'DAY';
+  granularity?: 'HOUR' | 'DAY' | 'MONTH';
   direction?: 'INBOUND' | 'OUTBOUND' | 'INTERNAL';
   answerResult?: 'ANSWERED' | 'UNANSWERED';
   keyword?: string;
@@ -27,6 +27,13 @@ export interface ReportQueueOptionVO {
   id: string | number;
   queueCode: string;
   queueName: string;
+  enabled: boolean;
+}
+
+export interface ReportSkillGroupOptionVO {
+  id: string | number;
+  groupCode: string;
+  groupName: string;
   enabled: boolean;
 }
 
@@ -126,6 +133,26 @@ export interface CallDetailVO {
   waitSeconds: number;
   talkSeconds: number;
   hangupCause?: string;
+}
+
+export interface CallAgentStatisticVO {
+  bucket: string;
+  agentId: string | number;
+  agentName: string;
+  agentExtension?: string;
+  totalCalls: number;
+  answeredCalls: number;
+  answerRate: number;
+  outboundCalls: number;
+  outboundAnsweredCalls: number;
+  outboundAnswerRate: number;
+  outboundTalkSeconds: number;
+  outboundAverageTalkSeconds: number;
+  inboundCalls: number;
+  inboundAnsweredCalls: number;
+  inboundAnswerRate: number;
+  inboundTalkSeconds: number;
+  inboundAverageTalkSeconds: number;
 }
 
 export interface AgentReportVO {

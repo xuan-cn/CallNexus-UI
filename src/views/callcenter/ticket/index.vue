@@ -127,7 +127,6 @@
         </div>
       </template>
     </CallCenterBusinessDetail>
-    <SubmitVerify ref="submitVerifyRef" :task-variables="taskVariables" @submit-callback="handleWorkflowUpdated" />
     <ApprovalRecord ref="approvalRecordRef" />
     <DynamicBusinessFormDialog v-model="createVisible" business-type="TICKET" @saved="handleCreated" />
     <el-dialog v-model="deadlineDialogVisible" title="设置工单办结时限" width="500px" append-to-body destroy-on-close>
@@ -161,6 +160,7 @@
     <TicketUrgencyManager v-model="urgencyManagerVisible" @changed="handleUrgencyConfigChanged" />
     </template>
     <AiTicketDraftReview v-else @open-ticket="openCreatedTicket" />
+    <SubmitVerify ref="submitVerifyRef" :task-variables="taskVariables" @submit-callback="handleWorkflowUpdated" />
   </div>
 </template>
 
@@ -193,6 +193,7 @@ import TicketUrgencyManager from './TicketUrgencyManager.vue';
 import { checkPermi } from '@/utils/permission';
 
 const route = useRoute();
+const router = useRouter();
 const loading = ref(false);
 const rows = ref<TicketVO[]>([]);
 const total = ref(0);
@@ -396,8 +397,32 @@ const close = async (ticket: TicketVO) => {
   await handleWorkflowUpdated();
 };
 const showProgress = (ticket: TicketVO) => approvalRecordRef.value?.init(ticket.id);
-const openApproval = () => submitVerifyRef.value?.openDialog(String(route.query.taskId));
+const openApproval = async () => {
+  const taskId = Array.isArray(route.query.taskId) ? route.query.taskId[0] : route.query.taskId;
+  if (!taskId) {
+    ElMessage.error('未获取到当前流程任务，请从待办任务重新打开工单');
+    return;
+  }
+  await nextTick();
+  if (!submitVerifyRef.value) {
+    ElMessage.error('任务办理组件加载失败，请刷新页面后重试');
+    return;
+  }
+  await submitVerifyRef.value.openDialog(String(taskId));
+};
 async function handleWorkflowUpdated() {
+  if (route.query.type === 'approval') {
+    detailVisible.value = false;
+    detailId.value = undefined;
+    taskVariables.value = {};
+    const nextQuery = { ...route.query };
+    delete nextQuery.id;
+    delete nextQuery.type;
+    delete nextQuery.taskId;
+    await router.replace({ query: nextQuery });
+    await load();
+    return;
+  }
   await load();
   if (detailVisible.value) await detailRef.value?.reload();
 }

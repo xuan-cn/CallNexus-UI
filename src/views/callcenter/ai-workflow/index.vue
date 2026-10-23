@@ -76,6 +76,7 @@
         </div>
         <div class="designer-actions">
           <el-input v-model="versionName" placeholder="版本说明" style="width: 190px" />
+          <el-button @click="openFallbackSettings">公共兜底</el-button>
           <el-button @click="openVariables()">变量</el-button>
           <el-button :loading="savingDraft" @click="saveDraft">保存草稿</el-button>
           <el-button :loading="validating" @click="() => validateDraft()">校验</el-button>
@@ -129,6 +130,75 @@
         >
       </el-table>
       <el-button class="mt-4" icon="Plus" @click="addVariable">新增变量</el-button>
+    </el-drawer>
+
+    <el-drawer v-model="fallbackVisible" title="意图未命中公共策略" size="620px" append-to-body>
+      <el-alert class="mb-4" type="info" :closable="false" title="意图节点选择“继承流程公共策略”后使用这里的配置；单个节点仍可独立覆盖。" />
+      <el-form label-position="top">
+        <el-form-item label="未命中时">
+          <el-select v-model="fallbackPolicy.fallbackMode" style="width: 100%">
+            <el-option label="按原方式走未命中连线" value="EDGE" />
+            <el-option label="回复固定话术并重新询问" value="FIXED_RETRY" />
+            <el-option label="AI 回答后重新询问" value="AI_RETRY" />
+            <el-option label="回复固定话术后继续流程" value="FIXED_CONTINUE" />
+            <el-option label="AI 回答后继续流程" value="AI_CONTINUE" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="['FIXED_RETRY', 'FIXED_CONTINUE'].includes(fallbackPolicy.fallbackMode)" label="回复话术">
+          <el-input
+            v-model="fallbackPolicy.fallbackText"
+            type="textarea"
+            :rows="4"
+            placeholder="例如：抱歉，我没有听清。请问您是否需要办理这项业务？"
+          />
+        </el-form-item>
+        <el-form-item v-if="['AI_RETRY', 'AI_CONTINUE'].includes(fallbackPolicy.fallbackMode)" label="AI 回答要求">
+          <el-input
+            v-model="fallbackPolicy.fallbackPrompt"
+            type="textarea"
+            :rows="4"
+            placeholder="可留空，系统会要求 AI 简短回答并按当前策略继续。"
+          />
+        </el-form-item>
+        <template v-if="['FIXED_RETRY', 'AI_RETRY'].includes(fallbackPolicy.fallbackMode)">
+          <el-form-item label="最多重新询问">
+            <el-input-number v-model="fallbackPolicy.maxRetries" :min="1" :max="10" style="width: 100%" />
+          </el-form-item>
+          <el-form-item label="达到次数上限后">
+            <el-select v-model="fallbackPolicy.retryLimitAction" style="width: 100%">
+              <el-option label="走“未命中后继续”统一连线" value="CONTINUE" />
+              <el-option label="走原“未命中任何意图”连线" value="EDGE" />
+              <el-option label="直接转技能组" value="TRANSFER_QUEUE" />
+              <el-option label="直接转分机" value="TRANSFER_EXTENSION" />
+              <el-option label="直接挂机" value="HANGUP" />
+              <el-option label="结束编排并返回普通 AI 对话" value="END" />
+            </el-select>
+          </el-form-item>
+          <el-alert
+            v-if="['TRANSFER_QUEUE', 'TRANSFER_EXTENSION', 'HANGUP', 'END'].includes(fallbackPolicy.retryLimitAction)"
+            class="mb-4"
+            type="warning"
+            :closable="false"
+            title="选择直接动作后，继承该策略的意图节点不再需要未命中兜底连线；已有连线不会自动删除，请确认后手动整理。"
+          />
+          <el-form-item v-if="fallbackPolicy.retryLimitAction === 'TRANSFER_QUEUE'" label="目标技能组">
+            <el-select v-model="fallbackPolicy.limitQueueCode" filterable style="width: 100%" placeholder="请选择技能组">
+              <el-option v-for="item in queueOptions" :key="item.queueCode" :label="item.queueName" :value="item.queueCode" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="fallbackPolicy.retryLimitAction === 'TRANSFER_EXTENSION'" label="目标分机">
+            <el-input v-model="fallbackPolicy.limitExtension" placeholder="例如：1001" />
+          </el-form-item>
+          <el-form-item label="达到上限时的话术（可选）">
+            <el-input
+              v-model="fallbackPolicy.limitText"
+              type="textarea"
+              :rows="3"
+              placeholder="例如：暂时没有确认到您的选择，现在为您转接人工服务。"
+            />
+          </el-form-item>
+        </template>
+      </el-form>
     </el-drawer>
 
     <el-dialog v-model="validationVisible" title="发布校验结果" width="680px">
@@ -187,6 +257,7 @@ import {
 import type {
   AiWorkflowDefinition,
   AiWorkflowForm,
+  AiWorkflowIntentFallbackPolicy,
   AiWorkflowMediaOptionVO,
   AiWorkflowScene,
   AiWorkflowValidationVO,
@@ -214,6 +285,7 @@ const publishing = ref(false);
 const startingTest = ref(false);
 const testVisible = ref(false);
 const variablesVisible = ref(false);
+const fallbackVisible = ref(false);
 const validationVisible = ref(false);
 const versionsVisible = ref(false);
 const versions = ref<AiWorkflowVersionVO[]>([]);
@@ -231,7 +303,22 @@ const sceneOptions: Array<{ label: string; value: AiWorkflowScene }> = [
 ];
 const emptyForm = (): AiWorkflowForm => ({ workflowCode: '', workflowName: '', sceneType: 'VOICE_OUTBOUND', description: '', enabled: true });
 const form = ref<AiWorkflowForm>(emptyForm());
-const graph = ref<AiWorkflowDefinition>({ schemaVersion: '1.0', variables: [], nodes: [], edges: [] });
+const defaultFallbackPolicy = (): AiWorkflowIntentFallbackPolicy => ({
+  fallbackMode: 'EDGE',
+  fallbackText: '',
+  fallbackPrompt: '',
+  maxRetries: 2,
+  retryLimitAction: 'CONTINUE',
+  limitText: '',
+  limitQueueCode: '',
+  limitExtension: ''
+});
+const graph = ref<AiWorkflowDefinition>({ schemaVersion: '1.0', variables: [], nodes: [], edges: [], settings: {} });
+const fallbackPolicy = computed(() => {
+  graph.value.settings ||= {};
+  graph.value.settings.intentFallback ||= defaultFallbackPolicy();
+  return graph.value.settings.intentFallback;
+});
 const rules = {
   workflowCode: [
     { required: true, message: '请输入编排编码', trigger: 'blur' },
@@ -316,6 +403,7 @@ const openDesigner = async (row: AiWorkflowVO) => {
   draft.value = draftResult.data;
   versionName.value = draft.value.versionName || `v${draft.value.versionNo} 草稿`;
   graph.value = JSON.parse(draft.value.definitionJson);
+  graph.value.settings ||= {};
   ensureVariableKeys();
   await nextTick();
   designerReady.value = true;
@@ -388,6 +476,11 @@ const openVariables = (createIfEmpty = false) => {
   ensureVariableKeys();
   if (createIfEmpty && !graph.value.variables.length) addVariable();
   variablesVisible.value = true;
+};
+const openFallbackSettings = () => {
+  graph.value.settings ||= {};
+  graph.value.settings.intentFallback ||= defaultFallbackPolicy();
+  fallbackVisible.value = true;
 };
 const versionLabel = (status: string) => ({ DRAFT: '草稿', PUBLISHED: '已发布', ARCHIVED: '已归档' })[status] || status;
 const versionTag = (status: string) => (status === 'PUBLISHED' ? 'success' : status === 'DRAFT' ? 'warning' : 'info');

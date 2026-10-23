@@ -74,7 +74,7 @@
               </el-form-item>
               <el-form-item label="开场白">
                 <el-input v-model="form.welcomeMessage" type="textarea" :rows="4" placeholder="创建新对话时，作为 AI 的第一条消息" />
-                <p class="field-hint">开场白不参与知识检索，后续电话 AI 将复用该内容。</p>
+                <p class="field-hint">留空时不播放开场白，接通后直接等待客户说话。</p>
               </el-form-item>
             </section>
             <section class="edit-section">
@@ -697,8 +697,7 @@ const defaults = (): AiAgentForm => ({
 2. 先归纳知识内容再回答用户问题，不要展示归纳或思考过程。
 3. 直接回答，不要出现“根据知识库回答”等字眼。
 4. 知识库中没有时，友善地回答用户问题，不要体现任何知识库字眼。
-5. 已经发送了固定开场白：“您好，我是 CallNexus AI 助手，请问有什么可以帮您？”
-6. 纯文本输出，不要使用 Markdown、加粗、列表符号。`,
+5. 纯文本输出，不要使用 Markdown、加粗、列表符号。`,
   welcomeMessage: '您好，我是 CallNexus AI 助手，请问有什么可以帮您？',
   retrievalMode: 'RAG',
   retrievalFailurePolicy: 'FALLBACK_MODEL',

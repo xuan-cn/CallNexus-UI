@@ -1,977 +1,469 @@
 <template>
-  <div class="p-2">
-    <el-card shadow="hover">
-      <template #header>
-        <div class="card-header">
-          <div>
-            <strong>点击拨号任务</strong>
-            <div class="description">按条件获取客户并分配坐席，坐席从可拨列表中任选客户拨打并登记结果。</div>
-          </div>
-          <el-button v-hasPermi="['callcenter:outbound-task:create']" type="primary" plain icon="Plus" @click="handleAdd">新增任务</el-button>
-        </div>
-      </template>
-      <el-table v-loading="loading" :data="tasks">
-        <el-table-column label="任务编码" prop="taskCode" min-width="130" />
-        <el-table-column label="任务名称" prop="taskName" min-width="170" />
-        <el-table-column label="状态" width="100">
-          <template #default="{ row }"><el-tag :type="statusTag(row.status)">{{ statusLabel(row.status) }}</el-tag></template>
-        </el-table-column>
-        <el-table-column label="名单进度" min-width="210">
-          <template #default="{ row }">
-            <el-progress :percentage="progress(row)" :stroke-width="10" />
-            <span class="progress-text">完成 {{ row.completedCount }} / 总计 {{ row.totalCount }}，待处理 {{ row.pendingCount }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="说明" prop="description" min-width="180" show-overflow-tooltip />
-        <el-table-column label="名单分配" min-width="180">
-          <template #default="{ row }">
-            <span v-if="row.assignmentMode !== 'SPECIFIED'">公共领取</span>
-            <span v-else>{{ assignedAgentNames(row.assignedAgentIds) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="调度状态" min-width="300">
-          <template #default="{ row }">
-            <div class="schedule-status">
-              <el-tag size="small" :type="row.dueRetryCount ? 'warning' : 'info'">到期 {{ row.dueRetryCount || 0 }}</el-tag>
-              <span class="schedule-summary" :title="row.lastScheduleSummary || '暂无调度记录'">
-                {{ compactScheduleSummary(row.lastScheduleSummary) }}
-              </span>
-              <span class="schedule-time">{{ row.lastScheduledAt || '尚未调度' }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="480" fixed="right" align="center">
-          <template #default="{ row }">
-            <el-button v-hasPermi="['callcenter:outbound-task:query']" link type="primary" @click="showMembers(row)">名单</el-button>
-            <el-button v-hasPermi="['callcenter:outbound-task:query']" link type="primary" @click="showStatistics(row)">统计</el-button>
-            <el-button v-hasPermi="['callcenter:outbound-task:query']" link type="primary" @click="showReport(row)">详细报表</el-button>
-            <el-button v-hasPermi="['callcenter:outbound-task:update']" link type="warning" @click="recoverExpired(row)">恢复异常名单</el-button>
-            <el-button v-if="row.status !== 'RUNNING'" v-hasPermi="['callcenter:outbound-task:update']" link type="success" @click="changeTaskStatus(row, true)">开始</el-button>
-            <el-button v-else v-hasPermi="['callcenter:outbound-task:update']" link type="warning" @click="changeTaskStatus(row, false)">暂停</el-button>
-            <el-button v-if="row.status === 'RUNNING'" v-hasPermi="['callcenter:outbound-task:execute']" link type="primary" @click="openWorkbench(row)">执行</el-button>
-            <el-button v-hasPermi="['callcenter:outbound-task:update']" link type="primary" icon="Edit" @click="handleUpdate(row)" />
-            <el-button v-hasPermi="['callcenter:outbound-task:delete']" link type="danger" icon="Delete" @click="handleDelete(row)" />
-          </template>
-        </el-table-column>
-      </el-table>
+  <div class="click-dial-page p-2">
+    <div class="summary-grid">
+      <button
+        v-for="item in summaryItems"
+        :key="item.value"
+        type="button"
+        class="summary-card"
+        :class="{ active: query.workFilter === item.value }"
+        @click="changeWorkFilter(item.value)"
+      >
+        <span>{{ item.label }}</span
+        ><strong>{{ item.count }}</strong>
+      </button>
+    </div>
+
+    <el-card shadow="never" class="filter-card">
+      <el-form :model="query" inline @submit.prevent>
+        <el-form-item label="客户"><el-input v-model="query.keyword" clearable placeholder="姓名或电话号码" @keyup.enter="search" /></el-form-item>
+        <el-form-item label="客户类型"><el-input v-model="query.customerType" clearable /></el-form-item>
+        <el-form-item label="来源渠道"><el-input v-model="query.sourceChannel" clearable /></el-form-item>
+        <el-form-item label="客户标签"><el-input v-model="query.tags" clearable /></el-form-item>
+        <el-form-item label="拨打结果">
+          <el-select v-model="query.resultCode" clearable placeholder="全部" style="width: 132px">
+            <el-option v-for="item in resultOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="最后拨打">
+          <el-date-picker
+            v-model="lastCalledRange"
+            type="datetimerange"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            start-placeholder="开始时间"
+            end-placeholder="结束时间"
+          />
+        </el-form-item>
+        <el-form-item
+          ><el-button type="primary" icon="Search" @click="search">查询</el-button
+          ><el-button icon="Refresh" @click="reset">重置</el-button></el-form-item
+        >
+      </el-form>
     </el-card>
 
-    <el-dialog v-model="taskDialog.visible" :title="taskDialog.title" width="680px" append-to-body>
-      <el-form ref="taskFormRef" :model="taskForm" :rules="taskRules" label-width="90px">
-        <el-form-item label="任务编码" prop="taskCode"><el-input v-model="taskForm.taskCode" placeholder="例如 OUTBOUND_202606" /></el-form-item>
-        <el-form-item label="任务名称" prop="taskName"><el-input v-model="taskForm.taskName" /></el-form-item>
-        <el-form-item label="任务说明"><el-input v-model="taskForm.description" type="textarea" :rows="4" maxlength="500" show-word-limit /></el-form-item>
-        <el-divider content-position="left">名单分配</el-divider>
-        <el-form-item label="分配方式">
-          <el-radio-group v-model="taskForm.assignmentMode">
-            <el-radio value="PUBLIC">公共领取</el-radio>
-            <el-radio value="SPECIFIED">指定坐席</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item v-if="taskForm.assignmentMode === 'SPECIFIED'" label="指定坐席" prop="assignedAgentIds">
-          <el-select v-model="taskForm.assignedAgentIds" multiple filterable collapse-tags collapse-tags-tooltip style="width: 100%" placeholder="至少选择一名坐席">
-            <el-option v-for="agent in agentOptions" :key="agent.id" :label="agentOptionLabel(agent)" :value="agent.id" />
-          </el-select>
-          <span class="form-tip">筛选生成名单时按所选坐席轮询均分，只有这些坐席可以领取。</span>
-        </el-form-item>
-        <el-form-item label="外呼主叫">
-          <el-select v-model="taskForm.callerNumberId" clearable filterable style="width: 100%" placeholder="不选则使用坐席默认主叫或节点默认主叫">
-            <el-option v-for="item in callerNumberOptions" :key="item.id" :label="callerNumberLabel(item)" :value="item.id" />
-          </el-select>
-          <span class="form-tip">任务主叫优先于坐席默认主叫。</span>
-        </el-form-item>
-        <el-divider content-position="left">自动重呼策略</el-divider>
-        <el-form-item label="自动重呼"><el-switch v-model="taskForm.autoRetryEnabled" /></el-form-item>
-        <template v-if="taskForm.autoRetryEnabled">
-          <el-form-item label="触发结果">
-            <el-select v-model="retryResultCodeValues" multiple style="width: 100%">
-              <el-option label="无人接听" value="NO_ANSWER" />
-              <el-option label="客户忙" value="BUSY" />
-              <el-option label="其他失败" value="OTHER" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="最大重呼">
-            <el-input-number v-model="taskForm.maxRetryCount" :min="0" :max="10" />
-            <span class="form-tip">次，不包含首次拨打</span>
-          </el-form-item>
-          <el-form-item label="重呼间隔">
-            <el-input-number v-model="taskForm.retryIntervalMinutes" :min="1" :max="10080" />
-            <span class="form-tip">分钟</span>
-          </el-form-item>
-          <el-divider content-position="left">到期重呼分配</el-divider>
-          <el-form-item label="自动分配"><el-switch v-model="taskForm.autoAssignDueRetry" /></el-form-item>
-          <el-form-item v-if="taskForm.autoAssignDueRetry" label="指定坐席">
-            <el-select v-model="taskForm.retryAssigneeAgentId" filterable style="width: 100%" placeholder="选择到期后自动分配的坐席">
-              <el-option v-for="agent in agentOptions" :key="agent.id" :label="agentOptionLabel(agent)" :value="agent.id" />
-            </el-select>
-            <span class="form-tip">仅在坐席已签入示闲且没有活动外呼名单时自动分配。</span>
-          </el-form-item>
-        </template>
-      </el-form>
-      <template #footer><el-button @click="taskDialog.visible = false">取消</el-button><el-button type="primary" @click="submitTask">保存</el-button></template>
-    </el-dialog>
-
-    <el-drawer v-model="memberDrawer.visible" :title="`${memberDrawer.task?.taskName || ''} - 外呼名单`" size="72%">
-      <div class="member-toolbar">
-        <el-button v-hasPermi="['callcenter:outbound-task:update']" type="primary" plain @click="openCustomerDialog">筛选获取客户</el-button>
-        <el-button v-hasPermi="['callcenter:outbound-task:update']" type="success" plain @click="openImportDialog">Excel 导入</el-button>
-      </div>
-      <el-table :data="members">
-        <el-table-column label="客户" prop="customerName" min-width="140"><template #default="{ row }">{{ row.customerName || '未提供姓名' }}</template></el-table-column>
-        <el-table-column label="电话号码" prop="phoneNumber" min-width="140" />
-        <el-table-column label="名单来源" width="110"><template #default="{ row }">{{ row.sourceType === 'EXCEL' ? 'Excel 导入' : row.sourceType === 'FILTER' ? '条件生成' : '手工添加' }}</template></el-table-column>
-        <el-table-column label="分配坐席" min-width="140"><template #default="{ row }">{{ agentNameById(row.assignedAgentId) }}</template></el-table-column>
-        <el-table-column label="状态" width="100"><template #default="{ row }">{{ memberStatusLabel(row.status) }}</template></el-table-column>
-        <el-table-column label="拨打次数" prop="attemptCount" width="90" />
-        <el-table-column label="结果" width="120"><template #default="{ row }">{{ resultLabel(row.resultCode) }}</template></el-table-column>
-        <el-table-column label="结果备注" prop="resultRemark" min-width="180" show-overflow-tooltip />
-        <el-table-column label="下次重呼" prop="nextFollowUpAt" min-width="170" />
-        <el-table-column label="结束原因" width="130"><template #default="{ row }">{{ completionReasonLabel(row.completionReason) }}</template></el-table-column>
-        <el-table-column label="拦截原因" prop="blockedReason" min-width="180" show-overflow-tooltip />
-        <el-table-column label="拦截时间" prop="blockedAt" min-width="170" />
-        <el-table-column label="操作" width="100" fixed="right">
+    <el-card shadow="never" class="list-card">
+      <template #header>
+        <div class="list-header">
+          <div><strong>我的客户</strong><span>仅展示当前坐席有效归属的客户</span></div>
+          <el-button icon="Refresh" :loading="loading" @click="loadData">刷新</el-button>
+        </div>
+      </template>
+      <el-table v-loading="loading" :data="rows" empty-text="当前筛选条件下没有客户">
+        <el-table-column label="客户" min-width="150"
+          ><template #default="{ row }"
+            ><el-button link type="primary" @click="showCustomer(row.customerId)">{{ row.customerName || '未提供姓名' }}</el-button></template
+          ></el-table-column
+        >
+        <el-table-column label="电话号码" min-width="185">
           <template #default="{ row }">
-            <el-button link type="primary" @click="showAttempts(row)">拨打明细</el-button>
+            <div class="phone-actions">
+              <el-button
+                v-if="primaryPhone(row)"
+                v-hasPermi="['callcenter:click-dial:execute']"
+                link
+                type="primary"
+                :loading="dialingId === row.assignmentId"
+                @click="dial(row, primaryPhoneId(row))"
+                ><el-icon><Phone /></el-icon>{{ primaryPhone(row) }}</el-button
+              >
+              <el-dropdown v-if="additionalPhones(row).length" trigger="click" @command="(phoneId) => dial(row, phoneId)">
+                <el-button link type="primary"
+                  >其他号码（{{ additionalPhones(row).length }}）<el-icon><ArrowDown /></el-icon
+                ></el-button>
+                <template #dropdown
+                  ><el-dropdown-menu
+                    ><el-dropdown-item v-for="phone in additionalPhones(row)" :key="phone.id" :command="phone.id"
+                      >{{ phone.phoneLabel || phone.phoneType || '号码' }}：{{ phone.phoneNumber }}</el-dropdown-item
+                    ></el-dropdown-menu
+                  ></template
+                >
+              </el-dropdown>
+            </div>
           </template>
         </el-table-column>
+        <el-table-column label="客户信息" min-width="180" show-overflow-tooltip
+          ><template #default="{ row }">{{
+            [row.customerType, row.sourceChannel, row.tags].filter(Boolean).join(' · ') || '-'
+          }}</template></el-table-column
+        >
+        <el-table-column label="状态" width="105"
+          ><template #default="{ row }"
+            ><el-tag :type="statusTag(row.dialStatus)">{{ statusLabel(row.dialStatus) }}</el-tag></template
+          ></el-table-column
+        >
+        <el-table-column label="拨打次数" prop="attemptCount" width="88" align="center" />
+        <el-table-column label="最后结果" width="110"
+          ><template #default="{ row }">{{ resultLabel(row.lastResultCode) }}</template></el-table-column
+        >
+        <el-table-column label="最后拨打" prop="lastCalledAt" min-width="165"
+          ><template #default="{ row }">{{ row.lastCalledAt || '-' }}</template></el-table-column
+        >
+        <el-table-column label="下次跟进" min-width="170"
+          ><template #default="{ row }"
+            ><span :class="{ overdue: isOverdue(row.nextFollowUpAt) }">{{ row.nextFollowUpAt || '-' }}</span></template
+          ></el-table-column
+        >
+        <el-table-column label="备注" prop="lastResultRemark" min-width="160" show-overflow-tooltip />
+        <el-table-column label="操作" width="190" fixed="right">
+          <template #default="{ row }"
+            ><el-button v-hasPermi="['callcenter:click-dial:result']" link type="primary" :disabled="!row.lastBusinessCallId" @click="openResult(row)"
+              >登记结果</el-button
+            ><el-button link type="primary" @click="openAttempts(row)">拨打记录</el-button></template
+          >
+        </el-table-column>
       </el-table>
-    </el-drawer>
+      <el-pagination
+        v-model:current-page="query.pageNum"
+        v-model:page-size="query.pageSize"
+        class="pagination"
+        background
+        layout="total, sizes, prev, pager, next"
+        :total="total"
+        @current-change="loadRows"
+        @size-change="search"
+      />
+    </el-card>
 
-    <el-dialog v-model="customerDialog.visible" title="按条件获取客户" width="920px" append-to-body>
-      <el-alert title="生成名单只会处理当前筛选条件下、且在你数据权限范围内的客户。任务内已有客户会自动跳过。" type="info" :closable="false" show-icon />
-      <el-form inline class="customer-filter" @submit.prevent>
-        <el-form-item label="客户电话"><el-input v-model="customerQuery.primaryPhone" clearable /></el-form-item>
-        <el-form-item label="客户姓名"><el-input v-model="customerQuery.customerName" clearable /></el-form-item>
-        <el-form-item label="分配状态"><el-select v-model="customerQuery.assignmentState" clearable placeholder="全部"><el-option label="未分配" value="UNASSIGNED" /><el-option label="已分配" value="ASSIGNED" /></el-select></el-form-item>
-        <el-form-item label="客户类型"><el-input v-model="customerQuery.customerType" clearable /></el-form-item>
-        <el-form-item label="来源渠道"><el-input v-model="customerQuery.sourceChannel" clearable /></el-form-item>
-        <el-form-item label="客户标签"><el-input v-model="customerQuery.tags" clearable /></el-form-item>
-        <el-form-item label="技能组">
-          <el-select v-model="customerQuery.skillGroupId" clearable filterable placeholder="全部技能组">
-            <el-option v-for="group in skillGroupOptions" :key="group.id" :label="group.groupName" :value="group.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="资料模板">
-          <el-select v-model="customerQuery.templateId" clearable filterable placeholder="全部模板" @change="handleCustomerTemplateChange">
-            <el-option v-for="template in customerFormTemplates" :key="template.id" :label="template.templateName" :value="template.id" />
-          </el-select>
-        </el-form-item>
-        <DynamicQueryFields v-model="dynamicQueryValues" :fields="querySchemaFields" @search="searchCustomersForTask" />
-        <el-form-item><el-button type="primary" @click="searchCustomersForTask">查询</el-button><el-button @click="resetCustomerQuery">重置</el-button></el-form-item>
+    <el-drawer v-model="resultDrawer.visible" title="登记拨打结果" size="440px" append-to-body>
+      <el-descriptions v-if="resultDrawer.customer" :column="1" border>
+        <el-descriptions-item label="客户">{{ resultDrawer.customer.customerName || '未提供姓名' }}</el-descriptions-item>
+        <el-descriptions-item label="电话">{{ resultDrawer.phoneNumber || resultDrawer.customer.primaryPhone }}</el-descriptions-item>
+        <el-descriptions-item label="通话ID">{{ resultForm.businessCallId }}</el-descriptions-item>
+      </el-descriptions>
+      <el-form ref="resultFormRef" :model="resultForm" :rules="resultRules" label-position="top" class="result-form">
+        <el-form-item label="拨打结果" prop="resultCode"
+          ><el-select v-model="resultForm.resultCode" style="width: 100%"
+            ><el-option v-for="item in resultOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select
+        ></el-form-item>
+        <el-form-item label="处理状态" prop="dialStatus"
+          ><el-radio-group v-model="resultForm.dialStatus"
+            ><el-radio-button value="PROCESSING">待处理</el-radio-button><el-radio-button value="FOLLOW_UP">需要跟进</el-radio-button
+            ><el-radio-button value="COMPLETED">已完成</el-radio-button></el-radio-group
+          ></el-form-item
+        >
+        <el-form-item v-if="resultForm.dialStatus === 'FOLLOW_UP'" label="下次跟进" prop="nextFollowUpAt"
+          ><el-date-picker v-model="resultForm.nextFollowUpAt" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width: 100%"
+        /></el-form-item>
+        <el-form-item label="结果备注"
+          ><el-input v-model="resultForm.resultRemark" type="textarea" :rows="5" maxlength="1000" show-word-limit
+        /></el-form-item>
       </el-form>
-      <el-table ref="customerTableRef" v-loading="customerDialog.loading" :data="customers" @selection-change="selectedCustomers = $event">
-        <el-table-column type="selection" width="48" />
-        <el-table-column label="客户电话" prop="primaryPhone" min-width="150" />
-        <el-table-column label="客户姓名" min-width="160"><template #default="{ row }">{{ row.customerName || '未提供姓名' }}</template></el-table-column>
-        <el-table-column label="创建时间" prop="createTime" min-width="170" />
-      </el-table>
-      <el-pagination v-model:current-page="customerQuery.pageNum" v-model:page-size="customerQuery.pageSize" class="customer-pagination" background layout="total, sizes, prev, pager, next" :total="customerTotal" @current-change="loadCustomers" @size-change="searchCustomersForTask" />
-      <template #footer>
-        <el-button @click="customerDialog.visible = false">取消</el-button>
-        <el-button :disabled="!selectedCustomers.length" @click="addCustomers">添加选中客户（{{ selectedCustomers.length }}）</el-button>
-        <el-button type="primary" :loading="customerDialog.generating" @click="generateCustomers">获取全部筛选客户（{{ customerTotal }}）</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="importDialog.visible" title="Excel 导入外呼名单" width="920px" append-to-body :close-on-click-modal="false">
-      <el-alert title="先上传文件进行预检，确认后才会写入外呼名单。电话号码会自动清理空格、横线和括号。" type="info" :closable="false" show-icon />
-      <div class="import-actions">
-        <el-upload ref="importUploadRef" :auto-upload="false" :limit="1" accept=".xlsx,.xls" :on-change="handleImportFileChange" :on-remove="handleImportFileRemove">
-          <el-button class="import-action-button" type="primary" plain>选择 Excel 文件</el-button>
-        </el-upload>
-        <el-button class="import-action-button" plain icon="Download" @click="downloadImportTemplate">下载导入模板</el-button>
-        <el-button
-          v-if="importDialog.batch && importDialog.batch.invalidCount + importDialog.batch.duplicateCount + (importDialog.batch.blacklistedCount || 0) > 0"
-          class="import-action-button"
-          type="danger"
-          plain
-          icon="Download"
-          @click="downloadImportErrors"
-        >下载失败明细</el-button>
-        <el-button class="import-action-button" type="success" :loading="importDialog.previewing" :disabled="!importFile" @click="previewImport">开始预检</el-button>
-      </div>
-      <template v-if="importDialog.batch">
-        <div class="import-summary">
-          <el-tag>总计 {{ importDialog.batch.totalCount }}</el-tag>
-          <el-tag type="success">有效 {{ importDialog.batch.validCount }}</el-tag>
-          <el-tag type="warning">重复 {{ importDialog.batch.duplicateCount }}</el-tag>
-          <el-tag type="danger">无效 {{ importDialog.batch.invalidCount }}</el-tag>
-          <el-tag type="danger">黑名单 {{ importDialog.batch.blacklistedCount || 0 }}</el-tag>
-        </div>
-        <el-table :data="importDialog.batch.rows" max-height="420">
-          <el-table-column label="行号" prop="rowNumber" width="70" />
-          <el-table-column label="客户姓名" min-width="130"><template #default="{ row }">{{ row.customerName || '未提供姓名' }}</template></el-table-column>
-          <el-table-column label="原始号码" prop="originalPhone" min-width="150" />
-          <el-table-column label="清洗后号码" prop="normalizedPhone" min-width="150" />
-          <el-table-column label="预检结果" width="120"><template #default="{ row }"><el-tag :type="importStatusTag(row.status)">{{ importStatusLabel(row.status) }}</el-tag></template></el-table-column>
-          <el-table-column label="说明" prop="errorMessage" min-width="260"><template #default="{ row }">{{ row.errorMessage || (row.customerId ? '已匹配现有客户' : '将创建新客户') }}</template></el-table-column>
-        </el-table>
-      </template>
-      <template #footer>
-        <el-checkbox v-model="importDialog.autoCreateCustomer" :disabled="!importDialog.batch">未匹配客户时自动创建客户</el-checkbox>
-        <el-button @click="importDialog.visible = false">取消</el-button>
-        <el-button type="primary" :loading="importDialog.confirming" :disabled="!importDialog.batch?.validCount" @click="confirmImport">确认导入有效名单</el-button>
-      </template>
-    </el-dialog>
-
-    <el-drawer v-model="workbench.visible" title="点击拨号工作台" size="72%" append-to-body :close-on-click-modal="false">
-      <template v-if="!workbench.member">
-        <div class="dial-list-toolbar">
-          <el-input v-model="availableQuery.keyword" clearable placeholder="客户姓名或电话号码" @keyup.enter="searchAvailableMembers" />
-          <el-button type="primary" icon="Search" @click="searchAvailableMembers">查询</el-button>
-          <el-button icon="Refresh" @click="loadAvailableMembers">刷新</el-button>
-        </div>
-        <el-table v-loading="workbench.loading" :data="availableMembers" empty-text="当前没有可拨打客户">
-          <el-table-column label="客户姓名" min-width="160"><template #default="{ row }">{{ row.customerName || '未提供姓名' }}</template></el-table-column>
-          <el-table-column label="电话号码" prop="phoneNumber" min-width="160" />
-          <el-table-column label="已拨次数" prop="attemptCount" width="100" />
-          <el-table-column label="下次重呼" prop="nextFollowUpAt" min-width="170"><template #default="{ row }">{{ row.nextFollowUpAt || '-' }}</template></el-table-column>
-          <el-table-column label="操作" width="180" fixed="right">
-            <template #default="{ row }">
-              <el-button link type="primary" @click="showCustomerDetail(row.customerId)">客户详情</el-button>
-              <el-button link type="success" :loading="workbench.dialingId === row.id" @click="dialSelected(row)">拨打</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        <el-pagination v-model:current-page="availableQuery.pageNum" v-model:page-size="availableQuery.pageSize" class="customer-pagination" background layout="total, sizes, prev, pager, next" :total="availableTotal" @current-change="loadAvailableMembers" @size-change="searchAvailableMembers" />
-      </template>
-      <template v-else>
-        <el-descriptions :column="2" border>
-          <el-descriptions-item label="客户姓名">{{ workbench.member.customerName || '客户未提供姓名' }}</el-descriptions-item>
-          <el-descriptions-item label="客户电话">{{ workbench.member.phoneNumber }}</el-descriptions-item>
-          <el-descriptions-item label="拨打次数">{{ workbench.member.attemptCount }}</el-descriptions-item>
-          <el-descriptions-item label="名单状态">{{ memberStatusLabel(workbench.member.status) }}</el-descriptions-item>
-        </el-descriptions>
-        <div class="dial-actions">
-          <el-button class="workbench-action" type="primary" plain @click="showCustomerDetail(workbench.member.customerId)">查看客户详情</el-button>
-          <el-button class="workbench-action" type="success" :loading="workbench.dialing" :disabled="workbench.member.status === 'DIALING'" @click="dialCurrent">拨打客户</el-button>
-        </div>
-        <el-divider content-position="left">登记外呼结果</el-divider>
-        <el-form label-width="100px">
-          <el-form-item label="外呼结果"><el-select v-model="resultForm.resultCode" style="width: 100%" @change="handleResultChange"><el-option v-for="item in resultOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
-          <el-form-item label="结果备注"><el-input v-model="resultForm.resultRemark" type="textarea" :rows="3" maxlength="1000" show-word-limit /></el-form-item>
-          <el-form-item label="人工重呼"><el-switch v-model="resultForm.retry" @change="handleRetryChange" /></el-form-item>
-          <el-form-item v-if="resultForm.retry" label="下次重呼"><el-date-picker v-model="resultForm.nextFollowUpAt" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width: 100%" @change="handleFollowUpTimeChange" /></el-form-item>
-          <el-alert
-            v-if="resultForm.retry"
-            title="人工设置的重呼时间会覆盖任务自动重呼策略；到达该时间后，名单重新允许领取。"
-            type="warning"
-            :closable="false"
-            show-icon
-          />
-          <el-alert
-            v-else-if="workbench.task?.autoRetryEnabled"
-            :title="`任务已启用自动重呼，命中配置结果后系统将按 ${workbench.task.retryIntervalMinutes} 分钟间隔自动安排。`"
-            type="info"
-            :closable="false"
-            show-icon
-          />
-          <el-alert v-if="workbench.suggestedResultLabel" :title="`系统建议结果：${workbench.suggestedResultLabel}，请坐席确认后保存。`" type="warning" :closable="false" show-icon />
-        </el-form>
-      </template>
-      <template #footer>
-        <el-button @click="workbench.visible = false">关闭</el-button>
-        <el-button v-if="workbench.member" type="primary" @click="completeCurrent">保存外呼结果</el-button>
-      </template>
+      <template #footer
+        ><el-button @click="resultDrawer.visible = false">取消</el-button
+        ><el-button type="primary" :loading="resultDrawer.saving" @click="saveResult">保存结果</el-button></template
+      >
     </el-drawer>
-    <el-dialog v-model="statisticsDialog.visible" :title="`${statisticsDialog.task?.taskName || ''} - 外呼统计`" width="760px" append-to-body>
-      <div v-loading="statisticsDialog.loading">
-        <div v-if="statisticsDialog.data" class="statistics-grid">
-          <div v-for="item in statisticsCards" :key="item.label" class="statistics-card">
-            <span>{{ item.label }}</span>
-            <strong>{{ item.value }}</strong>
-          </div>
-        </div>
-        <el-divider content-position="left">外呼结果分布</el-divider>
-        <el-table :data="resultDistributionRows" empty-text="暂无已登记的外呼结果">
-          <el-table-column label="外呼结果" prop="label" />
-          <el-table-column label="数量" prop="count" width="140" />
-        </el-table>
-      </div>
-    </el-dialog>
-    <el-drawer v-model="attemptDrawer.visible" :title="`${attemptDrawer.member?.customerName || attemptDrawer.member?.phoneNumber || ''} - 拨打明细`" size="70%">
-      <el-table v-loading="attemptDrawer.loading" :data="attempts">
-        <el-table-column label="次数" prop="attemptNo" width="70" />
-        <el-table-column label="开始时间" prop="startedAt" min-width="170" />
-        <el-table-column label="接听时间" prop="answeredAt" min-width="170" />
-        <el-table-column label="结束时间" prop="endedAt" min-width="170" />
-        <el-table-column label="总时长" width="100"><template #default="{ row }">{{ durationLabel(row.durationSeconds) }}</template></el-table-column>
-        <el-table-column label="接通时长" width="100"><template #default="{ row }">{{ durationLabel(row.billableSeconds) }}</template></el-table-column>
-        <el-table-column label="业务结果" width="120"><template #default="{ row }">{{ resultLabel(row.resultCode) }}</template></el-table-column>
-        <el-table-column label="挂断原因" prop="hangupCauseLabel" min-width="160" />
-        <el-table-column label="通话标识" prop="businessCallId" min-width="260" show-overflow-tooltip />
+
+    <el-drawer v-model="attemptDrawer.visible" :title="`${attemptDrawer.customerName} - 拨打记录`" size="720px" append-to-body>
+      <el-table v-loading="attemptDrawer.loading" :data="attemptDrawer.rows">
+        <el-table-column label="次数" prop="attemptNo" width="70" /><el-table-column
+          label="电话号码"
+          prop="phoneNumber"
+          min-width="130"
+        /><el-table-column label="拨打时间" prop="startedAt" min-width="165" />
+        <el-table-column label="接通时长" width="100"
+          ><template #default="{ row }">{{ row.billableSeconds || 0 }}秒</template></el-table-column
+        >
+        <el-table-column label="结果" width="105"
+          ><template #default="{ row }">{{ resultLabel(row.resultCode || row.suggestedResultCode) }}</template></el-table-column
+        >
+        <el-table-column label="挂机原因" prop="hangupCause" min-width="145" /><el-table-column
+          label="备注"
+          prop="resultRemark"
+          min-width="180"
+          show-overflow-tooltip
+        />
       </el-table>
-    </el-drawer>
-    <el-drawer v-model="reportDrawer.visible" :title="`${reportDrawer.task?.taskName || ''} - 外呼详细报表`" size="88%" @closed="disposeTrendChart">
-      <el-form :model="reportQuery" inline>
-        <el-form-item label="客户电话"><el-input v-model="reportQuery.phoneNumber" clearable style="width: 150px" /></el-form-item>
-        <el-form-item label="坐席ID"><el-input v-model="reportQuery.agentId" clearable style="width: 150px" /></el-form-item>
-        <el-form-item label="业务结果">
-          <el-select v-model="reportQuery.resultCode" clearable style="width: 140px"><el-option v-for="item in resultOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select>
-        </el-form-item>
-        <el-form-item label="系统建议">
-          <el-select v-model="reportQuery.suggestedResultCode" clearable style="width: 140px"><el-option v-for="item in resultOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select>
-        </el-form-item>
-        <el-form-item label="挂断原因"><el-input v-model="reportQuery.hangupCause" clearable style="width: 170px" /></el-form-item>
-        <el-form-item label="拨打时间">
-          <el-date-picker v-model="reportDateRange" type="datetimerange" value-format="YYYY-MM-DD HH:mm:ss" range-separator="至" start-placeholder="开始时间" end-placeholder="结束时间" />
-        </el-form-item>
-        <el-form-item><el-button type="primary" icon="Search" @click="queryReport">查询</el-button><el-button icon="Refresh" @click="resetReport">重置</el-button><el-button type="success" plain icon="Download" @click="exportReport">导出明细</el-button></el-form-item>
-      </el-form>
-      <el-tabs v-model="reportDrawer.tab" @tab-change="handleReportTabChange">
-        <el-tab-pane label="拨打明细" name="detail">
-          <el-table v-loading="reportDrawer.loading" :data="reportAttempts">
-            <el-table-column label="客户" prop="customerName" min-width="120" />
-            <el-table-column label="电话" prop="phoneNumber" min-width="140" />
-            <el-table-column label="坐席ID" prop="agentId" min-width="150" />
-            <el-table-column label="次数" prop="attemptNo" width="70" />
-            <el-table-column label="开始时间" prop="startedAt" min-width="170" />
-            <el-table-column label="总时长" width="90"><template #default="{ row }">{{ durationLabel(row.durationSeconds) }}</template></el-table-column>
-            <el-table-column label="接通时长" width="100"><template #default="{ row }">{{ durationLabel(row.billableSeconds) }}</template></el-table-column>
-            <el-table-column label="业务结果" width="110"><template #default="{ row }">{{ resultLabel(row.resultCode) }}</template></el-table-column>
-            <el-table-column label="系统建议" prop="suggestedResultLabel" width="110" />
-            <el-table-column label="挂断原因" prop="hangupCauseLabel" min-width="160" />
-          </el-table>
-          <pagination v-show="reportTotal > 0" v-model:page="reportQuery.pageNum" v-model:limit="reportQuery.pageSize" :total="reportTotal" @pagination="loadReport" />
-        </el-tab-pane>
-        <el-tab-pane label="坐席汇总" name="agent">
-          <el-table v-loading="reportDrawer.loading" :data="agentSummaries">
-            <el-table-column label="坐席编码" prop="agentCode" min-width="130" />
-            <el-table-column label="坐席名称" prop="agentName" min-width="130" />
-            <el-table-column label="客户数" prop="customerCount" width="90" />
-            <el-table-column label="拨打次数" prop="attemptCount" width="100" />
-            <el-table-column label="接听次数" prop="answeredCount" width="100" />
-            <el-table-column label="已接通" prop="connectedCount" width="90" />
-            <el-table-column label="接听率" width="90"><template #default="{ row }">{{ row.answerRate }}%</template></el-table-column>
-            <el-table-column label="接通率" width="90"><template #default="{ row }">{{ row.connectionRate }}%</template></el-table-column>
-            <el-table-column label="总时长" width="110"><template #default="{ row }">{{ durationLabel(row.totalDurationSeconds) }}</template></el-table-column>
-            <el-table-column label="接通时长" width="110"><template #default="{ row }">{{ durationLabel(row.billableSeconds) }}</template></el-table-column>
-          </el-table>
-        </el-tab-pane>
-        <el-tab-pane label="日期趋势" name="trend">
-          <div class="trend-overview">
-            <div v-for="item in trendOverviewCards" :key="item.label" class="trend-overview-card" :class="item.tone">
-              <span>{{ item.label }}</span>
-              <strong>{{ item.value }}</strong>
-              <small>{{ item.description }}</small>
-            </div>
-          </div>
-          <div class="trend-panel">
-            <div class="trend-panel-header">
-              <div><strong>外呼量趋势</strong><span>按拨打开始日期统计</span></div>
-              <div class="trend-legend"><span class="attempt"></span>拨打次数 <span class="answered"></span>接听次数 <span class="connected"></span>已接通</div>
-            </div>
-            <div v-if="dailyTrends.length" ref="trendChartRef" class="trend-chart" />
-            <el-empty v-else description="当前筛选条件下暂无趋势数据" :image-size="80" />
-          </div>
-          <el-table :data="dailyTrends" class="trend-table">
-            <el-table-column label="日期" prop="date" />
-            <el-table-column label="客户数" prop="customerCount" />
-            <el-table-column label="拨打次数" prop="attemptCount" />
-            <el-table-column label="接听次数" prop="answeredCount" />
-            <el-table-column label="已接通" prop="connectedCount" />
-            <el-table-column label="接听率"><template #default="{ row }">{{ row.answerRate }}%</template></el-table-column>
-            <el-table-column label="接通率"><template #default="{ row }">{{ row.connectionRate }}%</template></el-table-column>
-          </el-table>
-        </el-tab-pane>
-      </el-tabs>
     </el-drawer>
   </div>
 </template>
 
-<script setup name="OutboundTask" lang="ts">
+<script setup lang="ts">
+import { ArrowDown, Phone } from '@element-plus/icons-vue';
+import type { FormInstance, FormRules } from 'element-plus';
+import { useRouter } from 'vue-router';
 import {
-  addOutboundCustomers, claimOutboundMember, completeOutboundMember, confirmOutboundMemberImport, createOutboundTask, deleteOutboundTask, dialOutboundMember, generateOutboundCustomers, getCurrentAssignedOutboundMember,
-  getOutboundAgentSummary, getOutboundDailyTrend, getOutboundTask, getOutboundTaskStatistics, listOutboundAttempts, listOutboundMembers, listOutboundTasks, pageOutboundAttempts, pauseOutboundTask, recoverExpiredOutboundMembers,
-  pageAvailableOutboundMembers, previewOutboundMemberImport, renewOutboundMemberLease, startOutboundTask, updateOutboundTask
-} from '@/api/callcenter/outbound-task';
-import { CompleteOutboundMemberForm, OutboundAgentSummaryVO, OutboundAttemptQuery, OutboundAttemptVO, OutboundDailyTrendVO, OutboundImportBatchVO, OutboundMemberVO, OutboundTaskForm, OutboundTaskStatisticsVO, OutboundTaskStatus, OutboundTaskVO } from '@/api/callcenter/outbound-task/types';
-import { CustomerQuery, CustomerVO, searchCustomers } from '@/api/callcenter/customer';
-import { listAgents } from '@/api/callcenter/agent';
-import type { AgentVO } from '@/api/callcenter/agent/types';
-import { listPhoneNumbers } from '@/api/callcenter/phone-number';
-import type { PhoneNumberVO } from '@/api/callcenter/phone-number/types';
-import type { UploadFile } from 'element-plus';
-import { getFormQuerySchema, listFormTemplates } from '@/api/callcenter/form-template';
-import type { FormQueryField, FormTemplate } from '@/api/callcenter/form-template/types';
-import DynamicQueryFields from '@/components/callcenter/DynamicQueryFields.vue';
-import { buildDynamicFilters } from '@/utils/callcenter/dynamic-form-query';
-import { listSkillGroups } from '@/api/callcenter/skill-group';
-import type { SkillGroupVO } from '@/api/callcenter/skill-group/types';
-import * as echarts from 'echarts';
+  completeClickDialCustomer,
+  dialAssignedCustomer,
+  getClickDialSummary,
+  listCustomerDialAttempts,
+  pageClickDialCustomers
+} from '@/api/callcenter/click-dial';
+import type {
+  ClickDialCustomerQuery,
+  ClickDialCustomerVO,
+  ClickDialResultCode,
+  ClickDialStatus,
+  ClickDialSummaryVO,
+  ClickDialWorkFilter,
+  CompleteClickDialForm,
+  CustomerDialAttemptVO
+} from '@/api/callcenter/click-dial/types';
 
+const router = useRouter();
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const loading = ref(false);
-const tasks = ref<OutboundTaskVO[]>([]);
-const agentOptions = ref<AgentVO[]>([]);
-const callerNumberOptions = ref<PhoneNumberVO[]>([]);
-const taskFormRef = ref<ElFormInstance>();
-const taskDialog = reactive({ visible: false, title: '', id: undefined as string | number | undefined });
-const taskForm = reactive<OutboundTaskForm>({
-  taskCode: '',
-  taskName: '',
-  description: '',
-  assignmentMode: 'PUBLIC',
-  assignedAgentIds: [],
-  callerNumberId: undefined,
-  autoRetryEnabled: true,
-  maxRetryCount: 2,
-  retryIntervalMinutes: 30,
-  retryResultCodes: 'NO_ANSWER,BUSY,OTHER',
-  autoAssignDueRetry: false,
-  retryAssigneeAgentId: undefined
+const dialingId = ref<string | number>();
+const rows = ref<ClickDialCustomerVO[]>([]);
+const total = ref(0);
+const lastCalledRange = ref<[string, string]>();
+const summary = reactive<ClickDialSummaryVO>({
+  totalCount: 0,
+  uncalledCount: 0,
+  processingCount: 0,
+  followUpCount: 0,
+  dueFollowUpCount: 0,
+  completedCount: 0,
+  dialedCount: 0
 });
-const retryResultCodeValues = computed({
-  get: () => taskForm.retryResultCodes ? taskForm.retryResultCodes.split(',').filter(Boolean) : [],
-  set: (values: string[]) => { taskForm.retryResultCodes = values.join(','); }
+const query = reactive<ClickDialCustomerQuery>({
+  pageNum: 1,
+  pageSize: 10,
+  workFilter: 'UNCALLED',
+  keyword: '',
+  customerType: '',
+  sourceChannel: '',
+  tags: '',
+  resultCode: ''
 });
-const taskRules = {
-  taskCode: [{ required: true, pattern: /^[A-Za-z0-9_-]{2,32}$/, message: '请输入合法任务编码', trigger: 'blur' }],
-  taskName: [{ required: true, message: '请输入任务名称', trigger: 'blur' }],
-  assignedAgentIds: [{ validator: (_rule: unknown, value: Array<string | number>, callback: (error?: Error) => void) => {
-    if (taskForm.assignmentMode === 'SPECIFIED' && !value?.length) callback(new Error('请至少选择一个指定坐席'));
-    else callback();
-  }, trigger: 'change' }]
-};
-const memberDrawer = reactive({ visible: false, task: undefined as OutboundTaskVO | undefined });
-const members = ref<OutboundMemberVO[]>([]);
-const importUploadRef = ref();
-const importFile = ref<File>();
-const importDialog = reactive({
-  visible: false,
-  previewing: false,
-  confirming: false,
-  autoCreateCustomer: true,
-  batch: undefined as OutboundImportBatchVO | undefined
-});
-const customerDialog = reactive({ visible: false, loading: false, generating: false });
-const customerQuery = reactive<CustomerQuery>({ pageNum: 1, pageSize: 10, primaryPhone: '', customerName: '', assignmentState: '' });
-const customers = ref<CustomerVO[]>([]);
-const customerTotal = ref(0);
-const selectedCustomers = ref<CustomerVO[]>([]);
-const customerFormTemplates = ref<FormTemplate[]>([]);
-const querySchemaFields = ref<FormQueryField[]>([]);
-const dynamicQueryValues = ref<Record<string, unknown>>({});
-const skillGroupOptions = ref<SkillGroupVO[]>([]);
-const workbench = reactive({ visible: false, loading: false, task: undefined as OutboundTaskVO | undefined, member: undefined as OutboundMemberVO | undefined, dialing: false, dialingId: undefined as string | number | undefined, suggestedResultLabel: '' });
-const availableMembers = ref<OutboundMemberVO[]>([]);
-const availableTotal = ref(0);
-const availableQuery = reactive({ pageNum: 1, pageSize: 10, keyword: '' });
-const router = useRouter();
-const statisticsDialog = reactive({ visible: false, loading: false, task: undefined as OutboundTaskVO | undefined, data: undefined as OutboundTaskStatisticsVO | undefined });
-const attemptDrawer = reactive({ visible: false, loading: false, member: undefined as OutboundMemberVO | undefined });
-const attempts = ref<OutboundAttemptVO[]>([]);
-const reportDrawer = reactive({ visible: false, loading: false, tab: 'detail', task: undefined as OutboundTaskVO | undefined });
-const reportAttempts = ref<OutboundAttemptVO[]>([]);
-const agentSummaries = ref<OutboundAgentSummaryVO[]>([]);
-const dailyTrends = ref<OutboundDailyTrendVO[]>([]);
-const trendChartRef = ref<HTMLElement>();
-let trendChart: echarts.ECharts | undefined;
-const reportTotal = ref(0);
-const reportDateRange = ref<[string, string]>();
-const reportQuery = reactive<OutboundAttemptQuery>({ pageNum: 1, pageSize: 10 });
-const resultTouched = ref(false);
-const resultForm = reactive<CompleteOutboundMemberForm>({ resultCode: 'CONNECTED', resultRemark: '', nextFollowUpAt: undefined, retry: false });
-const resultOptions = [
-  { value: 'CONNECTED', label: '已接通' }, { value: 'NO_ANSWER', label: '无人接听' }, { value: 'BUSY', label: '客户忙' },
-  { value: 'INVALID_NUMBER', label: '号码无效' }, { value: 'NOT_INTERESTED', label: '无意向' }, { value: 'FOLLOW_UP', label: '需要跟进' }, { value: 'OTHER', label: '其他' }
+const resultOptions: Array<{ label: string; value: ClickDialResultCode }> = [
+  { label: '已接通', value: 'CONNECTED' },
+  { label: '无人接听', value: 'NO_ANSWER' },
+  { label: '客户忙', value: 'BUSY' },
+  { label: '号码无效', value: 'INVALID_NUMBER' },
+  { label: '无意向', value: 'NOT_INTERESTED' },
+  { label: '需要跟进', value: 'FOLLOW_UP' },
+  { label: '其他', value: 'OTHER' }
 ];
-const statusLabel = (value: OutboundTaskStatus) => ({ DRAFT: '草稿', RUNNING: '执行中', PAUSED: '已暂停', COMPLETED: '已完成' })[value];
-const statusTag = (value: OutboundTaskStatus) => value === 'RUNNING' ? 'success' : value === 'PAUSED' ? 'warning' : 'info';
-const memberStatusLabel = (value: string) => ({ PENDING: '待领取', CLAIMED: '已领取', DIALING: '拨打中', COMPLETED: '已完成', RETRY: '待重呼', SKIPPED: '已跳过', BLOCKED: '黑名单拦截' })[value] || value;
-const completionReasonLabel = (value?: string) => ({ MANUAL: '人工确认', SYSTEM: '系统自动完成', RETRY_LIMIT_REACHED: '达到重呼上限' })[value || ''] || '-';
-const importStatusLabel = (value: string) => ({ VALID: '有效', INVALID: '无效', DUPLICATE_FILE: '文件内重复', DUPLICATE_TASK: '任务内重复', BLACKLISTED: '黑名单拦截' })[value] || value;
-const importStatusTag = (value: string) => value === 'VALID' ? 'success' : value === 'INVALID' ? 'danger' : 'warning';
-const resultLabel = (value?: string) => resultOptions.find((item) => item.value === value)?.label || '-';
-const statisticsCards = computed(() => {
-  const data = statisticsDialog.data;
-  if (!data) return [];
-  return [
-    { label: '总名单', value: data.totalCount },
-    { label: '待领取', value: data.pendingCount },
-    { label: '已领取', value: data.claimedCount },
-    { label: '拨打中', value: data.dialingCount },
-    { label: '已拨打', value: data.dialedCount },
-    { label: '已接通', value: data.connectedCount },
-    { label: '拨打尝试', value: data.totalAttemptCount },
-    { label: '尝试接通', value: data.answeredAttemptCount },
-    { label: '已完成', value: data.completedCount },
-    { label: '待重呼', value: data.retryCount },
-    { label: '等待重呼', value: data.waitingRetryCount },
-    { label: '达到重呼上限', value: data.retryLimitReachedCount },
-    { label: '已拦截', value: data.blockedCount },
-    { label: '完成率', value: `${data.completionRate}%` },
-    { label: '名单接通率', value: `${data.connectionRate}%` },
-    { label: '尝试接通率', value: `${data.attemptConnectionRate}%` }
-  ];
+const summaryItems = computed(() => [
+  { label: '未拨打', value: 'UNCALLED' as ClickDialWorkFilter, count: summary.uncalledCount },
+  { label: '待处理', value: 'PROCESSING' as ClickDialWorkFilter, count: summary.processingCount },
+  { label: '需要跟进', value: 'FOLLOW_UP' as ClickDialWorkFilter, count: summary.followUpCount },
+  { label: '今日待跟进', value: 'DUE_FOLLOW_UP' as ClickDialWorkFilter, count: summary.dueFollowUpCount },
+  { label: '已拨打', value: 'DIALED' as ClickDialWorkFilter, count: summary.dialedCount },
+  { label: '已完成', value: 'COMPLETED' as ClickDialWorkFilter, count: summary.completedCount },
+  { label: '全部', value: 'ALL' as ClickDialWorkFilter, count: summary.totalCount }
+]);
+
+const resultFormRef = ref<FormInstance>();
+const resultDrawer = reactive({ visible: false, saving: false, customer: undefined as ClickDialCustomerVO | undefined, phoneNumber: '' });
+const resultForm = reactive<CompleteClickDialForm>({
+  businessCallId: '',
+  resultCode: 'CONNECTED',
+  dialStatus: 'COMPLETED',
+  resultRemark: '',
+  nextFollowUpAt: undefined
 });
-const resultDistributionRows = computed(() => Object.entries(statisticsDialog.data?.resultDistribution || {})
-  .map(([code, count]) => ({ code, label: resultLabel(code), count })));
-const trendOverviewCards = computed(() => {
-  const attempts = dailyTrends.value.reduce((total, item) => total + item.attemptCount, 0);
-  const answered = dailyTrends.value.reduce((total, item) => total + item.answeredCount, 0);
-  const connected = dailyTrends.value.reduce((total, item) => total + item.connectedCount, 0);
-  const customers = dailyTrends.value.reduce((total, item) => total + item.customerCount, 0);
-  return [
-    { label: '累计拨打', value: attempts, description: `${dailyTrends.value.length} 个统计日`, tone: 'primary' },
-    { label: '累计接听', value: answered, description: `接听率 ${attempts ? Math.round(answered * 10000 / attempts) / 100 : 0}%`, tone: 'success' },
-    { label: '业务接通', value: connected, description: `接通率 ${attempts ? Math.round(connected * 10000 / attempts) / 100 : 0}%`, tone: 'connected' },
-    { label: '覆盖客户', value: customers, description: '按日客户数累计', tone: 'customer' }
-  ];
-});
-const progress = (row: OutboundTaskVO) => row.totalCount ? Math.round(row.completedCount * 100 / row.totalCount) : 0;
-const compactScheduleSummary = (summary?: string) => summary
-  ? `本次：${summary.replace(/到期重呼=\d+，?/, '').replaceAll('，', ' · ')}`
-  : '等待首次调度';
-const resetTaskForm = () => Object.assign(taskForm, {
-  taskCode: '', taskName: '', description: '', assignmentMode: 'PUBLIC', assignedAgentIds: [], callerNumberId: undefined, autoRetryEnabled: true, maxRetryCount: 2,
-  retryIntervalMinutes: 30, retryResultCodes: 'NO_ANSWER,BUSY,OTHER',
-  autoAssignDueRetry: false, retryAssigneeAgentId: undefined, version: undefined
-});
-const resetResult = () => Object.assign(resultForm, { resultCode: 'CONNECTED', resultRemark: '', nextFollowUpAt: undefined, retry: false });
-const load = async () => { loading.value = true; try { tasks.value = (await listOutboundTasks()).data; } finally { loading.value = false; } };
-const refreshTasksQuietly = async () => { tasks.value = (await listOutboundTasks()).data; };
-const loadAgentOptions = async () => { agentOptions.value = (await listAgents({ pageNum: 1, pageSize: 1000, enabled: true })).rows; };
-const loadCallerNumberOptions = async () => {
-  const res = await listPhoneNumbers({ pageNum: 1, pageSize: 1000, enabled: true });
-  callerNumberOptions.value = res.rows.filter((item) => ['CALLER_ID', 'BOTH'].includes(item.numberType) && !!item.gatewayId);
+const resultRules: FormRules = {
+  resultCode: [{ required: true, message: '请选择拨打结果', trigger: 'change' }],
+  dialStatus: [{ required: true, message: '请选择处理状态', trigger: 'change' }],
+  nextFollowUpAt: [
+    {
+      validator: (_rule, value, callback) =>
+        resultForm.dialStatus === 'FOLLOW_UP' && !value ? callback(new Error('请选择下次跟进时间')) : callback(),
+      trigger: 'change'
+    }
+  ]
 };
-const callerNumberLabel = (item: PhoneNumberVO) => `${item.number} - ${item.numberName || item.gatewayName || '主叫号码'}`;
-const agentOptionLabel = (agent: AgentVO) => {
-  const extension = agent.sipExtension ? '\u5206\u673a ' + agent.sipExtension : '\u672a\u7ed1\u5b9a\u5206\u673a';
-  const userId = agent.userId ? '\u7528\u6237ID ' + agent.userId : '\u672a\u7ed1\u5b9a\u7528\u6237';
-  return agent.agentName + '\uff08' + agent.agentCode + '\uff0c\u5750\u5e2dID ' + agent.id + '\uff0c' + extension + '\uff0c' + userId + '\uff09';
+const attemptDrawer = reactive({ visible: false, loading: false, customerName: '', rows: [] as CustomerDialAttemptVO[] });
+
+const loadRows = async () => {
+  loading.value = true;
+  try {
+    query.lastCalledStart = lastCalledRange.value?.[0];
+    query.lastCalledEnd = lastCalledRange.value?.[1];
+    const response = await pageClickDialCustomers(query);
+    rows.value = response.rows || [];
+    total.value = response.total || 0;
+  } finally {
+    loading.value = false;
+  }
 };
-const agentNameById = (agentId?: string | number) => {
-  if (!agentId) return '公共领取';
-  const agent = agentOptions.value.find((item) => String(item.id) === String(agentId));
-  return agent ? `${agent.agentName}（${agent.agentCode}）` : `坐席 ${agentId}`;
+const loadSummary = async () => Object.assign(summary, (await getClickDialSummary()).data || {});
+const loadData = async () => Promise.all([loadRows(), loadSummary()]);
+const search = async () => {
+  query.pageNum = 1;
+  await loadData();
 };
-const assignedAgentNames = (agentIds: Array<string | number> = []) => agentIds.length
-  ? agentIds.map((id) => agentNameById(id)).join('、') : '未指定';
-const handleAdd = async () => { resetTaskForm(); await Promise.all([loadAgentOptions(), loadCallerNumberOptions()]); taskDialog.id = undefined; taskDialog.title = '新增预览式外呼任务'; taskDialog.visible = true; };
-const handleUpdate = async (row: OutboundTaskVO) => { resetTaskForm(); await Promise.all([loadAgentOptions(), loadCallerNumberOptions()]); Object.assign(taskForm, (await getOutboundTask(row.id)).data); taskDialog.id = row.id; taskDialog.title = '修改预览式外呼任务'; taskDialog.visible = true; };
-const submitTask = () => taskFormRef.value?.validate(async (valid) => { if (!valid) return; taskDialog.id ? await updateOutboundTask(taskDialog.id, taskForm) : await createOutboundTask(taskForm); proxy?.$modal.msgSuccess('保存成功'); taskDialog.visible = false; await load(); });
-const handleDelete = async (row: OutboundTaskVO) => { await proxy?.$modal.confirm(`确认删除外呼任务“${row.taskName}”吗？`); await deleteOutboundTask(row.id); proxy?.$modal.msgSuccess('删除成功'); await load(); };
-const changeTaskStatus = async (row: OutboundTaskVO, start: boolean) => { start ? await startOutboundTask(row.id) : await pauseOutboundTask(row.id); proxy?.$modal.msgSuccess(start ? '任务已开始' : '任务已暂停'); await load(); };
-const showMembers = async (row: OutboundTaskVO) => { memberDrawer.task = row; members.value = (await listOutboundMembers(row.id)).data; memberDrawer.visible = true; };
-const showStatistics = async (row: OutboundTaskVO) => {
-  statisticsDialog.task = row;
-  statisticsDialog.visible = true;
-  statisticsDialog.loading = true;
-  try { statisticsDialog.data = (await getOutboundTaskStatistics(row.id)).data; } finally { statisticsDialog.loading = false; }
+const reset = async () => {
+  Object.assign(query, {
+    pageNum: 1,
+    pageSize: 10,
+    workFilter: 'UNCALLED',
+    keyword: '',
+    customerType: '',
+    sourceChannel: '',
+    tags: '',
+    resultCode: '',
+    lastCalledStart: undefined,
+    lastCalledEnd: undefined
+  });
+  lastCalledRange.value = undefined;
+  await loadData();
 };
-const showAttempts = async (row: OutboundMemberVO) => {
-  attemptDrawer.member = row;
+const changeWorkFilter = async (value: ClickDialWorkFilter) => {
+  query.workFilter = value;
+  query.pageNum = 1;
+  await loadRows();
+};
+const primaryPhoneObject = (row: ClickDialCustomerVO) => row.phones?.find((phone) => phone.primaryFlag) || row.phones?.[0];
+const primaryPhone = (row: ClickDialCustomerVO) => primaryPhoneObject(row)?.phoneNumber || row.primaryPhone || '';
+const primaryPhoneId = (row: ClickDialCustomerVO) => primaryPhoneObject(row)?.id;
+const additionalPhones = (row: ClickDialCustomerVO) => row.phones?.filter((phone) => String(phone.id) !== String(primaryPhoneId(row))) || [];
+const dial = async (row: ClickDialCustomerVO, phoneId?: string | number) => {
+  dialingId.value = row.assignmentId;
+  try {
+    const call = (await dialAssignedCustomer(row.assignmentId, phoneId)).data;
+    proxy?.$modal.msgSuccess('已发起外呼');
+    resultDrawer.customer = row;
+    resultDrawer.phoneNumber = call.phoneNumber;
+    Object.assign(resultForm, {
+      businessCallId: call.businessCallId,
+      resultCode: 'CONNECTED',
+      dialStatus: 'COMPLETED',
+      resultRemark: '',
+      nextFollowUpAt: undefined
+    });
+    resultDrawer.visible = true;
+    await loadData();
+  } finally {
+    dialingId.value = undefined;
+  }
+};
+const openResult = (row: ClickDialCustomerVO) => {
+  resultDrawer.customer = row;
+  resultDrawer.phoneNumber = primaryPhone(row);
+  Object.assign(resultForm, {
+    businessCallId: row.lastBusinessCallId || '',
+    resultCode: row.lastResultCode || 'CONNECTED',
+    dialStatus: row.dialStatus === 'UNCALLED' ? 'PROCESSING' : row.dialStatus,
+    resultRemark: row.lastResultRemark || '',
+    nextFollowUpAt: row.nextFollowUpAt
+  });
+  resultDrawer.visible = true;
+};
+const saveResult = async () => {
+  if (!resultDrawer.customer || !(await resultFormRef.value?.validate())) return;
+  resultDrawer.saving = true;
+  try {
+    await completeClickDialCustomer(resultDrawer.customer.assignmentId, resultForm);
+    proxy?.$modal.msgSuccess('拨打结果已保存');
+    resultDrawer.visible = false;
+    await loadData();
+  } finally {
+    resultDrawer.saving = false;
+  }
+};
+const openAttempts = async (row: ClickDialCustomerVO) => {
   attemptDrawer.visible = true;
   attemptDrawer.loading = true;
-  try { attempts.value = (await listOutboundAttempts(row.id)).data; } finally { attemptDrawer.loading = false; }
-};
-const loadReport = async () => {
-  if (!reportDrawer.task) return;
-  reportDrawer.loading = true;
-  reportQuery.taskId = reportDrawer.task.id;
-  reportQuery.startedAtBegin = reportDateRange.value?.[0];
-  reportQuery.startedAtEnd = reportDateRange.value?.[1];
+  attemptDrawer.customerName = row.customerName || '客户';
   try {
-    const response = await pageOutboundAttempts(reportQuery);
-    reportAttempts.value = response.rows;
-    reportTotal.value = response.total;
-  } finally { reportDrawer.loading = false; }
-};
-const reportParams = () => ({ ...reportQuery, startedAtBegin: reportDateRange.value?.[0], startedAtEnd: reportDateRange.value?.[1] });
-const loadAgentSummary = async () => { reportDrawer.loading = true; try { agentSummaries.value = (await getOutboundAgentSummary(reportParams())).data; } finally { reportDrawer.loading = false; } };
-const loadDailyTrend = async () => {
-  reportDrawer.loading = true;
-  try {
-    dailyTrends.value = (await getOutboundDailyTrend(reportParams())).data;
-    await nextTick();
-    renderTrendChart();
-  } finally { reportDrawer.loading = false; }
-};
-const renderTrendChart = () => {
-  if (!trendChartRef.value) return;
-  trendChart?.dispose();
-  trendChart = echarts.init(trendChartRef.value);
-  trendChart.setOption({
-    color: ['#053b70', '#18a981', '#55c99f'],
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: 'rgba(17, 32, 55, 0.94)',
-      borderWidth: 0,
-      padding: [10, 14],
-      textStyle: { color: '#fff', fontSize: 12 },
-      axisPointer: { type: 'line', lineStyle: { color: '#a9bad0', type: 'dashed' } }
-    },
-    grid: { left: 42, right: 20, top: 24, bottom: 34, containLabel: true },
-    xAxis: {
-      type: 'category',
-      boundaryGap: false,
-      data: dailyTrends.value.map((item) => item.date.slice(5)),
-      axisLine: { lineStyle: { color: '#dfe6ef' } },
-      axisTick: { show: false },
-      axisLabel: { color: '#8491a5', margin: 14 }
-    },
-    yAxis: {
-      type: 'value',
-      minInterval: 1,
-      axisLine: { show: false },
-      axisTick: { show: false },
-      axisLabel: { color: '#8491a5' },
-      splitLine: { lineStyle: { color: '#edf1f6', type: 'dashed' } }
-    },
-    series: [
-      {
-        name: '拨打次数',
-        type: 'line',
-        smooth: 0.35,
-        symbol: 'circle',
-        symbolSize: 7,
-        showSymbol: false,
-        lineStyle: { width: 3, color: '#053b70' },
-        itemStyle: { color: '#053b70', borderColor: '#fff', borderWidth: 2 },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(5, 59, 112, 0.24)' },
-            { offset: 1, color: 'rgba(5, 59, 112, 0.01)' }
-          ])
-        },
-        data: dailyTrends.value.map((item) => item.attemptCount)
-      },
-      {
-        name: '接听次数',
-        type: 'line',
-        smooth: 0.35,
-        symbol: 'circle',
-        symbolSize: 6,
-        showSymbol: false,
-        lineStyle: { width: 2.5, color: '#18a981' },
-        itemStyle: { color: '#18a981' },
-        data: dailyTrends.value.map((item) => item.answeredCount)
-      },
-      {
-        name: '已接通',
-        type: 'line',
-        smooth: 0.35,
-        symbol: 'circle',
-        symbolSize: 6,
-        showSymbol: false,
-        lineStyle: { width: 2, color: '#55c99f', type: 'dashed' },
-        itemStyle: { color: '#55c99f' },
-        data: dailyTrends.value.map((item) => item.connectedCount)
-      }
-    ]
-  });
-};
-const disposeTrendChart = () => { trendChart?.dispose(); trendChart = undefined; };
-const handleReportTabChange = async (tab: string | number) => { if (tab === 'agent') await loadAgentSummary(); else if (tab === 'trend') await loadDailyTrend(); else await loadReport(); };
-const showReport = async (row: OutboundTaskVO) => { reportDrawer.task = row; reportDrawer.tab = 'detail'; reportDrawer.visible = true; await loadReport(); };
-const queryReport = async () => { reportQuery.pageNum = 1; await handleReportTabChange(reportDrawer.tab); };
-const resetReport = async () => {
-  Object.assign(reportQuery, { pageNum: 1, pageSize: 10, taskId: reportDrawer.task?.id, agentId: undefined, phoneNumber: '', resultCode: undefined, suggestedResultCode: undefined, hangupCause: '' });
-  reportDateRange.value = undefined;
-  await handleReportTabChange(reportDrawer.tab);
-};
-const exportReport = () => {
-  if (!reportDrawer.task) return;
-  proxy?.download('api/v1/outbound-tasks/attempts/export', reportParams(), `${reportDrawer.task.taskName}_外呼拨打明细_${Date.now()}.xlsx`);
-};
-const durationLabel = (seconds?: number) => seconds == null ? '-' : `${seconds}秒`;
-const recoverExpired = async (row: OutboundTaskVO) => {
-  await proxy?.$modal.confirm(`确认检查并恢复外呼任务“${row.taskName}”中已超过租约时间的异常名单吗？`);
-  const count = (await recoverExpiredOutboundMembers(row.id)).data;
-  proxy?.$modal.msgSuccess(count ? `已恢复 ${count} 条异常名单` : '没有需要恢复的异常名单');
-  await load();
-};
-const currentCustomerSelectionQuery = (): CustomerQuery => ({
-  ...customerQuery,
-  dynamicFilters: buildDynamicFilters(querySchemaFields.value, dynamicQueryValues.value)
-});
-const loadCustomers = async () => {
-  customerDialog.loading = true;
-  try {
-    const response = await searchCustomers(currentCustomerSelectionQuery());
-    customers.value = response.rows;
-    customerTotal.value = response.total;
+    attemptDrawer.rows = (await listCustomerDialAttempts(row.assignmentId)).data || [];
   } finally {
-    customerDialog.loading = false;
+    attemptDrawer.loading = false;
   }
 };
-const searchCustomersForTask = async () => { customerQuery.pageNum = 1; await loadCustomers(); };
-const handleCustomerTemplateChange = async () => {
-  dynamicQueryValues.value = {};
-  querySchemaFields.value = [];
-  if (customerQuery.templateId) {
-    querySchemaFields.value = (await getFormQuerySchema(customerQuery.templateId)).data?.fields || [];
-  }
-  await searchCustomersForTask();
-};
-const resetCustomerQuery = async () => {
-  Object.assign(customerQuery, { pageNum: 1, pageSize: 10, primaryPhone: '', customerName: '', assignmentState: '', customerType: '', sourceChannel: '', tags: '', skillGroupId: undefined, templateId: undefined });
-  dynamicQueryValues.value = {};
-  querySchemaFields.value = [];
-  await loadCustomers();
-};
-const openCustomerDialog = async () => {
-  customerDialog.visible = true;
-  selectedCustomers.value = [];
-  if (!customerFormTemplates.value.length) {
-    const [templates, skillGroups] = await Promise.all([listFormTemplates('CUSTOMER'), listSkillGroups()]);
-    customerFormTemplates.value = (templates.data || []).filter((item) => item.enabled);
-    skillGroupOptions.value = skillGroups.data || [];
-  }
-  await loadCustomers();
-};
-const addCustomers = async () => {
-  if (!memberDrawer.task || !selectedCustomers.value.length) return proxy?.$modal.msgWarning('请选择客户');
-  const result = (await addOutboundCustomers(memberDrawer.task.id, selectedCustomers.value.map((item) => item.id))).data;
-  const blockedText = result.blocked.length ? `，黑名单拦截 ${result.blocked.length} 条：${result.blocked.map(item => `${item.phoneNumber}${item.reason ? `（${item.reason}）` : ''}`).join('、')}` : '';
-  proxy?.$modal.msgSuccess(`成功添加 ${result.addedCount} 条，重复跳过 ${result.duplicateCount} 条${blockedText}`);
-  customerDialog.visible = false;
-  await showMembers(memberDrawer.task);
-  await load();
-};
-const generateCustomers = async () => {
-  if (!memberDrawer.task) return;
-  if (!customerTotal.value) return proxy?.$modal.msgWarning('当前筛选条件没有匹配客户');
-  await proxy?.$modal.confirm(`确认按当前条件将 ${customerTotal.value} 位客户生成到任务“${memberDrawer.task.taskName}”吗？`);
-  customerDialog.generating = true;
-  try {
-    const result = (await generateOutboundCustomers(memberDrawer.task.id, currentCustomerSelectionQuery())).data;
-    const blockedText = result.blocked.length ? `，无有效号码或黑名单拦截 ${result.blocked.length} 条` : '';
-    proxy?.$modal.msgSuccess(`匹配 ${result.matchedCount} 条，新增 ${result.addedCount} 条，重复跳过 ${result.duplicateCount} 条${blockedText}`);
-    customerDialog.visible = false;
-    await showMembers(memberDrawer.task);
-    await load();
-  } finally {
-    customerDialog.generating = false;
-  }
-};
-const openImportDialog = () => {
-  importFile.value = undefined;
-  importDialog.batch = undefined;
-  importDialog.autoCreateCustomer = true;
-  importDialog.visible = true;
-  importUploadRef.value?.clearFiles();
-};
-const handleImportFileChange = (file: UploadFile) => {
-  importFile.value = file.raw;
-  importDialog.batch = undefined;
-};
-const handleImportFileRemove = () => {
-  importFile.value = undefined;
-  importDialog.batch = undefined;
-};
-const downloadImportTemplate = () => {
-  if (!memberDrawer.task) return;
-  proxy?.download(`api/v1/outbound-tasks/${memberDrawer.task.id}/members/import-template`, {}, `外呼名单导入模板_${new Date().getTime()}.xlsx`);
-};
-const downloadImportErrors = () => {
-  if (!memberDrawer.task || !importDialog.batch) return;
-  proxy?.download(
-    `api/v1/outbound-tasks/${memberDrawer.task.id}/members/import-batches/${importDialog.batch.id}/errors`,
-    {},
-    `外呼名单失败明细_${new Date().getTime()}.xlsx`
-  );
-};
-const previewImport = async () => {
-  if (!memberDrawer.task || !importFile.value) return;
-  importDialog.previewing = true;
-  try {
-    importDialog.batch = (await previewOutboundMemberImport(memberDrawer.task.id, importFile.value)).data;
-  } finally {
-    importDialog.previewing = false;
-  }
-};
-const confirmImport = async () => {
-  if (!memberDrawer.task || !importDialog.batch) return;
-  importDialog.confirming = true;
-  try {
-    const result = (await confirmOutboundMemberImport(memberDrawer.task.id, importDialog.batch.id, importDialog.autoCreateCustomer)).data;
-    proxy?.$modal.msgSuccess(`成功导入 ${result.importedCount} 条外呼名单`);
-    importDialog.visible = false;
-    await showMembers(memberDrawer.task);
-    await load();
-  } finally {
-    importDialog.confirming = false;
-  }
-};
-const loadAvailableMembers = async () => {
-  if (!workbench.task || workbench.member) return;
-  workbench.loading = true;
-  try {
-    const response = await pageAvailableOutboundMembers(workbench.task.id, availableQuery);
-    availableMembers.value = response.rows;
-    availableTotal.value = response.total;
-  } finally {
-    workbench.loading = false;
-  }
-};
-const searchAvailableMembers = async () => { availableQuery.pageNum = 1; await loadAvailableMembers(); };
-const openWorkbench = async (row: OutboundTaskVO) => {
-  workbench.task = row;
-  workbench.member = (await getCurrentAssignedOutboundMember()).data || undefined;
-  if (workbench.member && String(workbench.member.taskId) !== String(row.id)) {
-    workbench.task = tasks.value.find((item) => String(item.id) === String(workbench.member?.taskId)) || row;
-    proxy?.$modal.msgWarning('你还有一个未完成的外呼客户，已切换到该客户');
-  }
-  workbench.suggestedResultLabel = '';
-  resultTouched.value = false;
-  resetResult();
-  workbench.visible = true;
-  if (!workbench.member) await searchAvailableMembers();
-};
-const dialSelected = async (row: OutboundMemberVO) => {
-  workbench.dialingId = row.id;
-  try {
-    workbench.member = (await claimOutboundMember(row.id)).data;
-    resetResult();
-    resultTouched.value = false;
-    await dialCurrent();
-  } finally {
-    workbench.dialingId = undefined;
-  }
-};
-const dialCurrent = async () => {
-  if (!workbench.member) return;
-  workbench.dialing = true;
-  workbench.suggestedResultLabel = '';
-  resultTouched.value = false;
-  try { workbench.member = (await dialOutboundMember(workbench.member.id)).data; proxy?.$modal.msgSuccess('已发起外呼'); } finally { workbench.dialing = false; }
-};
-const showCustomerDetail = (customerId: string | number) => {
+const showCustomer = (customerId: string | number) =>
   void router.push({ name: 'CustomerDetailWorkspace', params: { customerId: String(customerId) } });
-};
-const handleResultChange = (resultCode: CompleteOutboundMemberForm['resultCode']) => {
-  resultTouched.value = true;
-  if (resultCode === 'FOLLOW_UP') resultForm.retry = true;
-};
-const refreshCurrentAttemptSuggestion = async () => {
-  if (!workbench.visible || workbench.suggestedResultLabel || workbench.member?.status !== 'DIALING' || !workbench.member.businessCallId) return;
-  try {
-    const current = (await listOutboundAttempts(workbench.member.id)).data.find((item) => item.businessCallId === workbench.member?.businessCallId);
-    if (!current?.suggestedResultCode) return;
-    workbench.suggestedResultLabel = current.suggestedResultLabel || resultLabel(current.suggestedResultCode);
-    if (!resultTouched.value) resultForm.resultCode = current.suggestedResultCode;
-  } catch {
-    // 保持当前表单，下一轮继续获取系统建议。
-  }
-};
-const handleFollowUpTimeChange = (value?: string) => {
-  if (value) resultForm.retry = true;
-};
-const handleRetryChange = (retry: boolean) => {
-  if (!retry) resultForm.nextFollowUpAt = undefined;
-};
-const validateResult = () => {
-  if (resultForm.retry && !resultForm.nextFollowUpAt) {
-    proxy?.$modal.msgWarning('人工重呼时，请设置下次重呼时间');
-    return false;
-  }
-  return true;
-};
-const completeCurrent = async () => {
-  if (!workbench.member || !validateResult()) return;
-  await completeOutboundMember(workbench.member.id, resultForm);
-  proxy?.$modal.msgSuccess('外呼结果已保存，并已写入客户跟进记录');
-  workbench.member = undefined;
-  resetResult();
-  await Promise.all([load(), loadAvailableMembers()]);
-};
-let leaseRenewTimer: ReturnType<typeof setInterval> | undefined;
-let suggestionTimer: ReturnType<typeof setInterval> | undefined;
-let assignmentTimer: ReturnType<typeof setInterval> | undefined;
-let taskRefreshTimer: ReturnType<typeof setInterval> | undefined;
-const checkCurrentAssignment = async () => {
-  if (workbench.visible) return;
-  const member = (await getCurrentAssignedOutboundMember()).data;
-  if (!member) return;
-  if (!tasks.value.some((item) => String(item.id) === String(member.taskId))) await load();
-  const task = tasks.value.find((item) => String(item.id) === String(member.taskId));
-  if (!isAutoAssignedDueRetryMember(task, member)) return;
-  workbench.task = task;
-  workbench.member = member;
-  workbench.suggestedResultLabel = '';
-  resetResult();
-  resultTouched.value = false;
-  workbench.visible = true;
-  proxy?.$modal.msgSuccess('到期重呼名单已自动分配，请确认客户资料后拨打');
-};
-const isAutoAssignedDueRetryMember = (task: OutboundTaskVO | undefined, member: OutboundMemberVO) =>
-  Boolean(
-    task?.autoAssignDueRetry
-      && task.retryAssigneeAgentId
-      && member.claimedAgentId
-      && String(task.retryAssigneeAgentId) === String(member.claimedAgentId)
-  );
-const renewCurrentMemberLease = async () => {
-  if (!workbench.visible || !workbench.member || !['CLAIMED', 'DIALING'].includes(workbench.member.status)) return;
-  try {
-    workbench.member = (await renewOutboundMemberLease(workbench.member.id)).data;
-  } catch {
-    // 请求层已统一提示错误，保留当前名单供坐席继续处理。
-  }
-};
-onMounted(() => {
-  Promise.all([load(), loadAgentOptions()]);
-  leaseRenewTimer = setInterval(renewCurrentMemberLease, 5 * 60 * 1000);
-  suggestionTimer = setInterval(refreshCurrentAttemptSuggestion, 5 * 1000);
-  assignmentTimer = setInterval(checkCurrentAssignment, 10 * 1000);
-  taskRefreshTimer = setInterval(refreshTasksQuietly, 15 * 1000);
-  checkCurrentAssignment();
-});
-onBeforeUnmount(() => {
-  if (leaseRenewTimer) clearInterval(leaseRenewTimer);
-  if (suggestionTimer) clearInterval(suggestionTimer);
-  if (assignmentTimer) clearInterval(assignmentTimer);
-  if (taskRefreshTimer) clearInterval(taskRefreshTimer);
-});
+const statusLabel = (status: ClickDialStatus) =>
+  ({ UNCALLED: '未拨打', PROCESSING: '待处理', FOLLOW_UP: '需要跟进', COMPLETED: '已完成' })[status] || status;
+const statusTag = (status: ClickDialStatus) =>
+  ({ UNCALLED: 'info', PROCESSING: 'warning', FOLLOW_UP: 'primary', COMPLETED: 'success' })[status] as any;
+const resultLabel = (code?: ClickDialResultCode) => resultOptions.find((item) => item.value === code)?.label || '-';
+const isOverdue = (value?: string) => Boolean(value && new Date(value).getTime() <= Date.now());
+onMounted(loadData);
 </script>
 
-<style scoped>
-.card-header { display: flex; align-items: center; justify-content: space-between; }
-.description, .progress-text { margin-top: 6px; color: var(--el-text-color-secondary); font-size: 12px; }
-.schedule-status { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; }
-.schedule-summary { max-width: 190px; overflow: hidden; color: var(--el-text-color-secondary); font-size: 12px; text-overflow: ellipsis; }
-.schedule-time { color: var(--el-text-color-placeholder); font-size: 12px; }
-.form-tip { margin-left: 8px; color: var(--el-text-color-secondary); font-size: 12px; }
-.member-toolbar { margin-bottom: 14px; }
-.customer-filter { margin-top: 16px; }
-.customer-pagination { justify-content: flex-end; margin-top: 14px; }
-.import-actions { display: flex; align-items: flex-start; gap: 10px; margin: 18px 0; }
-.import-actions :deep(.el-upload) { display: block; }
-.import-actions :deep(.el-button + .el-button) { margin-left: 0; }
-.import-action-button { min-width: 126px; margin-left: 0 !important; }
-.import-summary { display: flex; gap: 10px; margin-bottom: 12px; }
-.dial-actions { display: flex; justify-content: center; gap: 12px; padding: 24px 0 8px; }
-.dial-list-toolbar { display: flex; gap: 10px; margin-bottom: 14px; }
-.dial-list-toolbar .el-input { width: 280px; }
-.workbench-action { width: 132px; height: 40px; margin-left: 0 !important; }
-.statistics-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.statistics-card { display: flex; flex-direction: column; gap: 8px; padding: 16px; border: 1px solid var(--el-border-color-light); border-radius: 8px; background: var(--el-fill-color-light); }
-.statistics-card span { color: var(--el-text-color-secondary); font-size: 13px; }
-.statistics-card strong { color: var(--el-color-primary); font-size: 24px; }
-.trend-overview { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
-.trend-overview-card { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; overflow: hidden; border: 1px solid #e7edf5; border-radius: 12px; background: #fff; }
-.trend-overview-card::after { position: absolute; top: 0; right: 0; width: 52px; height: 52px; border-radius: 0 0 0 52px; content: ''; opacity: .12; background: currentColor; }
-.trend-overview-card span { color: #778196; font-size: 12px; }
-.trend-overview-card strong { color: #172033; font-size: 25px; line-height: 1.1; }
-.trend-overview-card small { color: #8993a6; font-size: 11px; }
-.trend-overview-card.primary { color: #053b70; }
-.trend-overview-card.success { color: #18a981; }
-.trend-overview-card.connected { color: #55c99f; }
-.trend-overview-card.customer { color: #7c65c1; }
-.trend-panel { padding: 18px 18px 8px; margin-bottom: 16px; border: 1px solid #e7edf5; border-radius: 14px; background: linear-gradient(180deg, #fff, #fbfcfe); box-shadow: 0 5px 18px rgba(28, 48, 78, .04); }
-.trend-panel-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 0 2px 8px; }
-.trend-panel-header > div:first-child { display: grid; gap: 4px; }
-.trend-panel-header strong { color: #172033; font-size: 15px; }
-.trend-panel-header span { color: #8a95a8; font-size: 11px; }
-.trend-legend { display: flex; align-items: center; gap: 8px; color: #778196; font-size: 11px; }
-.trend-legend span { width: 18px; height: 3px; border-radius: 3px; }
-.trend-legend .attempt { background: #053b70; }
-.trend-legend .answered { background: #18a981; }
-.trend-legend .connected { background: #55c99f; }
-.trend-chart { width: 100%; height: 330px; }
-.trend-table { overflow: hidden; border: 1px solid #e7edf5; border-radius: 12px; }
-@media (max-width: 1100px) { .trend-overview { grid-template-columns: repeat(2, 1fr); } }
+<style scoped lang="scss">
+.click-dial-page {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(110px, 1fr));
+  gap: 10px;
+}
+.summary-card {
+  min-height: 78px;
+  padding: 12px 16px;
+  text-align: left;
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+.summary-card:hover,
+.summary-card.active {
+  border-color: var(--el-color-primary);
+  box-shadow: 0 0 0 1px var(--el-color-primary-light-7);
+}
+.summary-card span,
+.summary-card strong {
+  display: block;
+}
+.summary-card span {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+.summary-card strong {
+  margin-top: 7px;
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+}
+.filter-card :deep(.el-card__body) {
+  padding-bottom: 4px;
+}
+.filter-card :deep(.el-form-item) {
+  margin-bottom: 12px;
+}
+.list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.list-header div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.list-header span {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.phone-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.phone-actions .el-button {
+  margin-left: 0;
+}
+.overdue {
+  color: var(--el-color-danger);
+  font-weight: 500;
+}
+.pagination {
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+.result-form {
+  margin-top: 18px;
+}
+@media (max-width: 1280px) {
+  .summary-grid {
+    grid-template-columns: repeat(4, minmax(120px, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+}
 </style>

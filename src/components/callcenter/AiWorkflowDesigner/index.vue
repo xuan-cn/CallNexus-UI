@@ -69,6 +69,20 @@
           title="只会写回这里勾选的字段。手机号和附件不允许由 AI 自动修改。"
         />
         <el-alert
+          v-if="selectedNode.type === 'INTENT_ROUTE' && String(selectedNode.config.fallbackMode || 'EDGE') === 'INHERIT'"
+          class="property-alert"
+          type="info"
+          :closable="false"
+          title="当前节点继承顶部“公共兜底”配置。需要特殊处理时，可改为其他策略单独覆盖。"
+        />
+        <el-alert
+          v-else-if="selectedNode.type === 'INTENT_ROUTE' && String(selectedNode.config.fallbackMode || 'EDGE') !== 'EDGE'"
+          class="property-alert"
+          type="info"
+          :closable="false"
+          title="重新询问由系统在当前节点内完成，不需要画回路线；继续流程只需配置一条统一的“未命中后继续”连线。"
+        />
+        <el-alert
           v-if="selectedNode.type === 'PLAY_MEDIA'"
           class="property-alert"
           type="info"
@@ -131,6 +145,14 @@
                 </el-dropdown>
               </div>
             </template>
+            <el-select
+              v-else-if="property.type === 'OPTIONS_SELECT'"
+              :model-value="selectedNode.config[property.key]"
+              style="width: 100%"
+              @update:model-value="updateNodeProperty(property.key, $event)"
+            >
+              <el-option v-for="item in property.options || []" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
             <el-select
               v-else-if="property.type === 'VARIABLE_SELECT'"
               :model-value="selectedNode.config[property.key]"
@@ -316,7 +338,8 @@
               @change="updateSelectedEdge"
             >
               <el-option v-for="item in sourceIntentOptions" :key="item.value" :label="item.label" :value="item.value" />
-              <el-option label="未命中任何意图" value="FALLBACK" />
+              <el-option v-if="sourceFallbackBranches.includes('FALLBACK')" label="未命中任何意图" value="FALLBACK" />
+              <el-option v-if="sourceFallbackBranches.includes('CONTINUE')" label="未命中后继续" value="CONTINUE" />
             </el-select>
           </el-form-item>
           <el-alert v-else type="info" :closable="false" title="这是顺序连线，不需要配置条件。" />
@@ -525,12 +548,26 @@ const sourceDefinition = computed(() => {
   return getAiWorkflowNodeDefinition(source?.type || 'START');
 });
 const sourceNode = computed(() => readGraph().nodes.find((node) => node.id === selectedEdge.value?.source));
+const effectiveIntentFallback = (node?: AiWorkflowNode) => {
+  const local = node?.config || {};
+  return String(local.fallbackMode || 'EDGE') === 'INHERIT' ? props.modelValue.settings?.intentFallback || { fallbackMode: 'EDGE' } : local;
+};
 const sourceIntentOptions = computed(() =>
   normalizedIntentCodes(sourceNode.value?.config?.intentCodes).map((code) => ({
     value: code,
     label: props.intentOptions.find((item) => item.intentCode === code)?.intentName || code
   }))
 );
+const sourceFallbackBranches = computed(() => {
+  const config = effectiveIntentFallback(sourceNode.value);
+  const mode = String(config.fallbackMode || 'EDGE');
+  if (['FIXED_RETRY', 'AI_RETRY'].includes(mode)) {
+    const action = String(config.retryLimitAction || 'CONTINUE');
+    if (!['EDGE', 'CONTINUE'].includes(action)) return [];
+    return [action === 'EDGE' ? 'FALLBACK' : 'CONTINUE'];
+  }
+  return [['FIXED_CONTINUE', 'AI_CONTINUE'].includes(mode) ? 'CONTINUE' : 'FALLBACK'];
+});
 const normalizedIntentCodes = (value: unknown): string[] => {
   if (Array.isArray(value)) return value.map(String);
   if (typeof value === 'string')
@@ -559,6 +596,7 @@ const branchLabel = (sourceId: string, condition?: string) => {
   if (source?.type === 'LOOP_LIMIT') return condition === 'CONTINUE' ? '继续循环' : condition === 'LIMIT' ? '达到上限' : condition;
   if (source?.type === 'INTENT_ROUTE') {
     if (condition === 'FALLBACK') return '未命中意图';
+    if (condition === 'CONTINUE') return '未命中后继续';
     return props.intentOptions.find((item) => item.intentCode === condition)?.intentName || condition;
   }
   return condition;
@@ -633,9 +671,48 @@ const updateNodeProperty = (key: string, value: unknown) => {
   if (!selectedNode.value) return;
   selectedNode.value.config[key] = value;
   updateSelectedNode();
+  if (selectedNode.value.type === 'INTENT_ROUTE' && ['fallbackMode', 'retryLimitAction'].includes(key)) {
+    normalizeIntentFallbackEdge();
+  }
 };
-const isPropertyVisible = (key: string) =>
-  key !== 'compareValue' || !['EMPTY', 'NOT_EMPTY'].includes(String(selectedNode.value?.config?.operator || ''));
+const normalizeIntentFallbackEdge = () => {
+  if (!lf || !selectedNode.value) return;
+  const fallbackEdges = readGraph().edges.filter(
+    (edge) => edge.source === selectedNode.value?.id && ['FALLBACK', 'CONTINUE'].includes(String(edge.condition))
+  );
+  if (fallbackEdges.length !== 1) return;
+  const config = effectiveIntentFallback(selectedNode.value);
+  const mode = String(config.fallbackMode || 'EDGE');
+  if (['FIXED_RETRY', 'AI_RETRY'].includes(mode) && !['EDGE', 'CONTINUE'].includes(String(config.retryLimitAction || 'CONTINUE'))) {
+    return;
+  }
+  const condition = ['FIXED_RETRY', 'AI_RETRY'].includes(mode)
+    ? String(config.retryLimitAction || 'CONTINUE') === 'EDGE'
+      ? 'FALLBACK'
+      : 'CONTINUE'
+    : ['FIXED_CONTINUE', 'AI_CONTINUE'].includes(mode)
+      ? 'CONTINUE'
+      : 'FALLBACK';
+  const edge = fallbackEdges[0];
+  if (edge.condition === condition) return;
+  lf.updateText(edge.id, branchLabel(edge.source, condition));
+  lf.setProperties(edge.id, { condition });
+  syncGraph();
+};
+const isPropertyVisible = (key: string) => {
+  if (key === 'compareValue') return !['EMPTY', 'NOT_EMPTY'].includes(String(selectedNode.value?.config?.operator || ''));
+  if (selectedNode.value?.type !== 'INTENT_ROUTE') return true;
+  const mode = String(selectedNode.value.config.fallbackMode || 'EDGE');
+  if (mode === 'INHERIT')
+    return !['fallbackText', 'fallbackPrompt', 'maxRetries', 'retryLimitAction', 'limitText', 'limitQueueCode', 'limitExtension'].includes(key);
+  if (key === 'fallbackText') return ['FIXED_RETRY', 'FIXED_CONTINUE'].includes(mode);
+  if (key === 'fallbackPrompt') return ['AI_RETRY', 'AI_CONTINUE'].includes(mode);
+  if (['maxRetries', 'retryLimitAction', 'limitText'].includes(key)) return ['FIXED_RETRY', 'AI_RETRY'].includes(mode);
+  if (key === 'limitQueueCode') return ['FIXED_RETRY', 'AI_RETRY'].includes(mode) && selectedNode.value.config.retryLimitAction === 'TRANSFER_QUEUE';
+  if (key === 'limitExtension')
+    return ['FIXED_RETRY', 'AI_RETRY'].includes(mode) && selectedNode.value.config.retryLimitAction === 'TRANSFER_EXTENSION';
+  return true;
+};
 const insertTemplateVariable = (key: string, variable: string) => {
   const current = String(selectedNode.value?.config[key] || '');
   updateNodeProperty(key, `${current}${current && !current.endsWith(' ') ? ' ' : ''}{{${variable}}}`);

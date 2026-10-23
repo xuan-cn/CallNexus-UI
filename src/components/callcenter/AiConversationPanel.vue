@@ -139,7 +139,7 @@ const loadMessages = async () => {
 const beginConversation = async () => {
   const response = await startAiConversation(props.agentId);
   conversationId.value = response.data.conversation.id;
-  messages.value = [response.data.message];
+  messages.value = response.data.message ? [response.data.message] : [];
   question.value = '';
   await loadConversations();
   scroll();

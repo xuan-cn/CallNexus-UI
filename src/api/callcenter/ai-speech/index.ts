@@ -49,6 +49,9 @@ export const testStreamingSpeechProvider = (
 export const testTtsProvider = (id: string | number, data: TtsTestForm): AxiosPromise<TtsTestVO> =>
   request({ url: `/api/v1/ai/speech-providers/${id}/test`, method: 'post', data });
 
+export const testTtsProviderPreview = (data: AiSpeechProviderForm, text: string, voice?: string): AxiosPromise<TtsTestVO> =>
+  request({ url: '/api/v1/ai/speech-providers/preview/tts/test', method: 'post', params: { text, voice }, data });
+
 export const listSpeechProviderVoices = (id: string | number): AxiosPromise<string[]> =>
   request({ url: `/api/v1/ai/speech-providers/${id}/voices`, method: 'get' });
 

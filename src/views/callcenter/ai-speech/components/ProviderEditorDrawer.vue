@@ -169,7 +169,7 @@ import type { FormInstance, FormRules } from 'element-plus';
 import {
   createSpeechProvider,
   getSpeechProviderCatalog,
-  testTtsProvider,
+  testTtsProviderPreview,
   testSpeechProviderPreviewConnection,
   updateSpeechProvider,
   validateSpeechProvider
@@ -344,16 +344,11 @@ const selectedModelHint = (item: SpeechCapabilityDefinitionVO) => {
 };
 
 const previewVoice = async (item: SpeechCapabilityDefinitionVO) => {
-  if (!form.value.id) return;
   previewing.value = item.capability;
   try {
     const binding = capabilityBinding[item.capability];
-    const res = await testTtsProvider(form.value.id, {
-      text: '您好，这是一段音色试听。',
-      voice: String(form.value[binding.voice] || ''),
-      format: form.value.defaultFormat,
-      sampleRate: form.value.defaultSampleRate
-    });
+    form.value.credentials = { ...credentials };
+    const res = await testTtsProviderPreview(form.value, '您好，这是一段音色试听。', String(form.value[binding.voice] || ''));
     if (!res.data.playbackUrl) throw new Error('服务商没有返回可播放音频');
     await new Audio(res.data.playbackUrl).play();
   } catch (error) {

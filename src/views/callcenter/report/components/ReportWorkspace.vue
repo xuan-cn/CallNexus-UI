@@ -14,31 +14,41 @@
         <el-button :icon="Download" :loading="exporting" @click="handleExport">导出</el-button>
       </div>
       <el-form class="filter-form" :inline="true" size="small" @submit.prevent>
-        <el-form-item>
+        <el-form-item label="统计时间">
           <el-date-picker
             v-model="dateRange"
             class="date-range-picker"
-            type="daterange"
-            value-format="YYYY-MM-DD"
+            :class="{ 'date-time-range-picker': mode === 'agent' }"
+            :type="mode === 'agent' ? 'datetimerange' : 'daterange'"
+            :value-format="mode === 'agent' ? 'YYYY-MM-DD HH:mm:ss' : 'YYYY-MM-DD'"
             range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期"
+            :start-placeholder="mode === 'agent' ? '开始时间' : '开始日期'"
+            :end-placeholder="mode === 'agent' ? '结束时间' : '结束日期'"
             :clearable="false"
           />
         </el-form-item>
-        <el-form-item v-if="mode === 'call'">
-          <el-input v-model="query.keyword" clearable placeholder="号码或队列" @keyup.enter="handleQuery" />
+        <el-form-item v-if="mode === 'call'" label="时间粒度">
+          <el-select v-model="query.granularity" class="granularity-filter">
+            <el-option label="按小时" value="HOUR" />
+            <el-option label="按天" value="DAY" />
+            <el-option label="按月" value="MONTH" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="mode === 'call'" label="呼入/呼出组">
+          <el-select v-model="query.skillGroupId" clearable filterable placeholder="全部组" class="group-filter">
+            <el-option v-for="group in skillGroupOptions" :key="String(group.id)" :label="skillGroupOptionLabel(group)" :value="group.id" />
+          </el-select>
         </el-form-item>
         <el-form-item v-else-if="mode === 'queue'">
           <el-input v-model="query.keyword" clearable placeholder="队列名称或编码" @keyup.enter="handleQuery" />
         </el-form-item>
-        <el-form-item v-if="mode === 'call' || mode === 'agent'">
+        <el-form-item v-if="mode === 'call' || mode === 'agent'" :label="mode === 'call' ? '坐席' : undefined">
           <el-select v-model="query.agentId" clearable filterable placeholder="全部坐席" class="agent-filter">
             <el-option v-for="agent in agentOptions" :key="agent.id" :label="agentOptionLabel(agent)" :value="agent.id" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="mode === 'call'">
-          <el-select v-model="query.direction" clearable placeholder="通话方向" style="width: 110px">
+        <el-form-item v-if="mode === 'call'" label="方向">
+          <el-select v-model="query.direction" clearable placeholder="全部方向" class="direction-filter">
             <el-option label="呼入" value="INBOUND" /><el-option label="呼出" value="OUTBOUND" /><el-option label="内部" value="INTERNAL" />
           </el-select>
         </el-form-item>
@@ -65,29 +75,60 @@
         /></el-card>
       </div>
       <el-card v-if="mode === 'call'" class="table-card" shadow="never">
-        <template #header>通话明细</template>
-        <el-table v-loading="loading" :data="callRows" size="small" height="100%">
-          <el-table-column label="开始时间" prop="startedAt" width="158" />
-          <el-table-column label="方向" width="70"
-            ><template #default="{ row }">{{ directionLabel(row.direction) }}</template></el-table-column
-          >
-          <el-table-column label="客户号码" prop="customerNumber" min-width="128" show-overflow-tooltip />
-          <el-table-column label="坐席" min-width="110" show-overflow-tooltip
-            ><template #default="{ row }">{{ row.agentName || row.agentExtension || '-' }}</template></el-table-column
-          >
-          <el-table-column label="队列" prop="queueName" min-width="120" show-overflow-tooltip />
-          <el-table-column label="结果" width="90"
-            ><template #default="{ row }">{{ row.answeredAt ? '已接通' : '未接通' }}</template></el-table-column
-          >
-          <el-table-column label="等待" width="82"
-            ><template #default="{ row }">{{ duration(row.waitSeconds) }}</template></el-table-column
-          >
-          <el-table-column label="通话时长" width="96"
-            ><template #default="{ row }">{{ duration(row.talkSeconds) }}</template></el-table-column
-          >
-          <el-table-column label="挂断原因" prop="hangupCause" min-width="140" show-overflow-tooltip />
+        <template #header>坐席话务统计</template>
+        <el-table v-loading="loading" :data="callStatisticRows" size="small" height="100%">
+          <el-table-column label="统计时段" prop="bucket" min-width="128" fixed="left" />
+          <el-table-column label="坐席" min-width="112" fixed="left">
+            <template #default="{ row }">
+              <div class="primary-cell">{{ row.agentName || '-' }}</div>
+              <div class="secondary-cell">{{ row.agentExtension || '-' }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column label="总话务" prop="totalCalls" width="78" align="center" />
+          <el-table-column label="总接通" prop="answeredCalls" width="78" align="center" />
+          <el-table-column label="接通率" width="80" align="center">
+            <template #default="{ row }">{{ percent(row.answerRate) }}</template>
+          </el-table-column>
+          <el-table-column label="呼出数量" min-width="112" align="center">
+            <template #default="{ row }">
+              <div class="stacked-metric">
+                <span>总量 {{ row.outboundCalls }}</span
+                ><small>接通 {{ row.outboundAnsweredCalls }}</small>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="呼出接通率" width="98" align="center">
+            <template #default="{ row }">{{ percent(row.outboundAnswerRate) }}</template>
+          </el-table-column>
+          <el-table-column label="呼出时长" min-width="130" align="center">
+            <template #default="{ row }">
+              <div class="stacked-metric">
+                <span>总计 {{ duration(row.outboundTalkSeconds) }}</span
+                ><small>平均 {{ duration(row.outboundAverageTalkSeconds) }}</small>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="呼入数量" min-width="112" align="center">
+            <template #default="{ row }">
+              <div class="stacked-metric">
+                <span>总量 {{ row.inboundCalls }}</span
+                ><small>接通 {{ row.inboundAnsweredCalls }}</small>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="呼入接通率" width="98" align="center">
+            <template #default="{ row }">{{ percent(row.inboundAnswerRate) }}</template>
+          </el-table-column>
+          <el-table-column label="呼入时长" min-width="130" align="center">
+            <template #default="{ row }">
+              <div class="stacked-metric">
+                <span>总计 {{ duration(row.inboundTalkSeconds) }}</span
+                ><small>平均 {{ duration(row.inboundAverageTalkSeconds) }}</small>
+              </div>
+            </template>
+          </el-table-column>
         </el-table>
-        <pagination v-show="total > 0" v-model:page="query.pageNum" v-model:limit="query.pageSize" :total="total" @pagination="loadCallDetails" />
+        <pagination v-show="total > 0" v-model:page="query.pageNum" v-model:limit="query.pageSize" :total="total" @pagination="loadCallStatistics" />
       </el-card>
     </template>
 
@@ -100,8 +141,8 @@
         >
         <div ref="rankChartRef" class="rank-chart"
       /></el-card>
-      <el-card class="table-card analysis-table-card" shadow="never">
-        <el-table v-loading="loading" :data="agentRows" size="small" class="analysis-table">
+      <el-card class="table-card analysis-table-card agent-analysis-table-card" shadow="never">
+        <el-table v-loading="loading" :data="agentRows" size="small" height="100%" class="analysis-table">
           <el-table-column label="坐席" min-width="112"
             ><template #default="{ row }"
               ><div class="primary-cell">{{ row.agentName }}</div>
@@ -303,19 +344,22 @@ import {
   listAgentReportCalls,
   listAgentReportPresenceLogs,
   listAgentReports,
+  listCallReportStatistics,
   listReportAgentOptions,
-  listCallReportDetails,
+  listReportSkillGroupOptions,
   listQueueReports
 } from '@/api/callcenter/report';
 import type {
   AgentReportVO,
   AgentPresenceLogVO,
+  CallAgentStatisticVO,
   CallDetailVO,
   CallDistributionVO,
   OverviewKpiVO,
   QueueReportVO,
   ReportAgentOptionVO,
   ReportQuery,
+  ReportSkillGroupOptionVO,
   ReportTrendPointVO
 } from '@/api/callcenter/report/types';
 
@@ -323,17 +367,21 @@ const props = defineProps<{ mode: 'overview' | 'call' | 'agent' | 'queue' }>();
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const now = new Date();
 const formatDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const formatDateTime = (date: Date) =>
+  `${formatDate(date)} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
 const start = new Date(now);
 start.setDate(start.getDate() - 6);
-const dateRange = ref<[string, string]>([formatDate(start), formatDate(now)]);
-const query = reactive<ReportQuery>({ pageNum: 1, pageSize: 20 });
+if (props.mode === 'agent') start.setHours(0, 0, 0, 0);
+const dateRange = ref<[string, string]>(props.mode === 'agent' ? [formatDateTime(start), formatDateTime(now)] : [formatDate(start), formatDate(now)]);
+const query = reactive<ReportQuery>({ pageNum: 1, pageSize: 20, granularity: props.mode === 'call' ? 'DAY' : undefined });
 const agentOptions = ref<ReportAgentOptionVO[]>([]);
+const skillGroupOptions = ref<ReportSkillGroupOptionVO[]>([]);
 const loading = ref(false);
 const exporting = ref(false);
 const kpis = ref<OverviewKpiVO>();
 const trend = ref<ReportTrendPointVO[]>([]);
 const distribution = ref<CallDistributionVO[]>([]);
-const callRows = ref<CallDetailVO[]>([]);
+const callStatisticRows = ref<CallAgentStatisticVO[]>([]);
 const agentRows = ref<AgentReportVO[]>([]);
 const selectedAgent = ref<AgentReportVO>();
 const agentDetailVisible = ref(false);
@@ -358,7 +406,7 @@ let rankChart: echarts.ECharts | undefined;
 const titles = { overview: '运营总览', call: '通话分析', agent: '坐席分析', queue: '队列分析' };
 const subtitles = {
   overview: '按业务通话口径查看整体话务和接通情况',
-  call: '核对话务趋势、结果构成和原始通话',
+  call: '按小时、天或月汇总坐席话务、接通和通话时长',
   agent: '按坐席通话腿统计处理量和状态时长',
   queue: '按每次进入队列统计接听、放弃和服务水平'
 };
@@ -384,19 +432,29 @@ const metricItems = computed(() => {
         props.mode === 'overview'
           ? `${value?.onlineAgents ?? 0} / ${value?.waitingCalls ?? 0}`
           : `${dateRange.value[0].slice(5)} 至 ${dateRange.value[1].slice(5)}`,
-      note: props.mode === 'overview' ? '当前实时值' : '最长31天'
+      note: props.mode === 'overview' ? '当前实时值' : rangeLimitNote.value
     }
   ];
 });
 
 const params = () => ({ ...query, beginDate: dateRange.value[0], endDate: dateRange.value[1] });
+const rangeLimitNote = computed(() => {
+  if (query.granularity === 'MONTH') return '最长5年';
+  if (query.granularity === 'DAY') return '最长366天';
+  return '最长31天';
+});
 const agentOptionLabel = (agent: ReportAgentOptionVO) => {
   const identity = agent.extension || agent.agentCode;
   return `${agent.agentName}${identity ? `（${identity}）` : ''}${agent.enabled ? '' : '（已停用）'}`;
 };
+const skillGroupOptionLabel = (group: ReportSkillGroupOptionVO) => `${group.groupName}${group.enabled ? '' : '（已停用）'}`;
 const loadAgentOptions = async () => {
   if (props.mode !== 'call' && props.mode !== 'agent') return;
   agentOptions.value = (await listReportAgentOptions()).data || [];
+};
+const loadSkillGroupOptions = async () => {
+  if (props.mode !== 'call') return;
+  skillGroupOptions.value = (await listReportSkillGroupOptions()).data || [];
 };
 const handleQuery = () => {
   query.pageNum = 1;
@@ -411,7 +469,8 @@ const handleExport = async () => {
   }[props.mode];
   exporting.value = true;
   try {
-    await proxy?.download(config.url, params(), `${config.name}_${dateRange.value[0]}_${dateRange.value[1]}.xlsx`);
+    const rangeLabel = `${dateRange.value[0]}_${dateRange.value[1]}`.replace(/[ :]/g, '-');
+    await proxy?.download(config.url, params(), `${config.name}_${rangeLabel}.xlsx`);
   } finally {
     exporting.value = false;
   }
@@ -428,7 +487,7 @@ const load = async () => {
       kpis.value = summaryRes.data;
       trend.value = trendRes.data || [];
       distribution.value = distributionRes.data || [];
-      if (props.mode === 'call') await loadCallDetails();
+      if (props.mode === 'call') await loadCallStatistics();
       await nextTick();
       renderTrend();
       renderDistribution();
@@ -451,9 +510,9 @@ const load = async () => {
     loading.value = false;
   }
 };
-const loadCallDetails = async () => {
-  const res = await listCallReportDetails(params());
-  callRows.value = res.rows || [];
+const loadCallStatistics = async () => {
+  const res = await listCallReportStatistics(params());
+  callStatisticRows.value = res.rows || [];
   total.value = res.total || 0;
 };
 const detailParams = (pageQuery: ReportQuery) => ({
@@ -509,7 +568,7 @@ const renderTrend = () => {
   trendChart.setOption({
     ...chartBase(),
     legend: { top: 0, textStyle: { fontSize: 11 } },
-    xAxis: { type: 'category', data: trend.value.map((i) => (i.bucket.length > 10 ? i.bucket.slice(11) : i.bucket.slice(5))) },
+    xAxis: { type: 'category', data: trend.value.map((i) => trendBucketLabel(i.bucket)) },
     yAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: '#edf1f6' } } },
     series: [
       { name: '呼入', type: 'line', smooth: true, showSymbol: false, data: trend.value.map((i) => i.inboundCalls) },
@@ -561,6 +620,11 @@ const percent = (value?: number) => (value == null ? '--' : `${Number(value).toF
 const directionLabel = (value: string) => ({ INBOUND: '呼入', OUTBOUND: '呼出', INTERNAL: '内部' })[value] || value;
 const resultLabel = (value: string) =>
   ({ ANSWERED: '已接通', NO_ANSWER: '无人接听', BUSY: '忙线', REJECTED: '拒接', FAILED: '失败' })[value] || value;
+const trendBucketLabel = (bucket: string) => {
+  if (query.granularity === 'HOUR') return bucket.slice(11);
+  if (query.granularity === 'MONTH') return bucket;
+  return bucket.slice(5);
+};
 const presenceStatusLabel = (value: string) =>
   ({ IDLE: '空闲', NOT_READY: '示忙', BUSY: '通话中', AFTER_CALL: '话后整理', OFFLINE: '离线' })[value] || value;
 const presenceSourceLabel = (value: string) =>
@@ -572,6 +636,7 @@ const resize = () => {
 };
 onMounted(() => {
   loadAgentOptions();
+  loadSkillGroupOptions();
   load();
   window.addEventListener('resize', resize);
 });
@@ -661,8 +726,18 @@ onBeforeUnmount(() => {
 .date-range-picker {
   width: 260px !important;
 }
+.date-time-range-picker {
+  width: 380px !important;
+}
 .agent-filter {
   width: 190px;
+}
+.group-filter {
+  width: 180px;
+}
+.granularity-filter,
+.direction-filter {
+  width: 110px;
 }
 .metric-grid {
   display: grid;
@@ -709,6 +784,9 @@ onBeforeUnmount(() => {
 .rank-chart {
   height: clamp(240px, 31vh, 330px);
 }
+.analysis-chart-card {
+  flex: 0 0 auto;
+}
 .table-card {
   flex: 1;
   min-height: 360px;
@@ -747,6 +825,20 @@ onBeforeUnmount(() => {
   height: auto;
   min-height: 0;
   padding: 8px 12px 12px;
+}
+.agent-analysis-table-card {
+  flex: 0 0 clamp(420px, 50vh, 620px);
+  min-height: 420px;
+}
+.agent-analysis-table-card :deep(.el-card__body) {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+.agent-analysis-table-card :deep(.analysis-table) {
+  flex: 1;
+  min-height: 0;
 }
 .analysis-table :deep(.el-table__cell) {
   padding: 7px 0;
@@ -822,6 +914,9 @@ onBeforeUnmount(() => {
   .filter-form :deep(.el-form-item),
   .filter-form :deep(.el-input),
   .agent-filter,
+  .group-filter,
+  .granularity-filter,
+  .direction-filter,
   .date-range-picker {
     width: 100% !important;
   }
