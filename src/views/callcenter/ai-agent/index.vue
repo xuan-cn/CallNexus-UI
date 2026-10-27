@@ -200,7 +200,7 @@
                     <el-form-item label="处理方式">
                       <el-select v-model="form.bargeInStrategy" style="width: 100%">
                         <el-option label="立即打断并响应用户" value="INTERRUPT" />
-                        <el-option label="控场后继续原播报" value="CONTROL_RESUME" />
+                        <el-option label="控场话术替换当前播报" value="CONTROL_RESUME" />
                       </el-select>
                     </el-form-item>
                   </el-col>
@@ -230,13 +230,7 @@
                     </el-col>
                     <el-col :span="8">
                       <el-form-item label="控场冷却">
-                        <el-input-number
-                          v-model="form.bargeInControlCooldownMs"
-                          :min="0"
-                          :max="60000"
-                          :step="1000"
-                          style="width: 100%"
-                        />
+                        <el-input-number v-model="form.bargeInControlCooldownMs" :min="0" :max="60000" :step="1000" style="width: 100%" />
                         <p class="field-hint">毫秒；冷却期内的插话降级为普通打断，不重复播放控场话术。</p>
                       </el-form-item>
                     </el-col>
@@ -251,6 +245,7 @@
                     show-word-limit
                     placeholder="例如：您先别急，请让我把这段内容说明完，很快就好。"
                   />
+                  <p class="field-hint">控场话术会替换当前剩余播报，说完后继续流程或等待客户回答，不再重播原文；请填写完整的替代话术。</p>
                   <div class="prompt-variable-list">
                     <span class="field-hint">可用变量（点击插入）：</span>
                     <el-tooltip v-for="variable in controlTextVariables" :key="variable.value" :content="variable.description" placement="top">
@@ -260,7 +255,9 @@
                     </el-tooltip>
                   </div>
                   <p class="field-hint">插话时立即停止当前音频，播放该话术，然后从被打断句子的开头继续播报。</p>
-                  <p class="field-hint">客户自定义字段可直接写成 <code>&#123;&#123;customer.custom.字段编码&#125;&#125;</code>；变量无值时替换为空。</p>
+                  <p class="field-hint">
+                    客户自定义字段可直接写成 <code>&#123;&#123;customer.custom.字段编码&#125;&#125;</code>；变量无值时替换为空。
+                  </p>
                 </el-form-item>
                 <el-alert
                   type="warning"

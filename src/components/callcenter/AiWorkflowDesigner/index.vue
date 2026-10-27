@@ -700,6 +700,8 @@ const normalizeIntentFallbackEdge = () => {
   syncGraph();
 };
 const isPropertyVisible = (key: string) => {
+  if (['nodeControlText', 'nodeControlMaxCount', 'nodeControlCooldownMs'].includes(key))
+    return selectedNode.value?.config?.nodeBargeInMode === 'CONTROL_RESUME';
   if (key === 'compareValue') return !['EMPTY', 'NOT_EMPTY'].includes(String(selectedNode.value?.config?.operator || ''));
   if (selectedNode.value?.type !== 'INTENT_ROUTE') return true;
   const mode = String(selectedNode.value.config.fallbackMode || 'EDGE');

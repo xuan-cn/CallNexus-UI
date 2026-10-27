@@ -232,6 +232,32 @@ export const aiWorkflowNodeDefinitions: AiWorkflowNodeDefinition[] = [
   { type: 'END', label: '结束', color: '#64748b', description: '正常结束当前编排', terminal: true, properties: [] }
 ];
 
+for (const definition of aiWorkflowNodeDefinitions) {
+  if (!['TEMPLATE_REPLY', 'MODEL_REPLY', 'KNOWLEDGE_QUERY', 'INTENT_ROUTE'].includes(definition.type)) continue;
+  definition.properties.push(
+    {
+      key: 'nodeBargeInMode',
+      label: '本节点打断方式',
+      type: 'OPTIONS_SELECT',
+      defaultValue: 'INHERIT',
+      options: [
+        { label: '继承 AI 助手', value: 'INHERIT' },
+        { label: '禁止打断', value: 'DISABLED' },
+        { label: '允许打断，直接回应', value: 'INTERRUPT' },
+        { label: '允许打断，控场替换当前话术', value: 'CONTROL_RESUME' }
+      ]
+    },
+    {
+      key: 'nodeControlText',
+      label: '本节点控场替代话术',
+      type: 'TEMPLATE',
+      placeholder: '支持变量；填写完整替代话术，说完继续流程，不重播原文；留空继承助手话术'
+    },
+    { key: 'nodeControlMaxCount', label: '本次节点执行最多控场次数', type: 'NUMBER', defaultValue: 2, min: 1, max: 20 },
+    { key: 'nodeControlCooldownMs', label: '控场冷却时间（毫秒）', type: 'NUMBER', defaultValue: 5000, min: 0, max: 60000 }
+  );
+}
+
 export const aiWorkflowPaletteDefinitions = aiWorkflowNodeDefinitions.filter((item) => item.type !== 'START');
 export const getAiWorkflowNodeDefinition = (type: string) =>
   aiWorkflowNodeDefinitions.find((item) => item.type === type) || aiWorkflowNodeDefinitions[0];
