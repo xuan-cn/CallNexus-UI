@@ -1,9 +1,9 @@
 <template>
-  <div class="outbound-report-page">
-    <section class="outbound-filter-panel">
-      <div class="page-head">
-        <div class="page-title">
-          <span class="page-title-icon"
+  <div class="outbound-report-page report-shell-page">
+    <section class="outbound-filter-panel report-shell-filter">
+      <div class="page-head report-shell-head">
+        <div class="page-title report-shell-title">
+          <span class="page-title-icon report-shell-title-icon"
             ><el-icon><TrendCharts /></el-icon
           ></span>
           <div>
@@ -11,9 +11,9 @@
             <p>统一查看预览外呼与自动外呼的拨打、接通和业务转化</p>
           </div>
         </div>
-        <el-button :icon="Download" :loading="exporting" @click="handleExport">导出</el-button>
+        <el-button type="primary" plain :icon="Download" :loading="exporting" @click="handleExport">导出</el-button>
       </div>
-      <el-form class="filter-form" :inline="true" size="small" label-position="left" @submit.prevent>
+      <el-form class="filter-form report-shell-filter-form" :inline="true" size="small" label-position="left" @submit.prevent>
         <el-form-item label="统计日期">
           <el-date-picker
             v-model="dateRange"
@@ -46,15 +46,15 @@
       </div>
     </section>
 
-    <div class="metric-grid">
-      <div v-for="item in metricItems" :key="item.label" class="metric-item">
+    <div class="metric-grid report-shell-metrics">
+      <div v-for="item in metricItems" :key="item.label" class="metric-item report-shell-metric">
         <span>{{ item.label }}</span
         ><strong>{{ item.value }}</strong
         ><small>{{ item.note }}</small>
       </div>
     </div>
 
-    <div class="chart-grid">
+    <div class="chart-grid report-shell-charts">
       <el-card shadow="never"
         ><template #header>外呼趋势</template>
         <div ref="trendChartRef" class="chart"
@@ -254,13 +254,49 @@ const renderCharts = () => {
     trendChart = echarts.init(trendChartRef.value);
     trendChart.setOption({
       ...chartBase(),
-      legend: { top: 0, textStyle: { fontSize: 11 } },
-      xAxis: { type: 'category', data: trendRows.value.map((i) => (i.bucket.length > 10 ? i.bucket.slice(11) : i.bucket.slice(5))) },
-      yAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: '#edf1f6' } } },
+      color: ['#2563eb', '#0ea5e9', '#14b8a6'],
+      legend: { top: 0, icon: 'circle', itemWidth: 8, itemHeight: 8, textStyle: { fontSize: 11, color: '#64748b' } },
+      xAxis: {
+        type: 'category',
+        boundaryGap: false,
+        data: trendRows.value.map((i) => (i.bucket.length > 10 ? i.bucket.slice(11) : i.bucket.slice(5))),
+        axisLine: { lineStyle: { color: '#e2e8f0' } },
+        axisLabel: { color: '#94a3b8' }
+      },
+      yAxis: {
+        type: 'value',
+        minInterval: 1,
+        axisLabel: { color: '#94a3b8' },
+        splitLine: { lineStyle: { color: '#edf1f6', type: 'dashed' } }
+      },
       series: [
-        { name: '拨打', type: 'line', smooth: true, showSymbol: false, data: trendRows.value.map((i) => i.attemptCount) },
-        { name: '接通', type: 'line', smooth: true, showSymbol: false, data: trendRows.value.map((i) => i.answeredCount) },
-        { name: '业务成功', type: 'line', smooth: true, showSymbol: false, data: trendRows.value.map((i) => i.businessSuccessCount) }
+        {
+          name: '拨打',
+          type: 'line',
+          smooth: true,
+          showSymbol: false,
+          data: trendRows.value.map((i) => i.attemptCount),
+          lineStyle: { width: 2.5 },
+          areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(37,99,235,0.16)' }, { offset: 1, color: 'rgba(37,99,235,0.02)' }]) }
+        },
+        {
+          name: '接通',
+          type: 'line',
+          smooth: true,
+          showSymbol: false,
+          data: trendRows.value.map((i) => i.answeredCount),
+          lineStyle: { width: 2.5 },
+          areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(14,165,233,0.14)' }, { offset: 1, color: 'rgba(14,165,233,0.02)' }]) }
+        },
+        {
+          name: '业务成功',
+          type: 'line',
+          smooth: true,
+          showSymbol: false,
+          data: trendRows.value.map((i) => i.businessSuccessCount),
+          lineStyle: { width: 2.5 },
+          areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(20,184,166,0.12)' }, { offset: 1, color: 'rgba(20,184,166,0.02)' }]) }
+        }
       ]
     });
   }
@@ -272,15 +308,27 @@ const renderCharts = () => {
       xAxis: {
         type: 'category',
         data: distributionRows.value.map((i) => resultLabel(i.category)),
-        axisLabel: { interval: 0, rotate: distributionRows.value.length > 5 ? 25 : 0 }
+        axisLabel: { interval: 0, rotate: distributionRows.value.length > 5 ? 25 : 0, color: '#94a3b8' },
+        axisLine: { lineStyle: { color: '#e2e8f0' } }
       },
-      yAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: '#edf1f6' } } },
+      yAxis: {
+        type: 'value',
+        minInterval: 1,
+        axisLabel: { color: '#94a3b8' },
+        splitLine: { lineStyle: { color: '#edf1f6', type: 'dashed' } }
+      },
       series: [
         {
           type: 'bar',
           barMaxWidth: 30,
           data: distributionRows.value.map((i) => i.count),
-          itemStyle: { color: '#7899bf', borderRadius: [4, 4, 0, 0] }
+          itemStyle: {
+            borderRadius: [6, 6, 0, 0],
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: '#60a5fa' },
+              { offset: 1, color: '#2563eb' }
+            ])
+          }
         }
       ]
     });
@@ -327,70 +375,15 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="scss">
-.outbound-report-page {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  height: 100%;
-  padding: 10px 12px;
-  box-sizing: border-box;
-  overflow: auto;
-  font-size: 12px;
-}
-.outbound-filter-panel,
-.chart-grid .el-card,
-.table-card {
-  border: 0;
-  border-radius: 12px;
-}
+@use '../styles/report-shell.scss';
+
 .outbound-filter-panel {
   display: block;
-  flex: 0 0 auto;
-  width: 100%;
-  min-width: 0;
-  padding: 12px 14px;
-  box-sizing: border-box;
-  background: var(--el-bg-color);
-}
-.page-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-.page-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.page-title-icon {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border-radius: 9px;
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-  font-size: 18px;
-}
-.page-title h2 {
-  margin: 0 0 3px;
-  font-size: 17px;
-  font-weight: 500;
-}
-.page-title p {
-  margin: 0;
-  color: var(--el-text-color-secondary);
-  font-size: 11px;
 }
 .filter-form {
   display: grid;
   grid-template-columns: max-content max-content max-content minmax(220px, 1fr) max-content;
   align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--el-border-color-lighter);
 }
 .filter-form :deep(.el-form-item) {
   display: flex;
@@ -411,42 +404,6 @@ onBeforeUnmount(() => {
   margin-top: 8px;
   color: var(--el-text-color-secondary);
   font-size: 11px;
-}
-.metric-grid {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(120px, 1fr));
-  gap: 8px;
-}
-.metric-item {
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: var(--el-fill-color-lighter);
-}
-.metric-item span,
-.metric-item small {
-  display: block;
-  color: var(--el-text-color-secondary);
-  font-size: 11px;
-}
-.metric-item strong {
-  display: block;
-  margin: 4px 0 2px;
-  font-size: 20px;
-  font-weight: 500;
-}
-.chart-grid {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 10px;
-}
-.chart-grid :deep(.el-card__header),
-.table-card :deep(.el-card__header) {
-  padding: 10px 14px;
-  font-size: 13px;
-  font-weight: 500;
-}
-.chart-grid :deep(.el-card__body) {
-  padding: 10px 12px;
 }
 .chart {
   height: 245px;
@@ -471,16 +428,6 @@ onBeforeUnmount(() => {
   min-height: 340px;
 }
 @media (max-width: 1200px) {
-  .metric-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-  .chart-grid {
-    grid-template-columns: 1fr;
-  }
-  .page-head {
-    align-items: flex-start;
-    flex-direction: column;
-  }
   .filter-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: center;
