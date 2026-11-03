@@ -1,12 +1,14 @@
 <template>
-  <div class="satisfaction-page">
-    <section class="filter-panel">
-      <div class="page-title">
-        <span class="title-icon"><el-icon><DataAnalysis /></el-icon></span>
-        <div><h2>满意度分析</h2><p>查看挂机评价参与情况、评分趋势以及队列和坐席表现</p></div>
+  <div class="satisfaction-page report-shell-page">
+    <section class="filter-panel report-shell-filter">
+      <div class="report-shell-head">
+        <div class="page-title report-shell-title">
+          <span class="title-icon report-shell-title-icon"><el-icon><DataAnalysis /></el-icon></span>
+          <div><h2>满意度分析</h2><p>查看挂机评价参与情况、评分趋势以及队列和坐席表现</p></div>
+        </div>
+        <el-button class="export-button" type="primary" plain :icon="Download" :loading="exporting" @click="handleExport">导出</el-button>
       </div>
-      <el-button class="export-button" :icon="Download" :loading="exporting" @click="handleExport">导出</el-button>
-      <el-form class="filter-form" :inline="true" size="small" @submit.prevent>
+      <el-form class="filter-form report-shell-filter-form" :inline="true" size="small" @submit.prevent>
         <el-form-item label="统计日期">
           <el-date-picker v-model="dateRange" class="date-range" type="daterange" value-format="YYYY-MM-DD"
             range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" :clearable="false" />
@@ -41,13 +43,13 @@
       </el-form>
     </section>
 
-    <div class="metric-grid">
-      <div v-for="item in metricItems" :key="item.label" class="metric-item">
+    <div class="metric-grid report-shell-metrics">
+      <div v-for="item in metricItems" :key="item.label" class="metric-item report-shell-metric">
         <span>{{ item.label }}</span><strong>{{ item.value }}</strong><small>{{ item.note }}</small>
       </div>
     </div>
 
-    <div class="chart-grid">
+    <div class="chart-grid report-shell-charts">
       <el-card shadow="never">
         <template #header>满意度趋势</template>
         <div v-show="hasData" ref="trendChartRef" class="chart" />
@@ -225,14 +227,29 @@ const renderCharts = () => {
   if (hasData.value && trendChartRef.value) {
     trendChart ||= echarts.init(trendChartRef.value);
     trendChart.setOption({
-      tooltip: { trigger: 'axis' }, legend: { top: 2, data: ['平均分', '满意率', '参与率'] },
+      color: ['#2563eb', '#0ea5e9', '#14b8a6'],
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: 'rgba(15, 23, 42, 0.92)',
+        borderWidth: 0,
+        textStyle: { color: '#fff', fontSize: 12 }
+      },
+      legend: { top: 2, icon: 'circle', itemWidth: 8, itemHeight: 8, data: ['平均分', '满意率', '参与率'], textStyle: { color: '#64748b' } },
       grid: { left: 42, right: 48, top: 42, bottom: 28 },
-      xAxis: { type: 'category', data: trendRows.value.map((item) => item.bucket.slice(5)) },
-      yAxis: [{ type: 'value', min: 0, max: 5 }, { type: 'value', min: 0, max: 100, axisLabel: { formatter: '{value}%' } }],
+      xAxis: {
+        type: 'category',
+        data: trendRows.value.map((item) => item.bucket.slice(5)),
+        axisLine: { lineStyle: { color: '#e2e8f0' } },
+        axisLabel: { color: '#94a3b8' }
+      },
+      yAxis: [
+        { type: 'value', min: 0, max: 5, axisLabel: { color: '#94a3b8' }, splitLine: { lineStyle: { color: '#edf1f6', type: 'dashed' } } },
+        { type: 'value', min: 0, max: 100, axisLabel: { formatter: '{value}%', color: '#94a3b8' }, splitLine: { show: false } }
+      ],
       series: [
-        { name: '平均分', type: 'line', smooth: true, data: trendRows.value.map((item) => item.averageScore) },
-        { name: '满意率', type: 'line', smooth: true, yAxisIndex: 1, data: trendRows.value.map((item) => item.satisfactionRate) },
-        { name: '参与率', type: 'line', smooth: true, yAxisIndex: 1, data: trendRows.value.map((item) => item.participationRate) }
+        { name: '平均分', type: 'line', smooth: true, showSymbol: false, lineStyle: { width: 2.5 }, data: trendRows.value.map((item) => item.averageScore) },
+        { name: '满意率', type: 'line', smooth: true, showSymbol: false, yAxisIndex: 1, lineStyle: { width: 2.5 }, data: trendRows.value.map((item) => item.satisfactionRate) },
+        { name: '参与率', type: 'line', smooth: true, showSymbol: false, yAxisIndex: 1, lineStyle: { width: 2.5 }, data: trendRows.value.map((item) => item.participationRate) }
       ]
     }, true);
   }
@@ -240,9 +257,40 @@ const renderCharts = () => {
     distributionChart ||= echarts.init(distributionChartRef.value);
     const counts = new Map(distributionRows.value.map((item) => [item.score, item.count]));
     distributionChart.setOption({
-      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } }, grid: { left: 38, right: 18, top: 18, bottom: 28 },
-      xAxis: { type: 'category', data: ['1分', '2分', '3分', '4分', '5分'] }, yAxis: { type: 'value', minInterval: 1 },
-      series: [{ type: 'bar', barMaxWidth: 34, data: [1, 2, 3, 4, 5].map((score) => counts.get(score) || 0), itemStyle: { color: '#409eff', borderRadius: [4, 4, 0, 0] } }]
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        backgroundColor: 'rgba(15, 23, 42, 0.92)',
+        borderWidth: 0,
+        textStyle: { color: '#fff', fontSize: 12 }
+      },
+      grid: { left: 38, right: 18, top: 18, bottom: 28 },
+      xAxis: {
+        type: 'category',
+        data: ['1分', '2分', '3分', '4分', '5分'],
+        axisLine: { lineStyle: { color: '#e2e8f0' } },
+        axisLabel: { color: '#94a3b8' }
+      },
+      yAxis: {
+        type: 'value',
+        minInterval: 1,
+        axisLabel: { color: '#94a3b8' },
+        splitLine: { lineStyle: { color: '#edf1f6', type: 'dashed' } }
+      },
+      series: [
+        {
+          type: 'bar',
+          barMaxWidth: 34,
+          data: [1, 2, 3, 4, 5].map((score) => counts.get(score) || 0),
+          itemStyle: {
+            borderRadius: [6, 6, 0, 0],
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: '#60a5fa' },
+              { offset: 1, color: '#2563eb' }
+            ])
+          }
+        }
+      ]
     }, true);
   }
 };
@@ -252,24 +300,68 @@ onBeforeUnmount(() => { window.removeEventListener('resize', resize); trendChart
 </script>
 
 <style scoped lang="scss">
-.satisfaction-page { display: flex; flex-direction: column; gap: 10px; min-height: 100%; padding: 10px 12px; box-sizing: border-box; overflow: auto; font-size: 12px; }
-.filter-panel, .metric-item, .chart-grid .el-card, .ranking-grid .el-card, .detail-card { border: 0; border-radius: 12px; background: var(--el-bg-color); }
-.filter-panel { position: relative; padding: 12px 14px; }
-.export-button { position: absolute; top: 12px; right: 14px; }
-.page-title { display: flex; align-items: center; gap: 10px; }
-.title-icon { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 9px; color: var(--el-color-primary); background: var(--el-color-primary-light-9); font-size: 18px; }
-.page-title h2 { margin: 0 0 3px; font-size: 17px; font-weight: 500; }
-.page-title p { margin: 0; color: var(--el-text-color-secondary); font-size: 11px; }
-.filter-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--el-border-color-lighter); }
-.filter-form :deep(.el-form-item) { margin: 0; min-width: 0; }.date-range { width: 260px !important; }.filter-select { width: 180px; }.short-select { width: 108px; }
-.metric-grid { display: grid; grid-template-columns: repeat(6, minmax(120px, 1fr)); gap: 8px; }
-.metric-item { padding: 10px 12px; background: var(--el-fill-color-lighter); }
-.metric-item span, .metric-item small { display: block; color: var(--el-text-color-secondary); font-size: 11px; }.metric-item strong { display: block; margin: 4px 0 2px; font-size: 20px; font-weight: 500; }
-.chart-grid, .ranking-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.chart-grid :deep(.el-card__header), .ranking-grid :deep(.el-card__header), .detail-card :deep(.el-card__header) { padding: 10px 14px; font-size: 13px; font-weight: 500; }
-.chart-grid :deep(.el-card__body), .ranking-grid :deep(.el-card__body) { padding: 8px 12px; }.chart { height: 250px; }.chart-grid :deep(.el-empty) { height: 250px; padding: 0; }
-.detail-card :deep(.el-card__body) { padding: 8px 12px 10px; }.detail-card :deep(.el-table), .ranking-grid :deep(.el-table) { font-size: 11px; }
-.detail-card :deep(.el-rate) { height: 18px; white-space: nowrap; }.detail-card :deep(.el-rate__icon) { margin-right: 0; font-size: 14px; }.muted { color: var(--el-text-color-secondary); }
-@media (max-width: 1200px) { .metric-grid { grid-template-columns: repeat(3, 1fr); }.chart-grid, .ranking-grid { grid-template-columns: 1fr; } }
-@media (max-width: 760px) { .filter-form :deep(.el-form-item), .date-range, .filter-select, .short-select { width: 100% !important; } }
+@use '../styles/report-shell.scss';
+
+.filter-panel {
+  position: relative;
+}
+.export-button {
+  flex: 0 0 auto;
+}
+.filter-form :deep(.el-form-item) {
+  margin: 0;
+  min-width: 0;
+}
+.date-range {
+  width: 260px !important;
+}
+.filter-select {
+  width: 180px;
+}
+.short-select {
+  width: 108px;
+}
+.ranking-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.chart {
+  height: 250px;
+}
+.chart-grid :deep(.el-empty) {
+  height: 250px;
+  padding: 0;
+}
+.detail-card :deep(.el-card__body) {
+  padding: 8px 12px 10px;
+}
+.detail-card :deep(.el-table),
+.ranking-grid :deep(.el-table) {
+  font-size: 11px;
+}
+.detail-card :deep(.el-rate) {
+  height: 18px;
+  white-space: nowrap;
+}
+.detail-card :deep(.el-rate__icon) {
+  margin-right: 0;
+  font-size: 14px;
+}
+.muted {
+  color: var(--el-text-color-secondary);
+}
+@media (max-width: 1200px) {
+  .ranking-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 760px) {
+  .filter-form :deep(.el-form-item),
+  .date-range,
+  .filter-select,
+  .short-select {
+    width: 100% !important;
+  }
+}
 </style>
