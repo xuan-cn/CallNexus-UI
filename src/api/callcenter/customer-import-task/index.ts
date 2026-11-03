@@ -41,6 +41,8 @@ export interface CustomerImportTaskForm {
 export interface CustomerImportTaskQuery extends PageQuery {
   taskName?: string;
   status?: ImportTaskStatus | '';
+  createdDateFrom?: string;
+  createdDateTo?: string;
 }
 
 export const pageImportTasks = (params: CustomerImportTaskQuery) =>

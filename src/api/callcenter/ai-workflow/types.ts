@@ -49,6 +49,21 @@ export interface AiWorkflowDefinition {
   edges: AiWorkflowEdge[];
   settings?: {
     intentFallback?: AiWorkflowIntentFallbackPolicy;
+    conversationRules?: Array<{
+      event: string;
+      enabled?: boolean;
+      phrases?: string;
+      matchMode?: string;
+      keywordMode?: string;
+      excludedKeywords?: string;
+      intentCodes?: string[];
+      aiUnderstandingEnabled?: boolean;
+      action?: string;
+      queueCode?: string;
+      replyText?: string;
+      retryText?: string;
+      maxCount?: number;
+    }>;
   };
 }
 
@@ -81,6 +96,15 @@ export interface AiWorkflowValidationVO {
   valid: boolean;
   errors: string[];
   warnings: string[];
+  issues?: AiWorkflowValidationIssue[];
+}
+
+export interface AiWorkflowValidationIssue {
+  message: string;
+  nodeId?: string;
+  edgeId?: string;
+  field?: string;
+  condition?: string;
 }
 
 export interface AiWorkflowMediaOptionVO {
@@ -121,6 +145,34 @@ export interface AiWorkflowNodeTraceVO {
   branchValue?: string;
   inputSummary?: string;
   outputSummary?: string;
+  dialogueDetails?: {
+    aiCalled?: boolean;
+    decision?: string;
+    confidence?: number;
+    evidence?: string;
+    optionCode?: string;
+    optionLabel?: string;
+    branchLabel?: string;
+    matchReason?: string;
+    matchedLabels?: string[];
+    timings?: Partial<Record<'matching' | 'intent' | 'understanding' | 'extraction' | 'knowledge', number>>;
+    detailsTruncated?: boolean;
+    reason?: string;
+    missingFields?: string[];
+    limitReached?: boolean;
+  };
+  ruleDetails?: {
+    eventLabel?: string;
+    matchReason?: string;
+    matchedLabels?: string[];
+    aiCalled?: boolean;
+    reason?: string;
+    evidence?: string;
+    confidence?: number;
+    count?: number;
+    maxCount?: number;
+    action?: string;
+  };
   durationMs: number;
   startedAt?: string;
 }

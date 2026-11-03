@@ -3,51 +3,19 @@
     <el-card shadow="never">
       <div class="page-header">
         <div>
-          <h2>AI 编排</h2>
           <p>配置 AI 助手的多轮对话、意图分支和业务动作。已发布版本不会被草稿修改影响。</p>
         </div>
         <el-button v-hasPermi="['callcenter:ai-workflow:create']" type="primary" icon="Plus" @click="openForm()">新增编排</el-button>
       </div>
-      <el-table v-loading="loading" :data="workflows">
-        <el-table-column label="编排" min-width="220">
-          <template #default="{ row }"
-            ><div class="workflow-name">{{ row.workflowName }}</div>
-            <div class="workflow-code">{{ row.workflowCode }}</div></template
-          >
-        </el-table-column>
-        <el-table-column label="场景" width="125"
-          ><template #default="{ row }"
-            ><el-tag effect="plain">{{ sceneLabel(row.sceneType) }}</el-tag></template
-          ></el-table-column
-        >
-        <el-table-column label="草稿" width="90"
-          ><template #default="{ row }">{{ row.draftVersionNo ? `v${row.draftVersionNo}` : '-' }}</template></el-table-column
-        >
-        <el-table-column label="已发布" width="100"
-          ><template #default="{ row }"
-            ><el-tag v-if="row.publishedVersionNo" type="success">v{{ row.publishedVersionNo }}</el-tag
-            ><span v-else>未发布</span></template
-          ></el-table-column
-        >
-        <el-table-column label="助手绑定" prop="bindingCount" width="95" />
-        <el-table-column label="状态" width="85"
-          ><template #default="{ row }"
-            ><el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag></template
-          ></el-table-column
-        >
-        <el-table-column label="更新时间" prop="updateTime" min-width="165" />
-        <el-table-column label="操作" width="310" fixed="right">
-          <template #default="{ row }">
-            <el-button v-hasPermi="['callcenter:ai-workflow:edit']" link type="primary" @click="openDesigner(row)">设计</el-button>
-            <el-button v-hasPermi="['callcenter:ai-workflow:edit']" link type="primary" @click="openForm(row)">修改</el-button>
-            <el-button link @click="openVersions(row)">版本</el-button>
-            <el-button v-hasPermi="['callcenter:ai-workflow:edit']" link :type="row.enabled ? 'warning' : 'success'" @click="toggleEnabled(row)">{{
-              row.enabled ? '停用' : '启用'
-            }}</el-button>
-            <el-button v-hasPermi="['callcenter:ai-workflow:delete']" link type="danger" @click="remove(row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <WorkflowLibrary
+        :workflows="workflows"
+        :loading="loading"
+        @design="openDesigner"
+        @edit="openForm"
+        @versions="openVersions"
+        @toggle="toggleEnabled"
+        @remove="remove"
+      />
     </el-card>
 
     <el-dialog v-model="formVisible" :title="formId ? '修改 AI 编排' : '新增 AI 编排'" width="640px" destroy-on-close>
@@ -67,25 +35,44 @@
       >
     </el-dialog>
 
-    <el-drawer v-model="designerVisible" size="96%" :with-header="false" destroy-on-close @closed="designerReady = false">
+    <el-drawer v-model="designerVisible" size="100%" :with-header="false" destroy-on-close @closed="designerReady = false">
       <div class="designer-header">
-        <div>
-          <strong>{{ currentWorkflow?.workflowName }}</strong
-          ><span>{{ currentWorkflow?.workflowCode }}</span
+        <div class="designer-meta">
+          <strong :title="currentWorkflow?.workflowName">{{ currentWorkflow?.workflowName }}</strong
+          ><span class="workflow-code">{{ currentWorkflow?.workflowCode }}</span
           ><el-tag type="warning">草稿 v{{ draft?.versionNo }}</el-tag>
         </div>
         <div class="designer-actions">
-          <el-input v-model="versionName" placeholder="版本说明" style="width: 190px" />
-          <el-button @click="openFallbackSettings">公共兜底</el-button>
-          <el-button @click="openVariables()">变量</el-button>
-          <el-button :loading="savingDraft" @click="saveDraft">保存草稿</el-button>
-          <el-button :loading="validating" @click="() => validateDraft()">校验</el-button>
-          <el-button v-hasPermi="['callcenter:ai-workflow:test']" type="primary" plain :loading="startingTest" @click="openTest">测试流程</el-button>
-          <el-button v-hasPermi="['callcenter:ai-workflow:publish']" type="success" :loading="publishing" @click="publishDraft">发布</el-button>
+          <el-dropdown trigger="click" placement="bottom-end">
+            <el-button icon="Setting"
+              >流程全局策略配置<el-icon class="settings-arrow"><ArrowDown /></el-icon
+            ></el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item icon="ChatDotRound" @click="rulesVisible = true">对话策略</el-dropdown-item>
+                <el-dropdown-item icon="Operation" @click="openFallbackSettings">未命中意图策略</el-dropdown-item>
+                <el-dropdown-item icon="Collection" divided @click="openVariables()">流程变量</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <div class="draft-actions">
+            <el-input v-model="versionName" aria-label="版本说明" placeholder="版本说明" class="version-input" />
+            <el-button icon="DocumentChecked" :loading="savingDraft" @click="saveDraft()">保存草稿</el-button>
+          </div>
+          <el-button-group>
+            <el-button icon="CircleCheck" :loading="validating" @click="() => validateDraft()">校验</el-button>
+            <el-button v-hasPermi="['callcenter:ai-workflow:test']" icon="VideoPlay" type="primary" plain :loading="startingTest" @click="openTest"
+              >测试流程</el-button
+            >
+          </el-button-group>
+          <el-button v-hasPermi="['callcenter:ai-workflow:publish']" icon="Upload" type="primary" :loading="publishing" @click="publishDraft"
+            >发布</el-button
+          >
           <el-button @click="designerVisible = false">关闭</el-button>
         </div>
       </div>
       <AiWorkflowDesigner
+        ref="designerRef"
         v-if="designerReady"
         v-model="graph"
         :intent-options="intentOptions"
@@ -201,12 +188,40 @@
       </el-form>
     </el-drawer>
 
+    <el-drawer v-model="rulesVisible" title="公共对话规则" size="640px" append-to-body>
+      <p>配置修改后需点击顶部“保存草稿”，发布后才影响新通话。节点可选择继承、关闭或单独覆盖。</p>
+      <ConversationRulesForm
+        :model-value="graph.settings?.conversationRules || []"
+        :intent-options="intentOptions"
+        :queue-options="queueOptions"
+        @update:model-value="setConversationRules"
+      />
+    </el-drawer>
     <el-dialog v-model="validationVisible" title="发布校验结果" width="680px">
       <el-result :icon="validation.valid ? 'success' : 'error'" :title="validation.valid ? '校验通过' : '校验失败'">
         <template #sub-title
           ><div class="validation-list">
-            <p v-for="item in validation.errors" :key="item" class="error-item">{{ item }}</p>
-            <p v-for="item in validation.warnings" :key="item" class="warning-item">{{ item }}</p>
+            <div v-for="item in validationErrors" :key="item.raw" class="validation-issue error-item">
+              <p>
+                {{ item.message }} <span v-if="item.count > 1">（同类提示 ×{{ item.count }}）</span>
+              </p>
+              <el-tooltip v-for="node in item.nodes" :key="node.id" :content="'节点 ID：' + node.id">
+                <el-button link type="primary" @click="locateValidationNode(node.id)">定位：{{ node.name || node.type }}</el-button>
+              </el-tooltip>
+              <p v-for="edge in item.edges" :key="edge.edgeId">
+                <el-button link type="danger" @click="locateValidationEdge(edge.edgeId!)"
+                  >定位错误连线 · 分支编码：{{ edge.condition || '未配置' }}</el-button
+                >
+              </p>
+            </div>
+            <div v-for="item in validationWarnings" :key="item.raw" class="validation-issue warning-item">
+              <p>
+                {{ item.message }} <span v-if="item.count > 1">（同类提示 ×{{ item.count }}）</span>
+              </p>
+              <el-tooltip v-for="node in item.nodes" :key="node.id" :content="'节点 ID：' + node.id">
+                <el-button link type="primary" @click="locateValidationNode(node.id)">定位：{{ node.name || node.type }}</el-button>
+              </el-tooltip>
+            </div>
           </div></template
         >
       </el-result>
@@ -235,6 +250,8 @@
 
 <script setup lang="ts">
 import AiWorkflowDesigner from '@/components/callcenter/AiWorkflowDesigner/index.vue';
+import ConversationRulesForm from '@/components/callcenter/AiWorkflowDesigner/ConversationRulesForm.vue';
+import { validationIssues } from './validationIssues';
 import { listAiAgents, listAiIntents } from '@/api/callcenter/ai-knowledge';
 import type { AiAgentVO, AiIntentVO } from '@/api/callcenter/ai-knowledge/types';
 import { listCallQueues } from '@/api/callcenter/call-queue';
@@ -266,6 +283,7 @@ import type {
   Id
 } from '@/api/callcenter/ai-workflow/types';
 import AiWorkflowTestDrawer from './AiWorkflowTestDrawer.vue';
+import WorkflowLibrary from './WorkflowLibrary.vue';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const workflows = ref<AiWorkflowVO[]>([]);
@@ -287,9 +305,23 @@ const testVisible = ref(false);
 const variablesVisible = ref(false);
 const fallbackVisible = ref(false);
 const validationVisible = ref(false);
+const rulesVisible = ref(false);
 const versionsVisible = ref(false);
 const versions = ref<AiWorkflowVersionVO[]>([]);
 const validation = ref<AiWorkflowValidationVO>({ valid: false, errors: [], warnings: [] });
+const designerRef = ref<InstanceType<typeof AiWorkflowDesigner>>();
+const validationErrors = computed(() => validationIssues(validation.value.errors || [], graph.value.nodes, validation.value.issues));
+const validationWarnings = computed(() => validationIssues(validation.value.warnings || [], graph.value.nodes));
+const locateValidationNode = async (id: string) => {
+  validationVisible.value = false;
+  await nextTick();
+  designerRef.value?.focusNode(id);
+};
+const locateValidationEdge = async (id: string) => {
+  validationVisible.value = false;
+  await nextTick();
+  designerRef.value?.focusEdge(id);
+};
 const intentOptions = ref<AiIntentVO[]>([]);
 const queueOptions = ref<CallQueueVO[]>([]);
 const customerTemplates = ref<FormTemplate[]>([]);
@@ -314,6 +346,10 @@ const defaultFallbackPolicy = (): AiWorkflowIntentFallbackPolicy => ({
   limitExtension: ''
 });
 const graph = ref<AiWorkflowDefinition>({ schemaVersion: '1.0', variables: [], nodes: [], edges: [], settings: {} });
+const setConversationRules = (rules: NonNullable<AiWorkflowDefinition['settings']>['conversationRules']) => {
+  graph.value.settings ||= {};
+  graph.value.settings.conversationRules = rules;
+};
 const fallbackPolicy = computed(() => {
   graph.value.settings ||= {};
   graph.value.settings.intentFallback ||= defaultFallbackPolicy();
@@ -327,7 +363,6 @@ const rules = {
   workflowName: [{ required: true, message: '请输入编排名称', trigger: 'blur' }],
   sceneType: [{ required: true, message: '请选择适用场景', trigger: 'change' }]
 };
-const sceneLabel = (scene: AiWorkflowScene) => sceneOptions.find((item) => item.value === scene)?.label || scene;
 const load = async () => {
   loading.value = true;
   try {
@@ -424,6 +459,12 @@ const validateDraft = async (showResult = true) => {
   try {
     await saveDraft(false);
     validation.value = (await validateAiWorkflowDraft(currentWorkflow.value.id)).data;
+    designerRef.value?.showValidation(
+      validationErrors.value.flatMap((item) => [
+        ...item.nodes.map((node) => ({ nodeId: node.id, message: item.message })),
+        ...item.edges.map((edge) => ({ edgeId: edge.edgeId, message: `${item.message}；分支编码：${edge.condition || '未配置'}` }))
+      ])
+    );
     validationVisible.value = showResult || !validation.value.valid;
     return validation.value;
   } finally {
@@ -504,30 +545,31 @@ onMounted(load);
   color: #7b8798;
   font-size: 13px;
 }
-.workflow-name {
-  color: #1f2937;
-  font-weight: 600;
-}
-.workflow-code {
-  margin-top: 4px;
-  color: #94a3b8;
-  font-size: 12px;
-}
 .designer-header {
-  height: 64px;
+  min-height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  padding: 0 18px;
+  gap: 12px;
+  padding: 10px 18px;
+  box-sizing: border-box;
+  flex-wrap: wrap;
   border-bottom: 1px solid #e5e7eb;
 }
-.designer-header > div:first-child {
+.designer-meta {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+  flex: 1 1 220px;
 }
-.designer-header span {
+.designer-meta strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 280px;
+}
+.workflow-code {
   color: #94a3b8;
   font-size: 12px;
 }
@@ -535,9 +577,54 @@ onMounted(load);
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.designer-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+.draft-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-left: 1px solid #e5e7eb;
+  padding-left: 12px;
+}
+.version-input {
+  width: 148px;
+}
+.settings-arrow {
+  margin-left: 6px;
+}
+@media (max-width: 1280px) {
+  .designer-meta strong {
+    max-width: 200px;
+  }
+  .workflow-code {
+    display: none;
+  }
+  .version-input {
+    width: 120px;
+  }
+}
+@media (max-width: 900px) {
+  .designer-actions {
+    justify-content: flex-start;
+  }
+  .draft-actions {
+    padding-left: 0;
+    border-left: none;
+  }
 }
 .validation-list {
   text-align: left;
+  max-height: 45vh;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.validation-issue {
+  padding: 8px 0;
+  border-bottom: 1px solid #edf1f6;
 }
 .validation-list p {
   margin: 6px 0;

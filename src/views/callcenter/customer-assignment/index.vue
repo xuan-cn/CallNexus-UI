@@ -5,43 +5,28 @@
         <template #header>
           <div class="panel-heading">
             <div class="panel-title">导入任务</div>
-            <div class="panel-desc">选择任务后分配该任务导入的客户</div>
           </div>
         </template>
-        <el-input
-          v-model="taskQuery.taskName"
-          clearable
-          placeholder="搜索任务"
-          :prefix-icon="Search"
-          class="task-search"
-          @keyup.enter="searchTasks"
-        />
+        <el-input v-model="taskQuery.taskName" clearable placeholder="搜索任务" class="task-search" @keyup.enter="searchTasks" @clear="searchTasks">
+          <template #append><el-button :icon="Search" aria-label="搜索任务" @click="searchTasks" /></template>
+        </el-input>
+        <TaskDateFilter @change="changeTaskDates" />
+        <div class="task-list-meta">
+          <el-radio-group v-model="taskQuery.status" size="small" @change="searchTasks">
+            <el-radio-button value="">全部</el-radio-button><el-radio-button value="ENABLED">启用</el-radio-button>
+            <el-radio-button value="DISABLED">停用</el-radio-button>
+          </el-radio-group>
+          <span>{{ taskTotal }} 个</span>
+        </div>
         <div v-loading="taskLoading" class="task-list">
-          <button
+          <TaskListItem
             v-for="task in tasks"
             :key="task.id"
-            type="button"
-            class="task-item"
-            :class="{ active: `${task.id}` === `${selectedTaskId}` }"
-            @click="selectTask(task)"
-          >
-            <div class="task-name">{{ task.taskName }}</div>
-            <div class="task-counts">
-              <span
-                ><b>{{ task.importedCount || 0 }}</b
-                >导入</span
-              >
-              <span class="is-warn"
-                ><b>{{ task.unassignedCount || 0 }}</b
-                >未分配</span
-              >
-              <span class="is-ok"
-                ><b>{{ task.assignedCount || 0 }}</b
-                >已分配</span
-              >
-            </div>
-            <div class="last-time">最近导入 {{ task.lastImportTime || '暂无' }}</div>
-          </button>
+            :task="task"
+            :selected="`${task.id}` === `${selectedTaskId}`"
+            mode="assignment"
+            @select="selectTask"
+          />
           <el-empty v-if="!taskLoading && !tasks.length" description="暂无导入任务" :image-size="64" />
         </div>
         <pagination
@@ -49,6 +34,9 @@
           v-model:page="taskQuery.pageNum"
           v-model:limit="taskQuery.pageSize"
           :total="taskTotal"
+          :page-sizes="[12, 24, 48]"
+          :pager-count="5"
+          :auto-scroll="false"
           layout="prev, pager, next"
           small
           class="task-pagination"
@@ -258,6 +246,8 @@
 
 <script setup name="CustomerAssignment" lang="ts">
 import { Refresh, Search } from '@element-plus/icons-vue';
+import TaskListItem from '../customer-import-task/components/TaskListItem.vue';
+import TaskDateFilter from '../customer-import-task/components/TaskDateFilter.vue';
 import { ElMessage } from 'element-plus';
 import type { CustomerAssignmentForm, CustomerImportResultVO, CustomerQuery, CustomerVO } from '@/api/callcenter/customer';
 import { listAgents } from '@/api/callcenter/agent';
@@ -269,6 +259,7 @@ import {
   pageImportTaskBatches,
   pageImportTaskCustomers,
   pageImportTasks,
+  type CustomerImportTaskQuery,
   type CustomerImportTaskVO
 } from '@/api/callcenter/customer-import-task';
 
@@ -276,7 +267,8 @@ const taskLoading = ref(false);
 const tasks = ref<CustomerImportTaskVO[]>([]);
 const taskTotal = ref(0);
 const selectedTaskId = ref<string | number>();
-const taskQuery = reactive({ pageNum: 1, pageSize: 8, taskName: '', status: '' });
+const taskQuery = reactive<CustomerImportTaskQuery>({ pageNum: 1, pageSize: 12, taskName: '', status: '' });
+let taskRequestId = 0;
 const selectedTask = computed(() => tasks.value.find((item) => `${item.id}` === `${selectedTaskId.value}`));
 const loading = ref(false);
 const rows = ref<CustomerVO[]>([]);
@@ -328,19 +320,36 @@ const allocationPreview = computed(() => {
 });
 
 const loadTasks = async () => {
+  const requestId = ++taskRequestId;
   taskLoading.value = true;
   try {
     const response = await pageImportTasks(taskQuery);
+    if (requestId !== taskRequestId) return;
     tasks.value = response.rows || [];
     taskTotal.value = response.total || 0;
-    if (!selectedTaskId.value && tasks.value.length) selectTask(tasks.value[0]);
+    if (!tasks.value.some((task) => `${task.id}` === `${selectedTaskId.value}`)) {
+      if (tasks.value.length) selectTask(tasks.value[0]);
+      else {
+        selectedTaskId.value = undefined;
+        rows.value = [];
+        total.value = 0;
+        selectedRows.value = [];
+        batches.value = [];
+        loading.value = false;
+      }
+    }
   } finally {
-    taskLoading.value = false;
+    if (requestId === taskRequestId) taskLoading.value = false;
   }
 };
 const searchTasks = () => {
   taskQuery.pageNum = 1;
   loadTasks();
+};
+const changeTaskDates = (from?: string, to?: string) => {
+  taskQuery.createdDateFrom = from;
+  taskQuery.createdDateTo = to;
+  searchTasks();
 };
 const selectTask = (task: CustomerImportTaskVO) => {
   selectedTaskId.value = task.id;
@@ -351,18 +360,22 @@ const selectTask = (task: CustomerImportTaskVO) => {
 };
 const loadBatches = async () => {
   if (!selectedTaskId.value) return;
-  const response = await pageImportTaskBatches(selectedTaskId.value, { pageNum: 1, pageSize: 200 });
+  const taskId = selectedTaskId.value;
+  const response = await pageImportTaskBatches(taskId, { pageNum: 1, pageSize: 200 });
+  if (`${taskId}` !== `${selectedTaskId.value}`) return;
   batches.value = response.rows || [];
 };
 const loadCustomers = async () => {
   if (!selectedTaskId.value) return;
+  const taskId = selectedTaskId.value;
   loading.value = true;
   try {
-    const response = await pageImportTaskCustomers(selectedTaskId.value, query);
+    const response = await pageImportTaskCustomers(taskId, query);
+    if (`${taskId}` !== `${selectedTaskId.value}`) return;
     rows.value = response.rows || [];
     total.value = response.total || 0;
   } finally {
-    loading.value = false;
+    if (`${taskId}` === `${selectedTaskId.value}`) loading.value = false;
   }
 };
 const search = () => {
@@ -463,13 +476,18 @@ onMounted(async () => {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(280px, 28%) 1fr;
+  grid-template-columns: 260px minmax(0, 1fr);
   gap: 14px;
 }
 
 .task-panel,
 .customer-panel {
   min-height: 0;
+  min-width: 0;
+}
+.task-panel {
+  display: flex;
+  flex-direction: column;
 }
 
 .task-panel :deep(.el-card__header),
@@ -480,7 +498,8 @@ onMounted(async () => {
 .task-panel :deep(.el-card__body) {
   display: flex;
   flex-direction: column;
-  height: calc(100% - 70px);
+  flex: 1;
+  min-height: 0;
   padding: 12px 14px 10px !important;
 }
 
@@ -517,93 +536,23 @@ onMounted(async () => {
 .task-list {
   flex: 1;
   min-height: 0;
-  margin-top: 12px;
+  margin-top: 8px;
   overflow: auto;
 }
 
-.task-item {
-  display: block;
-  width: 100%;
-  margin-bottom: 8px;
-  padding: 12px 12px 10px;
-  text-align: left;
-  cursor: pointer;
-  border: 1px solid #e4ecf6;
-  border-radius: 12px;
-  background: #fff;
-  transition:
-    border-color 0.15s ease,
-    background-color 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-.task-item:hover {
-  border-color: #c5d8ff;
-  background: #f8fbff;
-}
-
-.task-item.active {
-  border-color: rgba(37, 99, 235, 0.35);
-  background: linear-gradient(180deg, #f5f9ff, #eef5ff);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
-}
-
-.task-name {
-  color: #17324d;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.3;
-}
-
-.task-counts {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  margin-top: 10px;
-  color: #64748b;
-  font-size: 11px;
-}
-
-.task-counts span {
+.task-list-meta {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  background: #f8fafc;
-  border: 1px solid #eef2f7;
-}
-
-.task-counts b {
-  color: #153b60;
-  font-size: 15px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.2;
-}
-
-.task-counts .is-warn b {
-  color: #c2410c;
-}
-
-.task-counts .is-ok b {
-  color: #0f766e;
-}
-
-.task-item.active .task-counts span {
-  background: rgba(255, 255, 255, 0.72);
-  border-color: #dbe7f5;
-}
-
-.last-time {
-  margin-top: 8px;
-  color: #94a3b8;
-  font-size: 11px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 
 .task-pagination {
   flex: none;
-  margin-top: 8px;
+  padding: 8px 0 0;
 }
 
 .filter-panel {
@@ -785,7 +734,7 @@ onMounted(async () => {
 
 @media (max-width: 1200px) {
   .workspace {
-    grid-template-columns: 270px 1fr;
+    grid-template-columns: 240px minmax(0, 1fr);
   }
 
   .filter-panel {
@@ -795,6 +744,18 @@ onMounted(async () => {
   .table-toolbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+@media (max-width: 800px) {
+  .assignment-page,
+  .workspace {
+    height: auto;
+  }
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .task-panel {
+    height: 340px;
   }
 }
 </style>

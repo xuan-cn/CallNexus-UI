@@ -37,14 +37,96 @@ export interface AiWorkflowNodeDefinition {
   properties: AiWorkflowPropertyDefinition[];
 }
 
+const answerModeOptions = [
+  { label: '关闭问答，仅澄清或补播', value: 'OFF' },
+  { label: '仅知识库回答，未命中不调用模型兜底', value: 'KNOWLEDGE_ONLY' },
+  { label: '允许大模型兜底（遵循助手配置）', value: 'MODEL_FALLBACK' }
+];
+const answerMatchingProperties = (prefix: string, label: string): AiWorkflowPropertyDefinition[] => [
+  {
+    key: prefix + 'MatchMode',
+    label: label + '匹配方式',
+    type: 'OPTIONS_SELECT',
+    defaultValue: 'EXACT',
+    options: [
+      { label: '整句匹配', value: 'EXACT' },
+      { label: '关键词匹配', value: 'KEYWORD' },
+      { label: '意图匹配', value: 'INTENT' }
+    ]
+  },
+  {
+    key: prefix + 'Answers',
+    label: label + '回答 / 关键词（每行一条）',
+    type: 'TEXTAREA',
+    placeholder: '整句：忽略标点空格；关键词：包含匹配，请谨慎配置否定和疑问'
+  },
+  {
+    key: prefix + 'KeywordMode',
+    label: label + '关键词条件',
+    type: 'OPTIONS_SELECT',
+    defaultValue: 'ANY',
+    options: [
+      { label: '任一关键词命中', value: 'ANY' },
+      { label: '全部关键词命中', value: 'ALL' }
+    ]
+  },
+  { key: prefix + 'ExcludedKeywords', label: label + '排除词（每行一条）', type: 'TEXTAREA', placeholder: '包含任一排除词不命中' },
+  { key: prefix + 'IntentCodes', label: label + '意图', type: 'INTENT_MULTI_SELECT', defaultValue: [] }
+];
 export const aiWorkflowNodeDefinitions: AiWorkflowNodeDefinition[] = [
+  {
+    type: 'DIALOGUE_STEP',
+    label: '对话步骤',
+    color: '#0f766e',
+    branch: true,
+    description: '一步完成提问、等待和有限澄清；明确回答优先匹配，可开启 AI 辅助理解与知识插问。',
+    properties: [
+      {
+        key: 'goal',
+        label: '本步骤目标',
+        type: 'TEXTAREA',
+        placeholder: '说明本步骤要判断什么、各选项的判断条件，以及不确定时如何处理。支持分行填写。'
+      },
+      { key: 'aiUnderstandingEnabled', label: 'AI 辅助理解复杂表达', type: 'SWITCH', defaultValue: false },
+      { key: 'collectedFields', label: '本步必填流程文本字段（先在顶部变量中创建）', type: 'SLOT_TARGET_MULTI_SELECT', defaultValue: [] },
+      { key: 'reuseCollectedFields', label: '字段已齐全时复用并跳过本步提问', type: 'SWITCH', defaultValue: false },
+      { key: 'aiAutoAdvance', label: '允许高置信度业务选项/确认/拒绝推进（否则再次确认）', type: 'SWITCH', defaultValue: false },
+      {
+        key: 'answerMode',
+        label: '插问回答方式（需开启 AI 辅助理解，最多 5 次）',
+        type: 'OPTIONS_SELECT',
+        defaultValue: 'OFF',
+        options: answerModeOptions
+      },
+      { key: 'text', label: '提问话术', type: 'TEMPLATE' },
+      ...answerMatchingProperties('accepted', '确认完成'),
+      ...answerMatchingProperties('declined', '明确拒绝'),
+      { key: 'retryText', label: '未确认时的简短澄清话术', type: 'TEMPLATE' },
+      { key: 'maxRetries', label: '最多澄清次数（不含首次提问）', type: 'NUMBER', defaultValue: 2, min: 1, max: 10 }
+    ]
+  },
   { type: 'START', label: '开始', color: '#0f4c81', description: 'AI 编排入口', properties: [] },
   {
     type: 'TEMPLATE_REPLY',
     label: '模板回复',
     color: '#2563eb',
     description: '渲染变量后交给 TTS 或文本通道',
-    properties: [{ key: 'text', label: '回复内容', type: 'TEMPLATE', placeholder: '例如：您好，欢迎致电客服中心。' }]
+    properties: [
+      { key: 'text', label: '回复内容', type: 'TEMPLATE', placeholder: '例如：您好，欢迎致电客服中心。' },
+      { key: 'requiredDisclosure', label: '必须完整告知（测试需模拟播完）', type: 'SWITCH', defaultValue: false },
+      {
+        key: 'disclosureBargeInMode',
+        label: '必要告知打断方式',
+        type: 'OPTIONS_SELECT',
+        defaultValue: 'DISABLED',
+        options: [
+          { label: '禁止打断', value: 'DISABLED' },
+          { label: '允许打断，按问答策略回答后完整补播', value: 'REPLAY_AFTER_REPLY' }
+        ]
+      },
+      { key: 'disclosureMaxInterruptions', label: '最多打断次数，之后禁止打断直至补播完成', type: 'NUMBER', defaultValue: 2, min: 1, max: 5 },
+      { key: 'answerMode', label: '插问回答方式', type: 'OPTIONS_SELECT', defaultValue: 'KNOWLEDGE_ONLY', options: answerModeOptions }
+    ]
   },
   {
     type: 'WAIT_INPUT',
@@ -233,8 +315,31 @@ export const aiWorkflowNodeDefinitions: AiWorkflowNodeDefinition[] = [
 ];
 
 for (const definition of aiWorkflowNodeDefinitions) {
-  if (!['TEMPLATE_REPLY', 'MODEL_REPLY', 'KNOWLEDGE_QUERY', 'INTENT_ROUTE'].includes(definition.type)) continue;
+  if (['TEMPLATE_REPLY', 'WAIT_INPUT', 'DIALOGUE_STEP'].includes(definition.type))
+    definition.properties.push({
+      key: 'conversationRuleMode',
+      label: '公共对话规则',
+      type: 'OPTIONS_SELECT',
+      defaultValue: 'INHERIT',
+      options: [
+        { label: '继承流程公共规则', value: 'INHERIT' },
+        { label: '本节点关闭', value: 'DISABLED' },
+        { label: '本节点单独配置', value: 'OVERRIDE' }
+      ]
+    });
+  if (!['TEMPLATE_REPLY', 'MODEL_REPLY', 'KNOWLEDGE_QUERY', 'INTENT_ROUTE', 'DIALOGUE_STEP'].includes(definition.type)) continue;
   definition.properties.push(
+    {
+      key: 'playbackFailureAction',
+      label: '停播重试失败后',
+      type: 'OPTIONS_SELECT',
+      defaultValue: 'HANGUP',
+      options: [
+        { label: '挂断通话', value: 'HANGUP' },
+        { label: '转人工技能组', value: 'TRANSFER_QUEUE' }
+      ]
+    },
+    { key: 'playbackFailureQueueCode', label: '停播失败转入技能组', type: 'QUEUE_SELECT' },
     {
       key: 'nodeBargeInMode',
       label: '本节点打断方式',

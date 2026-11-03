@@ -6,47 +6,36 @@
           <div class="panel-header">
             <div>
               <div class="panel-title">导入任务</div>
-              <div class="panel-desc">一个任务可重复上传多个文件</div>
             </div>
             <el-button v-hasPermi="['callcenter:customer-import-task:create']" type="primary" :icon="Plus" @click="openTaskDrawer()">新建</el-button>
           </div>
         </template>
-        <el-input v-model="taskQuery.taskName" clearable placeholder="搜索任务名称" :prefix-icon="Search" @keyup.enter="searchTasks" />
+        <el-input v-model="taskQuery.taskName" clearable placeholder="搜索任务名称" @keyup.enter="searchTasks" @clear="searchTasks">
+          <template #append><el-button :icon="Search" aria-label="搜索任务" @click="searchTasks" /></template>
+        </el-input>
+        <TaskDateFilter @change="changeTaskDates" />
+        <div class="task-list-meta">
+          <el-radio-group v-model="taskQuery.status" size="small" @change="searchTasks">
+            <el-radio-button value="">全部</el-radio-button><el-radio-button value="ENABLED">启用</el-radio-button>
+            <el-radio-button value="DISABLED">停用</el-radio-button>
+          </el-radio-group>
+          <span>{{ taskTotal }} 个</span>
+        </div>
         <div v-loading="taskLoading" class="task-list">
-          <button
-            v-for="task in tasks"
-            :key="task.id"
-            type="button"
-            class="task-item"
-            :class="{ active: `${selectedTaskId}` === `${task.id}` }"
-            @click="selectTask(task)"
-          >
-            <div class="task-line">
-              <strong>{{ task.taskName }}</strong>
-              <el-tag :type="task.status === 'ENABLED' ? 'success' : 'info'" size="small">{{ task.status === 'ENABLED' ? '启用' : '停用' }}</el-tag>
-            </div>
-            <div class="task-code">{{ task.taskCode }}</div>
-            <div class="task-stats">
-              <span>批次 {{ task.batchCount || 0 }}</span>
-              <span>成功 {{ task.importedCount || 0 }}</span>
-              <span :class="{ danger: task.failedCount }">失败 {{ task.failedCount || 0 }}</span>
-            </div>
-            <div class="task-footer">
-              <span>{{ task.lastImportTime || '尚未上传' }}</span>
-              <span class="task-actions" @click.stop>
-                <el-button link type="primary" @click="openTaskDrawer(task)">编辑</el-button>
-                <el-dropdown trigger="click" @command="(command) => handleTaskCommand(command, task)">
-                  <el-button link>更多</el-button>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item command="status">{{ task.status === 'ENABLED' ? '停用' : '启用' }}</el-dropdown-item>
-                      <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
-              </span>
-            </div>
-          </button>
+          <TaskListItem v-for="task in tasks" :key="task.id" :task="task" :selected="`${selectedTaskId}` === `${task.id}`" @select="selectTask">
+            <template #actions>
+              <el-dropdown trigger="click" @command="(command) => handleTaskCommand(command, task)">
+                <el-button link :icon="MoreFilled" :aria-label="`${task.taskName}的操作`" />
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="edit">编辑</el-dropdown-item>
+                    <el-dropdown-item command="status">{{ task.status === 'ENABLED' ? '停用' : '启用' }}</el-dropdown-item>
+                    <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </template>
+          </TaskListItem>
           <el-empty v-if="!taskLoading && !tasks.length" description="暂无导入任务" :image-size="80" />
         </div>
         <pagination
@@ -54,7 +43,9 @@
           v-model:page="taskQuery.pageNum"
           v-model:limit="taskQuery.pageSize"
           :total="taskTotal"
-          :page-sizes="[6, 10, 20]"
+          :page-sizes="[12, 24, 48]"
+          :pager-count="5"
+          :auto-scroll="false"
           small
           layout="prev, pager, next"
           @pagination="loadTasks"
@@ -246,7 +237,9 @@
 </template>
 
 <script setup name="CustomerImportTask" lang="ts">
-import { Download, Plus, Refresh, Search, UploadFilled } from '@element-plus/icons-vue';
+import { Download, MoreFilled, Plus, Refresh, Search, UploadFilled } from '@element-plus/icons-vue';
+import TaskListItem from './components/TaskListItem.vue';
+import TaskDateFilter from './components/TaskDateFilter.vue';
 import type { FormInstance, FormRules, UploadFile, UploadInstance, UploadUserFile } from 'element-plus';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { listFormTemplates } from '@/api/callcenter/form-template';
@@ -264,6 +257,7 @@ import {
   updateImportTaskStatus,
   uploadImportTaskBatch,
   type CustomerImportTaskForm,
+  type CustomerImportTaskQuery,
   type CustomerImportTaskVO
 } from '@/api/callcenter/customer-import-task';
 
@@ -273,7 +267,8 @@ const taskTotal = ref(0);
 const taskLoading = ref(false);
 const selectedTaskId = ref<string | number>();
 const selectedTask = computed(() => tasks.value.find((item) => `${item.id}` === `${selectedTaskId.value}`));
-const taskQuery = reactive({ pageNum: 1, pageSize: 6, taskName: '', status: '' });
+const taskQuery = reactive<CustomerImportTaskQuery>({ pageNum: 1, pageSize: 12, taskName: '', status: '' });
+let taskRequestId = 0;
 const formTemplates = ref<FormTemplate[]>([]);
 
 const batches = ref<CustomerImportResultVO[]>([]);
@@ -331,19 +326,34 @@ const canUpload = computed(() => !!selectedFile.value && !!analysis.value && has
 const mappedFieldCount = computed(() => Object.values(fieldMapping).filter(Boolean).length);
 
 const loadTasks = async () => {
+  const requestId = ++taskRequestId;
   taskLoading.value = true;
   try {
     const response = await pageImportTasks(taskQuery);
+    if (requestId !== taskRequestId) return;
     tasks.value = response.rows || [];
     taskTotal.value = response.total || 0;
-    if (!selectedTaskId.value && tasks.value.length) selectTask(tasks.value[0]);
+    if (!tasks.value.some((task) => `${task.id}` === `${selectedTaskId.value}`)) {
+      if (tasks.value.length) selectTask(tasks.value[0]);
+      else {
+        selectedTaskId.value = undefined;
+        batches.value = [];
+        batchTotal.value = 0;
+        batchLoading.value = false;
+      }
+    }
   } finally {
-    taskLoading.value = false;
+    if (requestId === taskRequestId) taskLoading.value = false;
   }
 };
 const searchTasks = () => {
   taskQuery.pageNum = 1;
   loadTasks();
+};
+const changeTaskDates = (from?: string, to?: string) => {
+  taskQuery.createdDateFrom = from;
+  taskQuery.createdDateTo = to;
+  searchTasks();
 };
 const selectTask = (task: CustomerImportTaskVO) => {
   selectedTaskId.value = task.id;
@@ -354,13 +364,15 @@ const selectTask = (task: CustomerImportTaskVO) => {
 
 const loadBatches = async () => {
   if (!selectedTaskId.value) return;
+  const taskId = selectedTaskId.value;
   batchLoading.value = true;
   try {
-    const response = await pageImportTaskBatches(selectedTaskId.value, batchQuery);
+    const response = await pageImportTaskBatches(taskId, batchQuery);
+    if (`${taskId}` !== `${selectedTaskId.value}`) return;
     batches.value = response.rows || [];
     batchTotal.value = response.total || 0;
   } finally {
-    batchLoading.value = false;
+    if (`${taskId}` === `${selectedTaskId.value}`) batchLoading.value = false;
   }
 };
 
@@ -431,6 +443,10 @@ const saveTask = async () => {
   }
 };
 const handleTaskCommand = async (command: string, task: CustomerImportTaskVO) => {
+  if (command === 'edit') {
+    openTaskDrawer(task);
+    return;
+  }
   if (command === 'status') {
     await updateImportTaskStatus(task.id, task.status === 'ENABLED' ? 'DISABLED' : 'ENABLED');
     await loadTasks();
@@ -490,33 +506,40 @@ onMounted(async () => {
 }
 .workspace {
   display: grid;
-  grid-template-columns: minmax(320px, 34%) 1fr;
+  grid-template-columns: 260px minmax(0, 1fr);
   gap: 12px;
 }
 .task-panel,
 .content-panel {
   min-height: 0;
+  min-width: 0;
 }
-.task-panel:deep(.el-card__body) {
-  height: calc(100% - 65px);
+.task-panel {
   display: flex;
   flex-direction: column;
 }
-.panel-header,
-.task-line,
-.task-footer {
+.task-panel:deep(.el-card__header) {
+  padding: 12px;
+}
+.task-panel:deep(.el-card__body) {
+  flex: 1;
+  min-height: 0;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+}
+.panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 .panel-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   color: #102a43;
 }
-.panel-desc,
-.task-code {
+.panel-desc {
   font-size: 12px;
   color: #8492a6;
 }
@@ -524,45 +547,20 @@ onMounted(async () => {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  margin-top: 12px;
+  margin-top: 8px;
 }
-.task-item {
-  display: block;
-  width: 100%;
-  padding: 14px;
-  margin-bottom: 10px;
-  text-align: left;
-  background: #fff;
-  border: 1px solid #e5eaf1;
-  border-radius: 10px;
-  cursor: pointer;
-}
-.task-item.active {
-  border-color: transparent;
-  background: #f1f7fc;
-  box-shadow: none;
-}
-.task-code {
-  margin: 5px 0 10px;
-}
-.task-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+.task-list-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  font-size: 12px;
-  color: #52677c;
-}
-.task-footer {
   margin-top: 10px;
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--el-text-color-secondary);
 }
-.task-actions {
-  display: flex;
-  gap: 8px;
-}
-.danger {
-  color: #e5484d;
+.task-panel :deep(.pagination-container) {
+  flex: none;
+  padding: 8px 0 0;
 }
 .content-panel {
   min-height: 0;
@@ -644,7 +642,19 @@ onMounted(async () => {
 }
 @media (max-width: 1200px) {
   .workspace {
-    grid-template-columns: 300px 1fr;
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+}
+@media (max-width: 800px) {
+  .import-task-page,
+  .workspace {
+    height: auto;
+  }
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .task-panel {
+    height: 340px;
   }
 }
 </style>

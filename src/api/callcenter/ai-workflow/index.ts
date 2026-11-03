@@ -16,8 +16,7 @@ import type {
 const root = '/api/v1/ai-workflows';
 
 export const listAiWorkflows = (): AxiosPromise<AiWorkflowVO[]> => request({ url: root, method: 'get' });
-export const listAiWorkflowMediaOptions = (): AxiosPromise<AiWorkflowMediaOptionVO[]> =>
-  request({ url: `${root}/media-options`, method: 'get' });
+export const listAiWorkflowMediaOptions = (): AxiosPromise<AiWorkflowMediaOptionVO[]> => request({ url: `${root}/media-options`, method: 'get' });
 export const getAiWorkflow = (id: Id): AxiosPromise<AiWorkflowVO> => request({ url: `${root}/${id}`, method: 'get' });
 export const createAiWorkflow = (data: AiWorkflowForm): AxiosPromise<Id> => request({ url: root, method: 'post', data });
 export const updateAiWorkflow = (id: Id, data: AiWorkflowForm) => request({ url: `${root}/${id}`, method: 'put', data });
@@ -37,8 +36,10 @@ export const deleteAiAgentWorkflowBinding = (agentId: Id, sceneType: string) =>
   request({ url: `${root}/agents/${agentId}/bindings/${sceneType}`, method: 'delete' });
 export const startAiWorkflowTest = (id: Id, data: AiWorkflowTestStartForm): AxiosPromise<AiWorkflowTestExecutionVO> =>
   request({ url: `${root}/${id}/test-executions`, method: 'post', data });
-export const sendAiWorkflowTestInput = (executionId: string, data: { inputId: string; text: string }): AxiosPromise<AiWorkflowTestExecutionVO> =>
-  request({ url: `${root}/test-executions/${executionId}/inputs`, method: 'post', data });
+export const sendAiWorkflowTestInput = (
+  executionId: string,
+  data: { inputId: string; text?: string; signal?: string }
+): AxiosPromise<AiWorkflowTestExecutionVO> => request({ url: `${root}/test-executions/${executionId}/inputs`, method: 'post', data });
 export const getAiWorkflowTestExecution = (executionId: string): AxiosPromise<AiWorkflowTestExecutionVO> =>
   request({ url: `${root}/test-executions/${executionId}`, method: 'get' });
 export const terminateAiWorkflowTest = (executionId: string) => request({ url: `${root}/test-executions/${executionId}`, method: 'delete' });
