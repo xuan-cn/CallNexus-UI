@@ -82,13 +82,7 @@
     </el-dialog>
 
     <el-dialog v-model="importDialog.visible" class="blacklist-import-dialog" title="Excel 导入外呼黑名单" width="920px" append-to-body>
-      <el-alert
-        class="import-tip"
-        type="info"
-        :closable="false"
-        show-icon
-        title="先选择限制范围并上传 Excel，预检通过后再确认导入有效号码。"
-      />
+      <el-alert class="import-tip" type="info" :closable="false" show-icon title="先选择限制范围并上传 Excel，预检通过后再确认导入有效号码。" />
 
       <div class="import-panel">
         <div class="import-section">
@@ -191,6 +185,7 @@ import {
   enableOutboundBlacklist,
   getOutboundBlacklist,
   listOutboundBlacklists,
+  listOutboundBlacklistTaskOptions,
   previewOutboundBlacklistImport,
   updateOutboundBlacklist
 } from '@/api/callcenter/outbound-blacklist';
@@ -198,16 +193,15 @@ import {
   OutboundBlacklistForm,
   OutboundBlacklistImportBatchVO,
   OutboundBlacklistScope,
+  OutboundBlacklistTaskOption,
   OutboundBlacklistVO
 } from '@/api/callcenter/outbound-blacklist/types';
-import { listOutboundTasks } from '@/api/callcenter/outbound-task';
-import { OutboundTaskVO } from '@/api/callcenter/outbound-task/types';
 import type { UploadFile } from 'element-plus';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const loading = ref(false);
 const rows = ref<OutboundBlacklistVO[]>([]);
-const tasks = ref<OutboundTaskVO[]>([]);
+const tasks = ref<OutboundBlacklistTaskOption[]>([]);
 const formRef = ref<ElFormInstance>();
 const dialog = reactive({ visible: false, title: '' });
 const form = reactive<OutboundBlacklistForm>({ scopeType: 'GLOBAL', phoneNumber: '', source: 'MANUAL', enabled: true });
@@ -238,9 +232,8 @@ const sourceLabel = (value: string) =>
 const load = async () => {
   loading.value = true;
   try {
-    const [blacklistRes, taskRes] = await Promise.all([listOutboundBlacklists(), listOutboundTasks()]);
+    const blacklistRes = await listOutboundBlacklists();
     rows.value = blacklistRes.data;
-    tasks.value = taskRes.data;
   } finally {
     loading.value = false;
   }
@@ -249,12 +242,17 @@ const reset = () => {
   Object.assign(form, { id: undefined, scopeType: 'GLOBAL', taskId: undefined, phoneNumber: '', reason: '', source: 'MANUAL', enabled: true });
   validRange.value = undefined;
 };
-const openCreate = () => {
+const loadTaskOptions = async () => {
+  tasks.value = (await listOutboundBlacklistTaskOptions()).data;
+};
+const openCreate = async () => {
+  await loadTaskOptions();
   reset();
   dialog.title = '新增外呼黑名单';
   dialog.visible = true;
 };
 const openUpdate = async (row: OutboundBlacklistVO) => {
+  await loadTaskOptions();
   reset();
   const data = (await getOutboundBlacklist(row.id)).data;
   Object.assign(form, { ...data, phoneNumber: data.originalPhone });
@@ -282,7 +280,8 @@ const remove = async (row: OutboundBlacklistVO) => {
   proxy?.$modal.msgSuccess('已解除黑名单限制');
   await load();
 };
-const openImport = () => {
+const openImport = async () => {
+  await loadTaskOptions();
   Object.assign(importDialog, { visible: true, scopeType: 'GLOBAL', taskId: undefined, file: undefined, batch: undefined });
 };
 const downloadTemplate = () => proxy?.download('api/v1/outbound-blacklists/import-template', {}, `外呼黑名单导入模板_${Date.now()}.xlsx`);

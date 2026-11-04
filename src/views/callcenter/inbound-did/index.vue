@@ -113,7 +113,7 @@
             v-model="form.nodeId"
             :disabled="embedded"
             filterable
-            placeholder="请选择 FreeSWITCH 节点"
+            placeholder="请选择话务服务节点"
             style="width: 100%"
             @change="handleFormNodeChange"
           >
@@ -165,7 +165,7 @@
           >
             <el-option v-for="item in availableIvrOptions" :key="item.id" :label="item.flowName" :value="String(item.id)">
               <span>{{ item.flowName }}</span>
-              <span class="target-option-extra">{{ item.flowCode }}</span>
+
             </el-option>
           </el-select>
           <el-select
@@ -177,7 +177,7 @@
           >
             <el-option v-for="item in availableQueueOptions" :key="item.id" :label="item.queueName" :value="String(item.id)">
               <span>{{ item.queueName }}</span>
-              <span class="target-option-extra">{{ item.queueCode }}</span>
+
             </el-option>
           </el-select>
           <el-select
@@ -189,7 +189,7 @@
           >
             <el-option v-for="item in availableVoiceMailOptions" :key="item.id" :label="item.boxName" :value="String(item.id)">
               <span>{{ item.boxName }}</span>
-              <span class="target-option-extra">{{ item.boxCode }}</span>
+
             </el-option>
           </el-select>
           <el-select
@@ -249,7 +249,7 @@
     <el-drawer v-model="testDrawer.visible" title="呼入路由测试" size="520px" append-to-body>
       <el-form :model="testForm" label-width="100px">
         <el-form-item label="节点" required>
-          <el-select v-model="testForm.nodeId" filterable placeholder="请选择 FreeSWITCH 节点" style="width: 100%" @change="handleTestNodeChange">
+          <el-select v-model="testForm.nodeId" filterable placeholder="请选择话务服务节点" style="width: 100%" @change="handleTestNodeChange">
             <el-option v-for="node in nodeOptions" :key="node.id" :label="node.nodeName" :value="node.id" />
           </el-select>
         </el-form-item>
@@ -403,7 +403,7 @@ const data = reactive<PageData<InboundDidEntryForm, InboundDidEntryQuery>>({
     enabled: undefined
   },
   rules: {
-    nodeId: [{ required: true, message: '请选择 FreeSWITCH 节点', trigger: 'change' }],
+    nodeId: [{ required: true, message: '请选择话务服务节点', trigger: 'change' }],
     gatewayId: [{ required: true, message: '请选择来源网关', trigger: 'change' }],
     entryName: [{ required: true, message: '入口名称不能为空', trigger: 'blur' }],
     didNumber: [{ required: true, message: 'DID号码不能为空', trigger: 'blur' }],
@@ -727,7 +727,7 @@ const resetTestForm = () => {
 
 const handleRouteTest = async () => {
   if (!testForm.nodeId) {
-    proxy?.$modal.msgWarning('请先选择 FreeSWITCH 节点');
+    proxy?.$modal.msgWarning('请先选择话务服务节点');
     return;
   }
   testing.value = true;

@@ -197,7 +197,7 @@
             :disabled="!assignDrawer.form.skillGroupId"
             placeholder="请选择具体坐席"
           >
-            <el-option v-for="agent in availableAgents" :key="agent.id" :label="`${agent.agentName}（${agent.agentCode}）`" :value="agent.id" />
+            <el-option v-for="agent in availableAgents" :key="agent.id" :label="agent.agentName" :value="agent.id" />
           </el-select>
         </el-form-item>
         <template v-else>
@@ -220,7 +220,7 @@
                 :disabled="!assignDrawer.form.skillGroupId"
                 placeholder="请选择参与平均分配的坐席"
               >
-                <el-option v-for="agent in availableAgents" :key="agent.id" :label="`${agent.agentName}（${agent.agentCode}）`" :value="agent.id" />
+                <el-option v-for="agent in availableAgents" :key="agent.id" :label="agent.agentName" :value="agent.id" />
               </el-select>
               <div v-if="assignDrawer.form.skillGroupId && !availableAgents.length" class="agent-selector-empty">当前技能组没有启用的坐席</div>
             </div>

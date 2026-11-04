@@ -5,7 +5,7 @@
         <el-button v-hasPermi="['callcenter:ivr-flow:create']" type="primary" plain icon="Plus" @click="handleAdd">新增 IVR 流程</el-button>
       </template>
       <el-table v-loading="loading" :data="flows">
-        <el-table-column label="流程编码" prop="flowCode" min-width="140" />
+
         <el-table-column label="流程名称" prop="flowName" min-width="180" />
         <el-table-column label="节点组" prop="nodeGroupName" min-width="170" />
         <el-table-column label="版本" width="90"
@@ -62,7 +62,7 @@
 
     <el-dialog v-model="createDialog" title="新增 IVR 流程" width="620px" append-to-body>
       <el-form ref="createFormRef" :model="createForm" :rules="rules" label-width="100px">
-        <el-form-item label="流程编码" prop="flowCode"><el-input v-model="createForm.flowCode" placeholder="例如 service_hotline" /></el-form-item>
+        <AutoInternalCode v-model="createForm.flowCode" prefix="flow" />
         <el-form-item label="流程名称" prop="flowName"><el-input v-model="createForm.flowName" /></el-form-item>
         <el-form-item label="节点组" prop="nodeGroupId">
           <el-select v-model="createForm.nodeGroupId" style="width: 100%">
@@ -140,6 +140,8 @@
 </template>
 
 <script setup name="IvrFlow" lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+
 import {
   createIvrFlow,
   deleteIvrFlow,

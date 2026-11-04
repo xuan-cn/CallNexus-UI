@@ -63,7 +63,7 @@
       <el-card class="intent-content" shadow="never">
         <el-form :model="query" inline class="query-form" @submit.prevent="search">
           <el-form-item label="关键词"
-            ><el-input v-model="query.keyword" clearable placeholder="名称、编码或说明" @keyup.enter="search"
+            ><el-input v-model="query.keyword" clearable placeholder="名称或说明" @keyup.enter="search"
           /></el-form-item>
           <el-form-item label="类型"
             ><el-select v-model="query.intentType" clearable placeholder="全部类型"
@@ -97,7 +97,7 @@
           <el-table-column label="意图" min-width="190"
             ><template #default="{ row }"
               ><div class="intent-name">{{ row.intentName }}</div>
-              <div class="intent-code">{{ row.intentCode }}</div></template
+              </template
             ></el-table-column
           >
           <el-table-column label="分类" width="130"
@@ -146,9 +146,7 @@
       <el-form ref="formRef" :model="form" :rules="rules" label-width="110px">
         <el-divider content-position="left">基础信息</el-divider>
         <el-row :gutter="18">
-          <el-col :span="12"
-            ><el-form-item label="意图编码" prop="intentCode"><el-input v-model="form.intentCode" placeholder="例如 TRANSFER_HUMAN" /></el-form-item
-          ></el-col>
+          <AutoInternalCode v-model="form.intentCode" prefix="intent" />
           <el-col :span="12"
             ><el-form-item label="意图名称" prop="intentName"><el-input v-model="form.intentName" placeholder="例如 转人工" /></el-form-item
           ></el-col>
@@ -170,12 +168,12 @@
           ><el-input v-model="form.description" type="textarea" :rows="2" placeholder="说明该意图何时应命中、何时不应命中"
         /></el-form-item>
         <el-divider content-position="left">正反例话术</el-divider>
-        <el-alert title="正例描述用户可能怎么说；反例排除容易混淆但不应命中的表达。" type="info" :closable="false" class="mb-3" />
+        <el-alert title="正例描述用户可能怎么说；反例排除不应命中的表达。支持直接粘贴多行话术，每行一条，自动忽略空行和同列重复项，逗号不会拆句。" type="info" :closable="false" class="mb-3" />
         <div class="utterance-editor">
           <div class="utterance-column">
             <div class="column-title positive">正例话术</div>
             <div v-for="(item, index) in positiveUtterances" :key="item.key" class="utterance-row">
-              <el-input v-model="item.value" placeholder="例如：帮我转人工坐席" /><el-button
+              <el-input v-model="item.value" placeholder="例如：帮我转人工坐席；支持粘贴多行" @paste="pasteUtterances($event, 'POSITIVE', index)" /><el-button
                 icon="Delete"
                 circle
                 plain
@@ -188,7 +186,7 @@
           <div class="utterance-column">
             <div class="column-title negative">反例话术</div>
             <div v-for="(item, index) in negativeUtterances" :key="item.key" class="utterance-row">
-              <el-input v-model="item.value" placeholder="例如：不要转人工" /><el-button
+              <el-input v-model="item.value" placeholder="例如：不要转人工；支持粘贴多行" @paste="pasteUtterances($event, 'NEGATIVE', index)" /><el-button
                 icon="Delete"
                 circle
                 plain
@@ -199,6 +197,7 @@
             <el-button plain icon="Plus" @click="negativeUtterances.push(newUtterance())">添加反例</el-button>
           </div>
         </div>
+        <IntentRuleEditor v-model="form.matchRules" />
         <el-divider content-position="left">助手与动作建议</el-divider>
         <el-form-item label="绑定助手"
           ><el-select
@@ -220,7 +219,7 @@
         ></el-row>
         <el-form-item v-if="form.actionType === 'TRANSFER_QUEUE'" label="目标技能组"
           ><el-select v-model="actionQueueCode" filterable style="width: 100%"
-            ><el-option v-for="item in queues" :key="item.id" :label="`${item.queueName}（${item.queueCode}）`" :value="item.queueCode" /></el-select
+            ><el-option v-for="item in queues" :key="item.id" :label="item.queueName" :value="item.queueCode" /></el-select
         ></el-form-item>
         <el-form-item v-else-if="form.actionType === 'TRANSFER_EXTENSION'" label="目标分机"
           ><el-select v-model="actionExtension" filterable style="width: 100%"
@@ -232,14 +231,14 @@
         ></el-form-item>
         <el-form-item v-else-if="form.actionType === 'TRANSFER_IVR'" label="目标 IVR"
           ><el-select v-model="actionIvrFlowId" filterable style="width: 100%"
-            ><el-option v-for="item in ivrFlows" :key="item.id" :label="`${item.flowName}（${item.flowCode}）`" :value="String(item.id)" /></el-select
+            ><el-option v-for="item in ivrFlows" :key="item.id" :label="item.flowName" :value="String(item.id)" /></el-select
         ></el-form-item>
         <el-form-item v-else-if="form.actionType === 'TRANSFER_ONLINE_SERVICE'" label="在线客服组"
           ><el-select v-model="actionOnlineSkillGroupId" filterable style="width: 100%"
             ><el-option
               v-for="item in skillGroups"
               :key="item.id"
-              :label="`${item.groupName}（${item.groupCode}）`"
+              :label="item.groupName"
               :value="String(item.id)" /></el-select
         ></el-form-item>
         <template v-else-if="form.actionType === 'CREATE_TICKET'"
@@ -271,7 +270,7 @@
         <span>分类用于缩小识别范围，也便于编排时批量选择。</span><el-button type="primary" icon="Plus" @click="openGroupEditor()">新增分类</el-button>
       </div>
       <el-table :data="groups"
-        ><el-table-column prop="groupName" label="分类名称" /><el-table-column prop="groupCode" label="分类编码" /><el-table-column
+        ><el-table-column prop="groupName" label="分类名称" /><el-table-column
           prop="intentCount"
           label="意图数"
           width="80"
@@ -288,8 +287,7 @@
     <el-dialog v-model="groupEditorVisible" :title="groupForm.id ? '修改分类' : '新增分类'" width="520px" append-to-body>
       <el-form label-width="90px"
         ><el-form-item label="分类名称" required><el-input v-model="groupForm.groupName" /></el-form-item
-        ><el-form-item label="分类编码" required><el-input v-model="groupForm.groupCode" placeholder="例如 AFTER_SALE" /></el-form-item
-        ><el-form-item label="排序"><el-input-number v-model="groupForm.sortOrder" :min="1" :max="10000" /></el-form-item
+        ><AutoInternalCode v-model="groupForm.groupCode" prefix="group" /><el-form-item label="排序"><el-input-number v-model="groupForm.sortOrder" :min="1" :max="10000" /></el-form-item
         ><el-form-item label="说明"><el-input v-model="groupForm.description" type="textarea" :rows="2" /></el-form-item
         ><el-form-item label="启用"><el-switch v-model="groupForm.enabled" /></el-form-item
       ></el-form>
@@ -347,6 +345,10 @@
 </template>
 
 <script setup lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+import IntentRuleEditor from './IntentRuleEditor.vue';
+import { splitUtterancePaste } from './utterancePaste';
+
 import {
   batchUpdateAiIntents,
   createAiIntent,
@@ -403,7 +405,7 @@ const actionMeta: Record<AiIntentActionType, string> = {
   END_CALL: '结束通话',
   KNOWLEDGE_QUERY: '发起知识查询'
 };
-const methodText: Record<string, string> = { EXACT: '精确话术', VECTOR: '向量识别', MODEL: '模型分类', NONE: '无候选' };
+const methodText: Record<string, string> = { EXACT: '精确话术', RULE: '关键词规则', RULE_CONFLICT: '规则冲突', VECTOR: '向量识别', NONE: '未命中' };
 const intents = ref<AiIntentVO[]>([]);
 const groups = ref<AiIntentGroupVO[]>([]);
 const agents = ref<AiAgentVO[]>([]);
@@ -452,6 +454,20 @@ let utteranceKey = 0;
 const newUtterance = (value = '') => ({ key: ++utteranceKey, value });
 const positiveUtterances = ref([newUtterance()]);
 const negativeUtterances = ref([newUtterance()]);
+const pasteUtterances = (event: ClipboardEvent, type: 'POSITIVE' | 'NEGATIVE', index: number) => {
+  const text = event.clipboardData?.getData('text') || '';
+  if (!/[\r\n\u2028\u2029]/.test(text)) return;
+  event.preventDefault();
+  const target = event.target as HTMLInputElement;
+  const list = type === 'POSITIVE' ? positiveUtterances : negativeUtterances;
+  try {
+    const values = list.value.map(item => item.value);
+    const next = splitUtterancePaste(values, index, text, target.selectionStart ?? target.value.length, target.selectionEnd ?? target.value.length);
+    if (next !== values) list.value = next.map(value => newUtterance(value));
+  } catch (error) {
+    proxy?.$modal.msgWarning((error as Error).message);
+  }
+};
 const defaults = (): AiIntentForm => ({
   intentCode: '',
   intentName: '',
@@ -612,7 +628,7 @@ const openGroupEditor = (row?: AiIntentGroupVO) => {
 };
 const saveGroup = async () => {
   if (!groupForm.value.groupName.trim() || !groupForm.value.groupCode.trim()) {
-    proxy?.$modal.msgError('请填写分类名称和编码');
+    proxy?.$modal.msgError('请填写分类名称');
     return;
   }
   groupForm.value.id ? await updateAiIntentGroup(groupForm.value.id, groupForm.value) : await createAiIntentGroup(groupForm.value);
@@ -863,15 +879,18 @@ onMounted(async () => {
   padding: 9px;
   border: 0;
   border-radius: 8px;
-  background: #f7f9fc;
-  color: #53708f;
+  background: var(--el-color-primary);
+  color: var(--el-color-white);
   font-size: 12px;
   gap: 6px;
   cursor: pointer;
 }
 .group-add-button:hover {
-  color: #1764ad;
-  background: #edf4fb;
+  background: var(--el-color-primary-light-3);
+}
+.group-add-button:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
 }
 .group-list :deep(.el-empty) {
   padding: 10px 0;

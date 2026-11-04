@@ -5,7 +5,7 @@
         <el-button v-hasPermi="['callcenter:freeswitch-node-group:create']" type="primary" plain icon="Plus" @click="handleAdd">新增节点组</el-button>
       </template>
       <el-table v-loading="loading" :data="groups">
-        <el-table-column label="节点组编码" prop="groupCode" min-width="150" />
+
         <el-table-column label="节点组名称" prop="groupName" min-width="170" />
         <el-table-column label="成员数" prop="memberCount" width="90" />
         <el-table-column label="状态" width="90">
@@ -24,11 +24,11 @@
     <el-dialog v-model="dialog.visible" :title="dialog.title" width="620px" append-to-body>
       <el-alert class="mb-4" type="info" :closable="false" title="向节点组新增成员后，系统会自动补同步该组当前有效发布的媒体。" />
       <el-form ref="formRef" :model="form" :rules="rules" label-width="110px">
-        <el-form-item label="节点组编码" prop="groupCode"><el-input v-model="form.groupCode" /></el-form-item>
+        <AutoInternalCode v-model="form.groupCode" prefix="group" />
         <el-form-item label="节点组名称" prop="groupName"><el-input v-model="form.groupName" /></el-form-item>
         <el-form-item label="成员节点" prop="nodeIds">
           <el-select v-model="form.nodeIds" multiple filterable style="width: 100%">
-            <el-option v-for="node in nodes" :key="node.id" :label="`${node.nodeName}（${node.nodeCode}）`" :value="node.id" />
+            <el-option v-for="node in nodes" :key="node.id" :label="node.nodeName" :value="node.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态"><el-switch v-model="form.enabled" active-text="启用" inactive-text="停用" /></el-form-item>
@@ -40,6 +40,8 @@
 </template>
 
 <script setup name="FreeSwitchNodeGroup" lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+
 import { createNodeGroup, deleteNodeGroup, getNodeGroup, listNodeGroups, updateNodeGroup } from '@/api/callcenter/freeswitch-node-group';
 import { NodeGroupForm, NodeGroupVO } from '@/api/callcenter/freeswitch-node-group/types';
 import { listFreeSwitchNodes } from '@/api/callcenter/freeswitch-node';

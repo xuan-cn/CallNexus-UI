@@ -20,7 +20,7 @@
 
     <el-dialog v-model="formVisible" :title="formId ? '修改 AI 编排' : '新增 AI 编排'" width="640px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
-        <el-form-item label="编排编码" prop="workflowCode"><el-input v-model="form.workflowCode" placeholder="例如 SALES_OUTBOUND" /></el-form-item>
+        <AutoInternalCode v-model="form.workflowCode" prefix="aiflow" />
         <el-form-item label="编排名称" prop="workflowName"><el-input v-model="form.workflowName" /></el-form-item>
         <el-form-item label="适用场景" prop="sceneType"
           ><el-select v-model="form.sceneType" style="width: 100%"
@@ -39,7 +39,6 @@
       <div class="designer-header">
         <div class="designer-meta">
           <strong :title="currentWorkflow?.workflowName">{{ currentWorkflow?.workflowName }}</strong
-          ><span class="workflow-code">{{ currentWorkflow?.workflowCode }}</span
           ><el-tag type="warning">草稿 v{{ draft?.versionNo }}</el-tag>
         </div>
         <div class="designer-actions">
@@ -249,6 +248,8 @@
 </template>
 
 <script setup lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+
 import AiWorkflowDesigner from '@/components/callcenter/AiWorkflowDesigner/index.vue';
 import ConversationRulesForm from '@/components/callcenter/AiWorkflowDesigner/ConversationRulesForm.vue';
 import { validationIssues } from './validationIssues';

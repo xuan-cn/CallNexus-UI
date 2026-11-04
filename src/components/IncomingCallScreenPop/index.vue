@@ -55,6 +55,7 @@
             <div class="hero-actions">
               <el-button v-if="props.customerView" plain @click="handleClosed">返回</el-button>
               <el-button :disabled="!phone" @click="copyPhone">复制号码</el-button>
+              <el-button v-hasPermi="['callcenter:customer:sms']" :disabled="!customer?.id" @click="smsVisible = true">发送短信</el-button>
               <el-button type="primary" plain :disabled="!phone" @click="dialCustomer">外呼</el-button>
               <el-button type="primary" :loading="savingCustomer" @click="saveCustomerInfo">保存信息</el-button>
             </div>
@@ -466,6 +467,7 @@
         </div>
       </section>
     </div>
+    <SendSmsDrawer v-model="smsVisible" :customer-id="customer?.id" />
   </div>
 </template>
 
@@ -473,6 +475,7 @@
 import { ArrowDown, EditPen, Phone } from '@element-plus/icons-vue';
 import { ElMessage, type InputInstance } from 'element-plus';
 import AgentAssistPanel from '@/components/AgentAssistPanel/index.vue';
+import SendSmsDrawer from '@/components/BusinessSms/SendSmsDrawer.vue';
 import { generateAgentAssistTicketDraft, getAgentAssist, summarizeAgentAssistCustomer } from '@/api/callcenter/agent-assist';
 import { useAgentDialBus } from '@/composables/useAgentDial';
 import {
@@ -524,6 +527,7 @@ const booting = ref(false);
 const phone = ref('');
 const customerName = ref('');
 const customer = ref<CustomerVO>();
+const smsVisible = ref(false);
 const customerTemplates = ref<FormTemplate[]>([]);
 const ticketTemplates = ref<FormTemplate[]>([]);
 const customerTemplateId = ref<string | number>();

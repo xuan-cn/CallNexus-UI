@@ -395,7 +395,7 @@
             type="info"
             show-icon
             :closable="false"
-            title="这里展示业务通话、FreeSWITCH 通话腿 UUID、桥接关系和坐席参与记录，主要用于排查转接、静音、DTMF、无声和状态残留问题。"
+            title="这里展示业务通话、话务服务通话腿 UUID、桥接关系和坐席参与记录，主要用于排查转接、静音、DTMF、无声和状态残留问题。"
           />
           <el-collapse class="diagnostic-collapse" model-value="legs">
             <el-collapse-item title="通话腿" name="legs">

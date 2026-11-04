@@ -402,7 +402,7 @@
         />
         <el-descriptions class="call-summary" :column="3" border>
           <el-descriptions-item label="业务通话ID" :span="2">{{ topology.call.businessCallId }}</el-descriptions-item>
-          <el-descriptions-item label="FreeSWITCH节点">{{ topology.call.nodeId || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="话务服务节点">{{ topology.call.nodeId || '-' }}</el-descriptions-item>
           <el-descriptions-item label="主叫">{{ topology.call.callerNumber || '-' }}</el-descriptions-item>
           <el-descriptions-item label="被叫">{{ topology.call.calledNumber || '-' }}</el-descriptions-item>
           <el-descriptions-item label="当前归属坐席">{{ topology.call.ownerAgentExtension || '-' }}</el-descriptions-item>

@@ -84,7 +84,7 @@
     >
       <div class="editor-shell">
         <div class="meta-bar">
-          <el-input v-model="form.templateCode" placeholder="模板编码，如 customer" class="meta-input" />
+          <AutoInternalCode v-model="form.templateCode" prefix="tpl" />
           <el-input v-model="form.templateName" placeholder="模板名称，如 客户信息" class="meta-input" />
           <el-select v-model="form.businessType" class="meta-select">
             <el-option label="客户" value="CUSTOMER" />
@@ -110,7 +110,7 @@
               <el-option
                 v-for="item in workflowOptions"
                 :key="item.flowCode"
-                :label="`${item.flowName}（${item.flowCode}）`"
+                :label="item.flowName"
                 :value="item.flowCode"
               />
             </el-select>
@@ -174,7 +174,7 @@
                   <div class="field-list-title">{{ field.fieldName || '未命名字段' }}</div>
                   <div class="field-list-meta">
                     <span>{{ fieldTypeLabel(field.fieldType) }}</span>
-                    <span>{{ field.fieldCode || '未设置编码' }}</span>
+
                   </div>
                   <div v-if="field.enabled === false || field.required || field.listVisible || field.queryEnabled" class="field-list-flags">
                     <span v-if="field.enabled === false" class="is-disabled">已停用</span>
@@ -193,7 +193,7 @@
               <div class="property-heading">
                 <div>
                   <strong>{{ selectedField.fieldName || '未命名字段' }}</strong>
-                  <small>{{ fieldTypeLabel(selectedField.fieldType) }} · {{ selectedField.fieldCode || '未设置编码' }}</small>
+                  <small>{{ fieldTypeLabel(selectedField.fieldType) }}</small>
                 </div>
                 <el-tag size="small" effect="plain">字段属性</el-tag>
               </div>
@@ -207,11 +207,7 @@
                           <el-input v-model="selectedField.fieldName" placeholder="如 性别" />
                         </el-form-item>
                       </el-col>
-                      <el-col :span="12">
-                        <el-form-item label="字段编码" required>
-                          <el-input v-model="selectedField.fieldCode" placeholder="如 gender" />
-                        </el-form-item>
-                      </el-col>
+                      <AutoInternalCode v-model="selectedField.fieldCode" prefix="fld" />
                       <el-col :span="12">
                         <el-form-item label="字段类型">
                           <el-select v-model="selectedField.fieldType" style="width: 100%" @change="handleFieldTypeChange(selectedField)">
@@ -438,6 +434,9 @@
 </template>
 
 <script setup name="FormTemplateManagement" lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+import { createInternalCode, ensureInternalCode } from '@/utils/internalCode';
+
 import { Plus, Rank, Refresh } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { createFormTemplate, deleteFormTemplate, listFormTemplates, updateFormTemplate } from '@/api/callcenter/form-template';
@@ -565,7 +564,7 @@ const openEdit = (template: FormTemplate) => {
 const addField = () => {
   const field: EditableField = {
     localId: localId(),
-    fieldCode: '',
+    fieldCode: createInternalCode('fld'),
     fieldName: '',
     fieldType: 'INPUT',
     required: false,
@@ -644,12 +643,14 @@ const deadlineDurationLabel = (minutes?: number) => {
   return `${minutes} 分钟`;
 };
 const submit = async () => {
+  form.value.templateCode = ensureInternalCode(form.value.templateCode, 'tpl');
+  form.value.fields.forEach((field) => { field.fieldCode = ensureInternalCode(field.fieldCode, 'fld'); });
   if (!form.value.templateCode || !form.value.templateName) {
-    ElMessage.warning('请填写模板编码和模板名称');
+    ElMessage.warning('请填写模板名称');
     return;
   }
   if (form.value.fields.some((field) => !field.fieldCode || !field.fieldName)) {
-    ElMessage.warning('请填写所有字段的编码和名称');
+    ElMessage.warning('请填写所有字段的名称');
     return;
   }
   if (form.value.fields.some((field) => optionTypes.includes(field.fieldType) && !validOptions(field).length)) {

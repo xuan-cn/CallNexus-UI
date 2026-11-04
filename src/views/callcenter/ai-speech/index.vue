@@ -9,29 +9,44 @@
             </el-button>
           </div>
           <el-table v-loading="providerLoading" :data="providers">
-            <el-table-column label="编码" prop="providerCode" min-width="150" />
+
             <el-table-column label="名称" prop="providerName" min-width="160" />
-            <el-table-column label="类型" prop="providerType" width="170" />
-            <el-table-column label="能力" min-width="310">
+            <el-table-column label="能力" width="210">
               <template #default="{ row }">
-                <el-space wrap>
-                  <el-tag v-if="row.ttsEnabled" type="success">TTS</el-tag>
-                  <el-tag v-if="row.streamingTtsEnabled" type="success">实时 TTS</el-tag>
-                  <el-tag v-if="row.recordingAsrEnabled" type="primary">录音 ASR</el-tag>
-                  <el-tag v-if="row.streamingAsrEnabled" type="warning">流式 ASR</el-tag>
-                  <span v-if="!row.ttsEnabled && !row.streamingTtsEnabled && !row.recordingAsrEnabled && !row.streamingAsrEnabled">-</span>
-                </el-space>
+                <div class="speech-purpose-tags">
+                  <el-tooltip v-if="row.ttsEnabled" content="语音合成（TTS）：将文字一次性合成为音频。" placement="top">
+                    <el-tag size="small" type="info" effect="plain">合成</el-tag>
+                  </el-tooltip>
+                  <el-tooltip v-if="row.streamingTtsEnabled" content="实时语音合成：边生成边传输音频，用于实时对话播报。" placement="top">
+                    <el-tag size="small" type="info" effect="plain">实时合成</el-tag>
+                  </el-tooltip>
+                  <el-tooltip v-if="row.recordingAsrEnabled" content="录音识别（ASR）：识别上传的录音或完整音频片段。" placement="top">
+                    <el-tag size="small" type="info" effect="plain">录音识别</el-tag>
+                  </el-tooltip>
+                  <el-tooltip v-if="row.streamingAsrEnabled" content="实时语音识别：持续接收音频流并输出识别结果。" placement="top">
+                    <el-tag size="small" type="info" effect="plain">实时识别</el-tag>
+                  </el-tooltip>
+                  <span v-if="!row.ttsEnabled && !row.streamingTtsEnabled && !row.recordingAsrEnabled && !row.streamingAsrEnabled" class="purpose-empty">未开启</span>
+                </div>
               </template>
             </el-table-column>
-            <el-table-column label="默认用途" min-width="430">
+            <el-table-column label="默认用途" width="210">
               <template #default="{ row }">
-                <el-space class="default-purpose-tags">
-                  <el-tag v-if="row.defaultTts" effect="dark" type="success">默认 TTS</el-tag>
-                  <el-tag v-if="row.defaultStreamingTts" effect="dark" type="success">默认实时 TTS</el-tag>
-                  <el-tag v-if="row.defaultRecordingAsr" effect="dark">默认录音 ASR</el-tag>
-                  <el-tag v-if="row.defaultStreamingAsr" effect="dark" type="warning">默认流式 ASR</el-tag>
-                  <span v-if="!row.defaultTts && !row.defaultStreamingTts && !row.defaultRecordingAsr && !row.defaultStreamingAsr">-</span>
-                </el-space>
+                <div class="speech-purpose-tags">
+                  <el-tooltip v-if="row.defaultTts" content="默认语音合成服务：未指定服务商时，用于普通文字转语音。" placement="top">
+                    <el-tag size="small" effect="light">合成</el-tag>
+                  </el-tooltip>
+                  <el-tooltip v-if="row.defaultStreamingTts" content="默认实时语音合成服务：未指定服务商时，用于流式语音播报。" placement="top">
+                    <el-tag size="small" effect="light">实时合成</el-tag>
+                  </el-tooltip>
+                  <el-tooltip v-if="row.defaultRecordingAsr" content="默认录音识别服务：未指定服务商时，用于录音及音频片段识别。" placement="top">
+                    <el-tag size="small" effect="light">录音识别</el-tag>
+                  </el-tooltip>
+                  <el-tooltip v-if="row.defaultStreamingAsr" content="默认实时语音识别服务：未指定服务商时，用于流式音频识别。" placement="top">
+                    <el-tag size="small" effect="light">实时识别</el-tag>
+                  </el-tooltip>
+                  <span v-if="!row.defaultTts && !row.defaultStreamingTts && !row.defaultRecordingAsr && !row.defaultStreamingAsr" class="purpose-empty">未设默认</span>
+                </div>
               </template>
             </el-table-column>
             <el-table-column label="认证" width="100">
@@ -87,9 +102,8 @@
             </el-button>
           </div>
           <el-table v-loading="templateLoading" :data="templates">
-            <el-table-column label="模板编码" prop="templateCode" min-width="180" />
+
             <el-table-column label="模板名称" prop="templateName" min-width="160" />
-            <el-table-column label="业务类型" prop="businessType" min-width="180" />
             <el-table-column label="模板内容" prop="templateText" min-width="300" show-overflow-tooltip />
             <el-table-column label="默认音色" prop="defaultVoice" width="140" />
             <el-table-column label="状态" width="90">
@@ -130,14 +144,15 @@
           <el-table v-loading="taskLoading" :data="tasks">
             <el-table-column label="任务ID" prop="id" min-width="170" />
             <el-table-column label="任务类型" prop="taskType" width="140" />
-            <el-table-column label="业务类型" prop="businessType" width="160" />
-            <el-table-column label="服务商" prop="providerType" width="150" />
+            <el-table-column label="服务商" min-width="180" show-overflow-tooltip>
+              <template #default="{ row }">{{ taskProviderName(row) }}</template>
+            </el-table-column>
             <el-table-column label="状态" width="100">
               <template #default="{ row }">
                 <el-tag :type="taskStatusType(row.status)">{{ taskStatusText(row.status) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="失败原因" prop="failureReason" min-width="260" show-overflow-tooltip />
+            <el-table-column label="失败原因" prop="failureReason" width="220" show-overflow-tooltip />
             <el-table-column label="创建时间" prop="createTime" width="180" />
             <el-table-column label="完成时间" prop="finishedAt" width="180" />
           </el-table>
@@ -157,7 +172,7 @@
 
     <el-dialog v-model="templateDialog.visible" :title="templateForm.id ? '修改语音模板' : '新增语音模板'" width="720px">
       <el-form ref="templateFormRef" :model="templateForm" :rules="templateRules" label-width="110px">
-        <el-form-item label="模板编码" prop="templateCode"><el-input v-model="templateForm.templateCode" /></el-form-item>
+        <AutoInternalCode v-model="templateForm.templateCode" prefix="tpl" />
         <el-form-item label="模板名称" prop="templateName"><el-input v-model="templateForm.templateName" /></el-form-item>
         <el-form-item label="业务类型" prop="businessType"><el-input v-model="templateForm.businessType" /></el-form-item>
         <el-form-item label="模板内容" prop="templateText"><el-input v-model="templateForm.templateText" type="textarea" :rows="4" /></el-form-item>
@@ -229,6 +244,8 @@
 </template>
 
 <script setup lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+
 import { ArrowDown, UploadFilled } from '@element-plus/icons-vue';
 import type { FormInstance, FormRules } from 'element-plus';
 import {
@@ -270,6 +287,10 @@ const providerDefinitions = ref<SpeechProviderDefinitionVO[]>([]);
 const editingProvider = ref<AiSpeechProviderVO>();
 const templates = ref<AiSpeechTemplateVO[]>([]);
 const tasks = ref<AiSpeechTaskVO[]>([]);
+const taskProviderName = (task: AiSpeechTaskVO) => {
+  const provider = task.providerId == null ? undefined : providers.value.find((item) => String(item.id) === String(task.providerId));
+  return provider?.providerName || providerDefinitions.value.find((item) => item.providerType === task.providerType)?.label || '未知服务商';
+};
 const taskTotal = ref(0);
 
 const templateFormRef = ref<FormInstance>();
@@ -476,6 +497,17 @@ onMounted(reloadAll);
 </script>
 
 <style scoped>
+.speech-purpose-tags {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  align-items: center;
+  gap: 4px 6px;
+}
+.purpose-empty {
+  grid-column: 1 / -1;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
 .provider-section {
   margin-bottom: 20px;
   padding: 18px 18px 6px;

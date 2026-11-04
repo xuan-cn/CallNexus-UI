@@ -1,0 +1,91 @@
+// Shared hint text only. Keep control values, labels, icons and business data at their existing sizes.
+:root {
+  --app-font-size-hint: 10px;
+}
+
+:is(
+  .app-hint,
+  .el-alert__title,
+  .el-alert__description,
+  .el-form-item__error,
+  .el-upload__tip,
+  .el-message__content,
+  .el-notification__content,
+  .el-notification__title,
+  .el-message-box__message,
+  .el-message-box__title,
+  .el-popconfirm__main,
+  .el-popper.el-tooltip[role='tooltip']:not(
+      :is(
+        .el-select__popper,
+        .el-dropdown__popper,
+        .el-picker__popper,
+        .el-cascader__dropdown,
+        .el-autocomplete__popper,
+        .el-color-picker__panel,
+        .el-popover
+      )
+    ),
+  .action-tip,
+  .collapse-tip,
+  .column-setting-tip,
+  .conference-tip,
+  .deadline-dialog-tip,
+  .diagnostic-tip,
+  .editor-tip,
+  .field-description,
+  .field-help,
+  .field-hint,
+  .field-tip,
+  .form-section__hint,
+  .form-tip,
+  .hint,
+  .import-help,
+  .intercom-tip,
+  .keyword-warning,
+  .manager-tip,
+  .metric-explain,
+  .model-hint,
+  .number-hint,
+  .page-description,
+  .palette-description,
+  .panel-description,
+  .panel-desc,
+  .phone-tip,
+  .prompt-variable-help,
+  .prompt-variable-help-item,
+  .property-description,
+  .property-help,
+  .provider-desc,
+  .readonly-hint,
+  .reserved-note-title,
+  .reserved-note-content,
+  .rule-hint,
+  .section-description,
+  .section-desc,
+  .section-hint,
+  .simulation-hint,
+  .tab-description,
+  .toolbar-tip,
+  .upload-placeholder__tip,
+  .webrtc-first-leg-tip,
+  .workflow-tip
+) {
+  font-size: var(--app-font-size-hint) !important;
+  line-height: 1.5;
+
+  // A hint can contain emphasized text, links, or lists with their own scoped font sizes.
+  :where(p, span, small, strong, b, em, code, a, li, pre):not(
+      :is(button, .el-button, .el-icon, .el-tag, .el-input, .el-select, .el-textarea, .el-checkbox, .el-radio, .el-switch, .el-tabs)
+    ):not(:is(button, .el-button, .el-icon, .el-tag, .el-input, .el-select, .el-textarea, .el-checkbox, .el-radio, .el-switch, .el-tabs) *) {
+    font-size: var(--app-font-size-hint) !important;
+  }
+}
+
+input::placeholder,
+textarea::placeholder,
+.el-select__placeholder.is-transparent,
+.el-input__count-inner,
+.el-textarea > .el-input__count {
+  font-size: var(--app-font-size-hint) !important;
+}

@@ -186,7 +186,7 @@ const agentStatuses = [
 ];
 
 const services = [
-  { name: 'FreeSWITCH', description: '媒体与通话控制', state: '运行中', tone: 'blue', icon: Phone },
+  { name: '话务服务', description: '媒体与通话控制', state: '运行中', tone: 'blue', icon: Phone },
   { name: 'ESL 连接', description: '事件监听与命令通道', state: '已连接', tone: 'green', icon: Connection },
   { name: 'WebSocket', description: '实时状态推送', state: '运行中', tone: 'purple', icon: SwitchButton }
 ];

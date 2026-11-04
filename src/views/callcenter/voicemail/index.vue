@@ -86,7 +86,7 @@
             <el-button type="primary" plain icon="Plus" @click="openBoxForm()">新增留言箱</el-button>
           </template>
           <el-table v-loading="boxLoading" :data="boxList">
-            <el-table-column label="编码" prop="boxCode" min-width="140" />
+
             <el-table-column label="名称" prop="boxName" min-width="160" />
             <el-table-column label="提示音" prop="promptMediaName" min-width="180" />
             <el-table-column label="最长秒数" prop="maxSeconds" width="100" />
@@ -151,9 +151,7 @@
 
     <el-dialog v-model="boxDialog.visible" :title="boxDialog.title" width="640px" append-to-body>
       <el-form ref="boxFormRef" :model="boxForm" :rules="boxRules" label-width="110px">
-        <el-form-item label="编码" prop="boxCode">
-          <el-input v-model="boxForm.boxCode" />
-        </el-form-item>
+        <AutoInternalCode v-model="boxForm.boxCode" prefix="box" />
         <el-form-item label="名称" prop="boxName">
           <el-input v-model="boxForm.boxName" />
         </el-form-item>
@@ -187,6 +185,8 @@
 </template>
 
 <script setup name="VoiceMail" lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+
 import {
   createVoiceMailBox,
   deleteVoiceMailBox,

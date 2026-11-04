@@ -3,7 +3,7 @@
     <el-card shadow="never"
       ><div class="mb-3"><el-button type="primary" plain icon="Plus" @click="edit()">新增 AI 助手</el-button></div>
       <el-table :data="agents"
-        ><el-table-column label="编码" prop="agentCode" min-width="130" /><el-table-column
+        ><el-table-column
           label="名称"
           prop="agentName"
           min-width="150"
@@ -40,10 +40,8 @@
             <section class="edit-section">
               <div class="edit-section-title">身份信息</div>
               <el-row :gutter="16">
-                <el-col :span="12">
-                  <el-form-item label="助手编码"><el-input v-model="form.agentCode" /></el-form-item>
-                </el-col>
-                <el-col :span="12">
+                <AutoInternalCode v-model="form.agentCode" prefix="agent" />
+                <el-col :span="24">
                   <el-form-item label="助手名称"><el-input v-model="form.agentName" /></el-form-item>
                 </el-col>
               </el-row>
@@ -312,8 +310,8 @@
             </template>
           </el-tab-pane>
 
-          <el-tab-pane label="坐席辅助" name="assist">
-            <el-alert v-if="!form.id" type="info" :closable="false" title="请先保存 AI 助手，再配置坐席工作台能力。" />
+          <el-tab-pane label="AI 总结" name="assist">
+            <el-alert v-if="!form.id" type="info" :closable="false" title="请先保存 AI 助手，再配置客户通话总结、自动工单和业务提示词。" />
             <template v-else>
               <section class="edit-section">
                 <div class="edit-section-title">坐席工作台能力</div>
@@ -325,11 +323,18 @@
                 />
                 <div class="customer-summary-config">
                   <div class="customer-summary-heading">
-                    <div>
+                    <div class="customer-summary-description">
                       <span>客户通话总结</span>
                       <small>坐席点击“AI 总结到客户字段”后，将当前人工通话的对话摘要写入指定客户文本字段。</small>
                     </div>
-                    <el-switch v-model="ticketPolicy.customerSummaryEnabled" active-text="启用" />
+                    <el-switch
+                      v-model="ticketPolicy.customerSummaryEnabled"
+                      class="customer-summary-switch"
+                      inline-prompt
+                      active-text="启用"
+                      inactive-text="停用"
+                      aria-label="启用客户通话总结"
+                    />
                   </div>
                   <el-row v-if="ticketPolicy.customerSummaryEnabled" :gutter="16">
                     <el-col :span="12">
@@ -366,19 +371,10 @@
                     </el-col>
                   </el-row>
                 </div>
-                <div class="section-actions">
-                  <el-button type="primary" :loading="ticketSaving" @click="saveAssistPolicy">保存坐席辅助配置</el-button>
-                </div>
               </section>
-            </template>
-          </el-tab-pane>
-
-          <el-tab-pane label="自动工单" name="ticket">
-            <el-alert v-if="!form.id" type="info" :closable="false" title="请先保存 AI 助手，再配置自动工单策略和提示词。" />
-            <template v-else>
               <section class="edit-section">
                 <div class="edit-section-title ticket-section-title">
-                  <span>生成策略</span><el-switch v-model="ticketPolicy.enabled" active-text="启用自动工单" />
+                  <span>自动工单</span><el-switch v-model="ticketPolicy.enabled" active-text="启用自动工单" />
                 </div>
                 <el-alert
                   class="mb-4"
@@ -462,12 +458,12 @@
                     ></el-col>
                   </template>
                 </el-row>
-                <div class="section-actions"><el-button type="primary" :loading="ticketSaving" @click="saveTicketPolicy">保存策略</el-button></div>
+                <div class="section-actions"><el-button type="primary" :loading="ticketSaving" @click="saveTicketPolicy">保存 AI 总结配置</el-button></div>
               </section>
 
               <section class="edit-section">
                 <div class="edit-section-title ticket-section-title">
-                  <span>业务提示词</span
+                  <span>自动工单提示词</span
                   ><el-tag :type="ticketPrompt.status === 'PUBLISHED' ? 'success' : ticketPrompt.status === 'DRAFT' ? 'warning' : 'info'">{{
                     promptStatusLabel(ticketPrompt.status)
                   }}</el-tag>
@@ -554,6 +550,8 @@
   </div>
 </template>
 <script setup lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+
 import {
   createAiAgent,
   deleteAiAgent,
@@ -811,19 +809,7 @@ const saveTicketPolicy = async () => {
   try {
     const { id, aiAgentId, activePromptVersionId, version, ...payload } = ticketPolicy.value;
     await saveAiTicketPolicy(form.value.id, payload);
-    proxy?.$modal.msgSuccess('自动工单策略已保存');
-    await loadTicketConfiguration(form.value.id);
-  } finally {
-    ticketSaving.value = false;
-  }
-};
-const saveAssistPolicy = async () => {
-  if (!form.value.id) return;
-  ticketSaving.value = true;
-  try {
-    const { id, aiAgentId, activePromptVersionId, version, ...payload } = ticketPolicy.value;
-    await saveAiTicketPolicy(form.value.id, payload);
-    proxy?.$modal.msgSuccess('坐席辅助配置已保存');
+    proxy?.$modal.msgSuccess('AI 总结配置已保存');
     await loadTicketConfiguration(form.value.id);
   } finally {
     ticketSaving.value = false;
@@ -1068,21 +1054,26 @@ onMounted(load);
   gap: 16px;
   margin-bottom: 12px;
 
-  > div {
+  > .customer-summary-description {
     display: flex;
     flex-direction: column;
     gap: 3px;
+    min-width: 0;
   }
 
-  span {
+  .customer-summary-description > span {
     color: #27364d;
     font-size: 13px;
   }
 
-  small {
+  .customer-summary-description > small {
     color: #7b8798;
     font-size: 11px;
     line-height: 1.5;
+  }
+
+  > .customer-summary-switch {
+    flex: 0 0 auto;
   }
 }
 

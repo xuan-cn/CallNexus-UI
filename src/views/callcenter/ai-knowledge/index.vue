@@ -24,7 +24,7 @@
               <span class="base-avatar">{{ (row.knowledgeName || '?').trim().charAt(0) }}</span>
               <div class="base-item-main">
                 <strong>{{ row.knowledgeName }}</strong>
-                <small>{{ row.knowledgeCode }}</small>
+
               </div>
               <div class="base-item-meta">
                 <el-tag size="small" :type="statusType(row.status)" effect="light" round>{{ statusText(row.status) }}
@@ -155,7 +155,8 @@
                 />
               </div>
             </el-tab-pane>
-            <el-tab-pane label="索引任务" name="task">
+            <!-- Hide the entry only; retain indexing, retry and task data. -->
+            <el-tab-pane v-if="false" label="索引任务" name="task">
               <div class="panel-body">
                 <div class="panel-toolbar task-toolbar">
                   <span>后台索引与重建任务，约每 5 秒自动刷新</span>
@@ -222,12 +223,8 @@
     <el-dialog v-model="baseDialog" :title="baseForm.id?'修改知识库':'新增知识库'" width="880px">
       <el-form :model="baseForm" label-width="110px">
         <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="知识库编码">
-              <el-input v-model="baseForm.knowledgeCode" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
+          <AutoInternalCode v-model="baseForm.knowledgeCode" prefix="kb" />
+          <el-col :span="24">
             <el-form-item label="知识库名称">
               <el-input v-model="baseForm.knowledgeName" />
             </el-form-item>
@@ -273,12 +270,8 @@
     <el-dialog v-model="faqDialog" :title="faqForm.id?'修改 FAQ':'新增 FAQ'" width="720px">
       <el-form :model="faqForm" label-width="110px">
         <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="FAQ编码">
-              <el-input v-model="faqForm.faqCode" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
+          <AutoInternalCode v-model="faqForm.faqCode" prefix="faq" />
+          <el-col :span="24">
             <el-form-item label="FAQ名称">
               <el-input v-model="faqForm.faqName" />
             </el-form-item>
@@ -377,12 +370,8 @@
     <el-dialog v-model="candidateEditDialog" title="审核 FAQ 候选" width="760px">
       <el-form :model="candidateForm" label-width="100px">
         <el-row :gutter="12">
-          <el-col :span="12">
-            <el-form-item label="FAQ编码">
-              <el-input v-model="candidateForm.faqCode" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
+          <AutoInternalCode v-model="candidateForm.faqCode" prefix="faq" />
+          <el-col :span="24">
             <el-form-item label="FAQ名称">
               <el-input v-model="candidateForm.faqName" />
             </el-form-item>
@@ -444,6 +433,8 @@
 </template>
 
 <script setup lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+
 import {
   confirmFaqCandidates as confirmFaqCandidateBatch,
   createKnowledgeBase,

@@ -1,7 +1,7 @@
 <template>
   <section v-loading="loading" class="workflow-library" aria-label="AI 编排列表">
     <div class="library-filters">
-      <el-input v-model="keyword" clearable placeholder="搜索编排名称或编码" aria-label="搜索编排" class="library-search" />
+      <el-input v-model="keyword" clearable placeholder="搜索编排名称" aria-label="搜索编排" class="library-search" />
       <el-select v-model="scene" clearable placeholder="全部场景" aria-label="编排场景">
         <el-option v-for="item in scenes" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>

@@ -40,7 +40,7 @@
           </el-select>
         </el-form-item>
         <el-form-item v-else-if="mode === 'queue'">
-          <el-input v-model="query.keyword" clearable placeholder="队列名称或编码" @keyup.enter="handleQuery" />
+          <el-input v-model="query.keyword" clearable placeholder="队列名称" @keyup.enter="handleQuery" />
         </el-form-item>
         <el-form-item v-if="mode === 'call' || mode === 'agent'" :label="mode === 'call' ? '坐席' : undefined">
           <el-select v-model="query.agentId" clearable filterable placeholder="全部坐席" class="agent-filter">
@@ -152,7 +152,7 @@
           <el-table-column label="坐席" min-width="112"
             ><template #default="{ row }"
               ><div class="primary-cell">{{ row.agentName }}</div>
-              <div class="secondary-cell">{{ row.extension || row.agentCode }}</div></template
+              <div class="secondary-cell">{{ row.extension || '-' }}</div></template
             ></el-table-column
           >
           <el-table-column label="技能组" prop="skillGroupNames" min-width="110" show-overflow-tooltip />
@@ -209,7 +209,7 @@
           <el-table-column label="队列" min-width="126"
             ><template #default="{ row }"
               ><div class="primary-cell">{{ row.queueName }}</div>
-              <div class="secondary-cell">{{ row.queueCode }}</div></template
+              </template
             ></el-table-column
           >
           <el-table-column label="技能组" prop="skillGroupName" min-width="108" show-overflow-tooltip />

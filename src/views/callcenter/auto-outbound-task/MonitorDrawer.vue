@@ -5,7 +5,7 @@
         <div class="monitor-heading">
           <div>
             <div class="task-name">{{ task?.taskName }}</div>
-            <div class="secondary">{{ task?.taskCode }}</div>
+
           </div>
           <el-tag :type="monitor.taskStatus === 'RUNNING' ? 'success' : 'info'">{{ statusLabel(monitor.taskStatus) }}</el-tag>
         </div>
@@ -42,7 +42,7 @@
           <el-descriptions-item label="调度摘要">{{ monitor.lastScheduleSummary || '尚未执行调度' }}</el-descriptions-item>
         </el-descriptions>
         <el-alert
-          title="调度器生成待拨任务，拨号执行器随后向 FreeSWITCH 发起呼叫；AI/IVR 通话结果会自动回写。"
+          title="调度器生成待拨任务，拨号执行器随后向话务服务发起呼叫；AI/IVR 通话结果会自动回写。"
           type="success"
           :closable="false"
           show-icon

@@ -79,7 +79,7 @@
               <div class="agent-avatar">{{ agentInitial(agent) }}</div>
               <div class="agent-identity">
                 <span class="agent-name">{{ agent.agentName || '-' }}</span>
-                <small>{{ agent.agentCode }}<template v-if="agent.extension"> · 分机 {{ agent.extension }}</template></small>
+                <small v-if="agent.extension">分机 {{ agent.extension }}</small>
               </div>
               <div class="agent-status-group">
                 <span class="presence-status"><i></i>{{ agent.status === 'OFFLINE' ? '离线' : '在线' }}</span>
@@ -250,7 +250,7 @@ const callQuery = reactive<PageQuery>({ pageNum: 1, pageSize: 10 });
 const presenceQuery = reactive<PageQuery>({ pageNum: 1, pageSize: 10 });
 let timer: ReturnType<typeof setInterval> | undefined;
 
-const detailTitle = computed(() => currentAgent.value ? `${currentAgent.value.agentName}（${currentAgent.value.agentCode}）` : '坐席详情');
+const detailTitle = computed(() => currentAgent.value ? `${currentAgent.value.agentName}` : '坐席详情');
 const dateRangeLabel = computed(() => dateRange.value[0] === dateRange.value[1] ? dateRange.value[0] : `${dateRange.value[0]} 至 ${dateRange.value[1]}`);
 const overviewItems = computed(() => [
   { label: '坐席总数', value: overview.value?.totalAgentCount || 0, extra: `在线 ${overview.value?.onlineAgentCount || 0} · 离线 ${overview.value?.offlineAgentCount || 0}`, tone: 'tone-total' },

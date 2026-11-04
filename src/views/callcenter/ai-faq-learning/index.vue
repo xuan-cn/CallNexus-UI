@@ -42,7 +42,7 @@
           <div class="detail-header"><div><h3>审核 FAQ 候选</h3><span>{{ current.agentName }} · {{ current.sourceChannel === 'VOICE' ? 'AI语音通话' : '在线对话' }}</span></div><el-tag :type="statusType(current.status)">{{ statusText(current.status) }}</el-tag></div>
           <section class="source-section"><label>用户问题</label><div class="message user-message">{{ current.standardQuestion }}</div><label>模型兜底回答</label><div class="message assistant-message">{{ current.standardAnswer }}</div></section>
           <el-form :model="form" label-position="top" class="review-form">
-            <el-row :gutter="12"><el-col :span="10"><el-form-item label="FAQ编码"><el-input v-model="form.faqCode" /></el-form-item></el-col><el-col :span="14"><el-form-item label="FAQ名称"><el-input v-model="form.faqName" /></el-form-item></el-col></el-row>
+            <el-row :gutter="12"><AutoInternalCode v-model="form.faqCode" prefix="faq" /><el-col :span="24"><el-form-item label="FAQ名称"><el-input v-model="form.faqName" /></el-form-item></el-col></el-row>
             <el-form-item label="标准问题"><el-input v-model="form.standardQuestion" type="textarea" :rows="2" /></el-form-item>
             <el-form-item label="标准答案"><el-input v-model="form.standardAnswer" type="textarea" :rows="5" /></el-form-item>
             <el-form-item label="相似问法"><el-select v-model="form.aliases" multiple filterable allow-create default-first-option style="width: 100%" /></el-form-item>
@@ -60,7 +60,10 @@
 </template>
 
 <script setup lang="ts">
-import { ElMessage, ElMessageBox } from 'element-plus';
+import AutoInternalCode from '@/components/AutoInternalCode';
+
+import { h } from 'vue';
+import { ElMessage, ElMessageBox, ElSelect, ElOption } from 'element-plus';
 import {
   approveFaqLearningCandidate, batchApproveFaqLearningCandidates, batchMergeFaqLearningCandidates,
   batchRejectFaqLearningCandidates, getFaqLearningCandidate, getFaqLearningStatistics, listKnowledgeBases,
@@ -89,7 +92,27 @@ const setStatus = (status: string) => { query.status = status; search(); };
 const fill = (value: FaqLearningCandidateVO) => Object.assign(form, { faqCode: value.faqCode, faqName: value.faqName, standardQuestion: value.standardQuestion, standardAnswer: value.standardAnswer, aliases: [...(value.aliases || [])], answerMode: value.answerMode || 'DIRECT' });
 const selectRow = async (row?: FaqLearningCandidateVO) => { if (!row) return; current.value = (await getFaqLearningCandidate(row.id)).data; if (current.value) fill(current.value); };
 const approve = async () => { if (!current.value) return; await approveFaqLearningCandidate(current.value.id, form); ElMessage.success('已发布到 FAQ，索引任务正在执行'); await refresh(); };
-const selectFaq = async (knowledgeBaseId: Id) => { const faqs = (await listKnowledgeFaqs(knowledgeBaseId)).data || []; const values = faqs.filter((item) => item.enabled); if (!values.length) throw new Error('当前知识库没有可合并的 FAQ'); const { value } = await ElMessageBox.prompt(`请输入目标 FAQ 编码：${values.slice(0, 8).map((item) => item.faqCode).join('、')}`, '合并到已有 FAQ', { inputValidator: (code) => values.some((item) => item.faqCode === code) || '请输入列表中有效的 FAQ 编码' }); return values.find((item) => item.faqCode === value) as KnowledgeFaqVO; };
+const selectFaq = async (knowledgeBaseId: Id) => {
+  const values = ((await listKnowledgeFaqs(knowledgeBaseId)).data || []).filter((item) => item.enabled);
+  if (!values.length) throw new Error('当前知识库没有可合并的 FAQ');
+  const selectedId = ref<Id>();
+  await ElMessageBox({
+    title: '合并到已有 FAQ',
+    showCancelButton: true,
+    message: () => h(ElSelect, {
+      modelValue: selectedId.value,
+      'onUpdate:modelValue': (value: Id) => { selectedId.value = value; },
+      filterable: true,
+      placeholder: '选择目标 FAQ',
+      style: { width: '100%' }
+    }, () => values.map((item) => h(ElOption, { key: item.id, value: item.id, label: item.faqName || item.standardQuestion }))),
+    beforeClose: (action, _instance, done) => {
+      if (action === 'confirm' && !selectedId.value) { ElMessage.warning('请选择目标 FAQ'); return; }
+      done();
+    }
+  });
+  return values.find((item) => item.id === selectedId.value) as KnowledgeFaqVO;
+};
 const mergeOne = async () => { if (!current.value) return; const faq = await selectFaq(current.value.knowledgeBaseId); await mergeFaqLearningCandidate(current.value.id, faq.id); ElMessage.success('已作为相似问法合并'); await refresh(); };
 const rejectOne = async () => { if (!current.value) return; const { value } = await ElMessageBox.prompt('填写驳回原因', '驳回候选', { inputValidator: (text) => Boolean(text?.trim()) || '请填写原因' }); await rejectFaqLearningCandidate(current.value.id, value); ElMessage.success('已驳回'); await refresh(); };
 const reopen = async () => { if (!current.value) return; await reopenFaqLearningCandidate(current.value.id); await refresh(); };

@@ -33,7 +33,9 @@
             <el-button v-hasPermi="['callcenter:sip-account:create']" type="primary" plain icon="Plus" @click="handleAdd"> 新增 SIP 分机 </el-button>
           </el-col>
           <el-col :span="1.5">
-            <el-button v-hasPermi="['callcenter:sip-account:create']" type="success" plain icon="DocumentAdd" @click="handleBatchAdd">批量新增</el-button>
+            <el-button v-hasPermi="['callcenter:sip-account:create']" type="success" plain icon="DocumentAdd" @click="handleBatchAdd"
+              >批量新增</el-button
+            >
           </el-col>
           <right-toolbar v-model:show-search="showSearch" @query-table="getList" />
         </el-row>
@@ -42,7 +44,7 @@
         <el-table-column label="分机号" prop="extension" min-width="100" />
         <el-table-column label="SIP 登录名" prop="authUsername" min-width="180" />
         <el-table-column label="显示名称" prop="displayName" min-width="150" />
-        <el-table-column label="FreeSWITCH 节点" prop="nodeName" min-width="170">
+        <el-table-column label="话务服务节点" prop="nodeName" min-width="170">
           <template #default="{ row }">{{ row.nodeName || '未绑定' }}</template>
         </el-table-column>
         <el-table-column label="SIP 域" prop="domain" min-width="180" />
@@ -79,14 +81,7 @@
               icon="Lock"
               @click="handleSecurityLock(row)"
             />
-            <el-button
-              v-else
-              v-hasPermi="['callcenter:sip-security:unblock']"
-              link
-              type="success"
-              icon="Unlock"
-              @click="handleSecurityUnlock(row)"
-            />
+            <el-button v-else v-hasPermi="['callcenter:sip-security:unblock']" link type="success" icon="Unlock" @click="handleSecurityUnlock(row)" />
             <el-button v-hasPermi="['callcenter:sip-account:delete']" link type="danger" icon="Delete" @click="handleDelete(row)" />
           </template>
         </el-table-column>
@@ -94,7 +89,7 @@
       <pagination v-show="total > 0" v-model:page="queryParams.pageNum" v-model:limit="queryParams.pageSize" :total="total" @pagination="getList" />
     </el-card>
 
-    <el-dialog v-model="dialog.visible" :title="dialog.title" width="620px" append-to-body>
+    <el-dialog v-model="dialog.visible" :title="dialog.title" width="620px" append-to-body @closed="reset">
       <el-alert
         class="mb-4"
         type="info"
@@ -104,7 +99,7 @@
       />
       <el-form ref="formRef" :model="form" :rules="rules" label-width="105px">
         <el-form-item label="节点" prop="nodeId">
-          <el-select v-model="form.nodeId" filterable placeholder="请选择启用的 FreeSWITCH 节点" style="width: 100%" @change="handleNodeChange">
+          <el-select v-model="form.nodeId" filterable placeholder="请选择启用的话务服务节点" style="width: 100%" @change="handleNodeChange">
             <el-option v-for="node in nodeOptions" :key="node.id" :label="`${node.nodeName}（${node.sipDomain}）`" :value="node.id" />
           </el-select>
         </el-form-item>
@@ -118,10 +113,16 @@
           <el-input v-model="form.displayName" placeholder="例如 客服分机1003" />
         </el-form-item>
         <el-form-item label="SIP 域" prop="domain">
-          <el-input v-model="form.domain" placeholder="FreeSWITCH 域名或 IP" />
+          <el-input v-model="form.domain" placeholder="话务服务域名或 IP" />
         </el-form-item>
-        <el-form-item :label="form.id ? '新密码' : '认证密码'" prop="password">
-          <el-input v-model="form.password" type="password" show-password :placeholder="form.id ? '留空表示不修改' : '至少12位安全密码'" />
+        <el-form-item label="认证密码" prop="password">
+          <el-input
+            v-model="form.password"
+            type="password"
+            show-password
+            autocomplete="new-password"
+            :placeholder="form.id ? '当前密码，留空表示不修改' : '至少12位安全密码'"
+          />
         </el-form-item>
         <el-form-item v-if="form.id" label="状态">
           <el-switch v-model="form.enabled" active-text="启用" inactive-text="停用" />
@@ -134,10 +135,16 @@
     </el-dialog>
 
     <el-drawer v-model="batchDialog.visible" title="批量新增 SIP 分机" size="520px" append-to-body :close-on-click-modal="false">
-      <el-alert class="mb-4" type="info" show-icon :closable="false" title="系统将从起始分机号开始连续生成，单次最多新增 200 个。任一号码重复时整批不会写入。" />
+      <el-alert
+        class="mb-4"
+        type="info"
+        show-icon
+        :closable="false"
+        title="系统将从起始分机号开始连续生成，单次最多新增 200 个。任一号码重复时整批不会写入。"
+      />
       <el-form ref="batchFormRef" :model="batchForm" :rules="batchRules" label-width="110px">
         <el-form-item label="节点" prop="nodeId">
-          <el-select v-model="batchForm.nodeId" filterable placeholder="请选择启用的 FreeSWITCH 节点" style="width: 100%">
+          <el-select v-model="batchForm.nodeId" filterable placeholder="请选择启用的话务服务节点" style="width: 100%">
             <el-option v-for="node in nodeOptions" :key="node.id" :label="`${node.nodeName}（${node.sipDomain}）`" :value="node.id" />
           </el-select>
         </el-form-item>
@@ -171,6 +178,7 @@ import {
   createSipAccount,
   deleteSipAccount,
   getSipAccount,
+  getSipAccountPassword,
   listSipAccounts,
   lockSipAccount,
   unlockSipAccount,
@@ -192,10 +200,17 @@ const queryFormRef = ref<ElFormInstance>();
 const formRef = ref<ElFormInstance>();
 const batchFormRef = ref<ElFormInstance>();
 const dialog = reactive<DialogOption>({ visible: false, title: '' });
+const originalPassword = ref('');
 const batchDialog = reactive({ visible: false, submitting: false });
-const batchForm = reactive<SipAccountBatchCreateForm>({ nodeId: undefined, startExtension: '1001', count: 10, displayNamePrefix: '客服分机', password: '' });
+const batchForm = reactive<SipAccountBatchCreateForm>({
+  nodeId: undefined,
+  startExtension: '1001',
+  count: 10,
+  displayNamePrefix: '客服分机',
+  password: ''
+});
 const batchRules = {
-  nodeId: [{ required: true, message: '请选择 FreeSWITCH 节点', trigger: 'change' }],
+  nodeId: [{ required: true, message: '请选择话务服务节点', trigger: 'change' }],
   startExtension: [{ required: true, pattern: /^[0-9]{2,16}$/, message: '请输入2到16位数字分机号', trigger: 'blur' }],
   count: [{ required: true, type: 'number', min: 1, max: 200, message: '新增数量为1到200', trigger: 'change' }],
   displayNamePrefix: [{ required: true, message: '请输入显示名称前缀', trigger: 'blur' }],
@@ -237,6 +252,10 @@ const authUsernameValidator = (_rule: unknown, value: string, callback: (error?:
 };
 
 const passwordValidator = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
+  if (form.value.id && value === originalPassword.value) {
+    callback();
+    return;
+  }
   if (!form.value.id && (!value || value.length < 12)) {
     callback(new Error('密码至少12位'));
     return;
@@ -252,7 +271,7 @@ const data = reactive<PageData<SipAccountForm, SipAccountQuery>>({
   form: { ...initialForm },
   queryParams: { pageNum: 1, pageSize: 10, extension: '', authUsername: '', displayName: '', enabled: undefined },
   rules: {
-    nodeId: [{ required: true, message: '请选择 FreeSWITCH 节点', trigger: 'change' }],
+    nodeId: [{ required: true, message: '请选择话务服务节点', trigger: 'change' }],
     extension: [{ required: true, pattern: /^[0-9]{2,16}$/, message: '请输入2到16位数字分机号', trigger: 'blur' }],
     authUsername: [{ validator: authUsernameValidator, trigger: 'blur' }],
     displayName: [{ required: true, message: '显示名称不能为空', trigger: 'blur' }],
@@ -307,6 +326,7 @@ const resetQuery = () => {
 };
 
 const reset = () => {
+  originalPassword.value = '';
   form.value = { ...initialForm };
   formRef.value?.resetFields();
 };
@@ -343,8 +363,9 @@ const submitBatchForm = () =>
 const handleUpdate = async (row: SipAccountVO) => {
   reset();
   await loadNodeOptions();
-  const res = await getSipAccount(row.id);
-  Object.assign(form.value, res.data, { password: '' });
+  const [res, passwordRes] = await Promise.all([getSipAccount(row.id), getSipAccountPassword(row.id)]);
+  originalPassword.value = passwordRes.data.password || '';
+  Object.assign(form.value, res.data, { password: originalPassword.value });
   dialog.title = '修改 SIP 分机';
   dialog.visible = true;
 };
@@ -366,7 +387,7 @@ const submitForm = () =>
     if (!payload.authUsername?.trim()) {
       delete payload.authUsername;
     }
-    if (payload.id && !payload.password?.trim()) {
+    if (payload.id && (!payload.password?.trim() || payload.password === originalPassword.value)) {
       delete payload.password;
     }
     form.value.id ? await updateSipAccount(payload) : await createSipAccount(payload);

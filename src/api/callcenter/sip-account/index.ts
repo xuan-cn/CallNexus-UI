@@ -14,6 +14,9 @@ export const listSipAccounts = (query: SipAccountQuery): AxiosPromise<SipAccount
 
 export const getSipAccount = (id: string | number): AxiosPromise<SipAccountVO> => request({ url: `/api/v1/sip-accounts/${id}`, method: 'get' });
 
+export const getSipAccountPassword = (id: string | number): AxiosPromise<{ password: string }> =>
+  request({ url: `/api/v1/sip-accounts/${id}/password`, method: 'get' });
+
 export const createSipAccount = (data: SipAccountForm) =>
   request({ url: '/api/v1/sip-accounts', method: 'post', data, headers: { isEncrypt: 'true' } });
 

@@ -5,7 +5,7 @@
         <el-button v-hasPermi="['callcenter:call-queue:create']" type="primary" plain icon="Plus" @click="handleAdd">新增队列</el-button>
       </template>
       <el-table v-loading="loading" :data="queues">
-        <el-table-column label="队列编码" prop="queueCode" min-width="140" />
+
         <el-table-column label="队列名称" prop="queueName" min-width="160" />
         <el-table-column label="技能组" prop="skillGroupName" min-width="160" />
         <el-table-column label="节点组" prop="nodeGroupName" min-width="160" />
@@ -62,11 +62,7 @@
                 </div>
               </div>
               <el-row :gutter="16">
-                <el-col :span="12">
-                  <el-form-item label="队列编码" prop="queueCode">
-                    <el-input v-model="form.queueCode" placeholder="例如 SUPPORT_QUEUE" />
-                  </el-form-item>
-                </el-col>
+                <AutoInternalCode v-model="form.queueCode" prefix="queue" />
                 <el-col :span="12">
                   <el-form-item label="队列名称" prop="queueName">
                     <el-input v-model="form.queueName" />
@@ -122,7 +118,7 @@
                 <el-col :span="12">
                   <el-form-item label="振铃超时">
                     <el-input-number v-model="form.ringTimeoutSeconds" :min="5" :max="300" />
-                    <span class="unit">秒，写入 FreeSWITCH leg_timeout</span>
+                    <span class="unit">秒，写入话务服务 leg_timeout</span>
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
@@ -383,7 +379,7 @@
             </div>
             <div class="guide-item">
               <span class="guide-label">等待音</span>
-              <span>{{ selectedWaitMediaName || '未选择，使用 FreeSWITCH 默认等待音' }}</span>
+              <span>{{ selectedWaitMediaName || '未选择，使用话务服务默认等待音' }}</span>
             </div>
             <div class="guide-item">
               <span class="guide-label">排队提醒</span>
@@ -423,6 +419,8 @@
 </template>
 
 <script setup name="CallQueue" lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+
 import { createCallQueue, deleteCallQueue, getCallQueue, listCallQueues, syncCallQueue, updateCallQueue } from '@/api/callcenter/call-queue';
 import { CallQueueForm, CallQueueVO, QueueStrategy } from '@/api/callcenter/call-queue/types';
 import { listSkillGroups } from '@/api/callcenter/skill-group';
@@ -509,7 +507,7 @@ const form = reactive<CallQueueForm>(initialForm());
 const rules = {
   queueCode: [{ required: true, pattern: /^[A-Za-z0-9_-]{2,32}$/, message: '请输入合法队列编码', trigger: 'blur' }],
   queueName: [{ required: true, message: '请输入队列名称', trigger: 'blur' }],
-  nodeGroupId: [{ required: true, message: '请选择 FreeSWITCH 节点组', trigger: 'change' }],
+  nodeGroupId: [{ required: true, message: '请选择话务服务节点组', trigger: 'change' }],
   skillGroupId: [{ required: true, message: '请选择接听技能组', trigger: 'change' }],
   strategy: [{ required: true, message: '请选择分配策略', trigger: 'change' }]
 };
@@ -610,7 +608,7 @@ const queueExecutionSteps = computed(() => {
   if (selectedForceWaitMediaName.value) {
     steps.push(`播放入队前提示音「${selectedForceWaitMediaName.value}」，播放完成后才进入队列。`);
   }
-  steps.push(selectedWaitMediaName.value ? `客户开始听等待音「${selectedWaitMediaName.value}」。` : '客户开始听 FreeSWITCH 默认等待音。');
+  steps.push(selectedWaitMediaName.value ? `客户开始听等待音「${selectedWaitMediaName.value}」。` : '客户开始听话务服务默认等待音。');
   if (form.queueAnnounceEnabled) {
     steps.push(queueAnnounceGuide.value);
   }
@@ -629,7 +627,7 @@ const queueExecutionSteps = computed(() => {
     steps.push(
       selectedSatisfactionMediaName.value
         ? `坐席先挂机后，客户继续听评价提示音「${selectedSatisfactionMediaName.value}」，可在 ${form.satisfactionTimeoutSeconds || 8} 秒内按 1-5 分评价；客户先挂机或转接通话不进入评价。`
-        : '坐席先挂机后进入满意度评价；请先选择已发布并同步到 FreeSWITCH 节点的评价提示音。'
+        : '坐席先挂机后进入满意度评价；请先选择已发布并同步到话务服务节点的评价提示音。'
     );
   }
   if (form.stickyAgentEnabled) {
@@ -733,7 +731,7 @@ const handleSync = async (row: CallQueueVO) => {
   syncingId.value = row.id;
   try {
     await syncCallQueue(row.id);
-    proxy?.$modal.msgSuccess('已同步到 FreeSWITCH');
+    proxy?.$modal.msgSuccess('已同步到话务服务');
   } finally {
     syncingId.value = undefined;
     await load();

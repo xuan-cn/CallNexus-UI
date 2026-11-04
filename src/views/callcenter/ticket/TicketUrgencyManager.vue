@@ -11,7 +11,7 @@
           <el-tag v-if="row.isDefault" size="small" type="success" effect="plain">默认</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="编码" prop="levelCode" min-width="120" />
+
       <el-table-column label="权重" prop="priorityWeight" width="80" align="center" />
       <el-table-column label="顺序" prop="sortOrder" width="80" align="center" />
       <el-table-column label="状态" width="90">
@@ -28,9 +28,7 @@
     <el-dialog v-model="editVisible" :title="editingId ? '修改紧急程度' : '新增紧急程度'" width="560px" append-to-body destroy-on-close>
       <el-form label-width="96px">
         <el-form-item label="名称" required><el-input v-model="form.levelName" maxlength="32" /></el-form-item>
-        <el-form-item label="编码" required>
-          <el-input v-model="form.levelCode" maxlength="32" :disabled="Boolean(editingId)" placeholder="如 URGENT" />
-        </el-form-item>
+        <AutoInternalCode v-model="form.levelCode" prefix="level" />
         <el-form-item label="排序权重" required>
           <el-input-number v-model="form.priorityWeight" :min="0" :max="10000" />
           <span class="field-tip">数值越大越靠前</span>
@@ -50,6 +48,8 @@
 </template>
 
 <script setup lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   createTicketUrgencyLevel,
@@ -116,7 +116,7 @@ const openEdit = (row: TicketUrgencyLevelVO) => {
 
 const submit = async () => {
   if (!form.levelName.trim() || !/^[A-Za-z0-9_.-]{1,32}$/.test(form.levelCode.trim())) {
-    ElMessage.warning('请填写名称，编码只能包含字母、数字、点、横线或下划线');
+    ElMessage.warning('请填写名称');
     return;
   }
   if (form.isDefault) form.enabled = true;

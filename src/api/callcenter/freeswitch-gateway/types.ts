@@ -2,6 +2,15 @@ export type GatewayDirection = 'INBOUND' | 'OUTBOUND' | 'BOTH';
 export type GatewayTransport = 'UDP' | 'TCP' | 'TLS';
 export type GatewayAccessMode = 'IP_TRUNK' | 'OUTBOUND_REGISTER' | 'DEVICE_REGISTER';
 
+export interface FreeSwitchGatewayRuntimeVO {
+  id: string | number;
+  status: string;
+  registrationState?: string;
+  probeState?: string;
+  detail: string;
+  checkedAt?: string;
+}
+
 export interface FreeSwitchGatewayVO {
   id: string | number;
   nodeId: string | number;

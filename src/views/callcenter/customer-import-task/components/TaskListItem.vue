@@ -36,8 +36,6 @@
       </template>
       <div class="task-detail-title">{{ task.taskName }}</div>
       <dl class="task-details">
-        <dt>任务编号</dt>
-        <dd>{{ task.taskCode || '-' }}</dd>
         <dt>状态</dt>
         <dd>{{ task.status === 'ENABLED' ? '启用' : '停用' }}</dd>
         <dt>导入批次</dt>

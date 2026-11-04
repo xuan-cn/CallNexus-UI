@@ -53,8 +53,12 @@ function createCompressionPlugin(kind: CompressionKind): Plugin {
     configResolved(resolvedConfig) {
       config = resolvedConfig;
     },
-    async closeBundle() {
-      const outputDir = path.resolve(process.cwd(), config?.build.outDir ?? 'dist');
+    async writeBundle(outputOptions) {
+      // Only compress outputs from a successful write, never stale files after a failed build.
+      if (!outputOptions.dir && !outputOptions.file) return;
+      const outputDir = outputOptions.dir
+        ? path.resolve(config?.root ?? process.cwd(), outputOptions.dir)
+        : path.dirname(path.resolve(config?.root ?? process.cwd(), outputOptions.file!));
       const files = await collectFiles(outputDir);
       const compressedEntries: Array<{ file: string; originalKb: string; compressedKb: string }> = [];
 

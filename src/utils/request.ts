@@ -11,6 +11,7 @@ import { getLanguage } from '@/lang';
 import { encryptBase64, encryptWithAes, generateAesKey, decryptWithAes, decryptBase64 } from '@/utils/crypto';
 import { encrypt, decrypt } from '@/utils/jsencrypt';
 import router from '@/router';
+import { userFacingMessage } from '@/utils/userFacingMessage';
 
 const encryptHeader = 'encrypt-key';
 let downloadLoadingInstance: LoadingInstance;
@@ -123,7 +124,7 @@ service.interceptors.response.use(
     // 未设置状态码则默认成功状态
     const code = res.data.code || HttpStatus.SUCCESS;
     // 获取错误信息
-    const msg = errorCode[code] || res.data.msg || errorCode['default'];
+    const msg = userFacingMessage(errorCode[code] || res.data.msg || errorCode['default']);
     // 二进制数据则直接返回
     if (res.request.responseType === 'blob' || res.request.responseType === 'arraybuffer') {
       return res.data;
@@ -165,7 +166,7 @@ service.interceptors.response.use(
     }
   },
   (error: any) => {
-    let { message } = error;
+    let message = userFacingMessage(error.message || '请求失败，请稍后重试');
     if (message == 'Network Error') {
       message = '服务启动异常，请检查前端或后台服务是否正常启动，启动后重新尝试';
     } else if (message.includes('timeout')) {
@@ -174,6 +175,7 @@ service.interceptors.response.use(
       message = '系统接口' + message.substr(message.length - 3) + '异常';
     }
     ElMessage({ message: message, type: 'error', duration: 5 * 1000 });
+    if (error && typeof error === 'object') error.message = message;
     return Promise.reject(error);
   }
 );
@@ -198,7 +200,7 @@ export function download(url: string, params: any, fileName: string) {
         const blob = new Blob([resp]);
         const resText = await blob.text();
         const rspObj = JSON.parse(resText);
-        const errMsg = errorCode[rspObj.code] || rspObj.msg || errorCode['default'];
+        const errMsg = userFacingMessage(errorCode[rspObj.code] || rspObj.msg || errorCode['default']);
         ElMessage.error(errMsg);
       }
       downloadLoadingInstance.close();

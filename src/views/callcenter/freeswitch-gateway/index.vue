@@ -7,9 +7,7 @@
             <el-option v-for="node in nodeOptions" :key="node.id" :label="node.nodeName" :value="node.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="网关编码" prop="gatewayCode">
-          <el-input v-model="queryParams.gatewayCode" clearable @keyup.enter="handleQuery" />
-        </el-form-item>
+
         <el-form-item label="网关名称" prop="gatewayName">
           <el-input v-model="queryParams.gatewayName" clearable @keyup.enter="handleQuery" />
         </el-form-item>
@@ -18,7 +16,7 @@
             <el-option v-for="item in directionOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="状态" prop="enabled">
+        <el-form-item label="配置状态" prop="enabled">
           <el-select v-model="queryParams.enabled" clearable style="width: 120px">
             <el-option label="启用" :value="true" />
             <el-option label="停用" :value="false" />
@@ -34,9 +32,10 @@
     <el-card shadow="hover">
       <template #header>
         <el-button v-hasPermi="['callcenter:freeswitch-gateway:create']" type="primary" plain icon="Plus" @click="handleAdd">新增线路</el-button>
+        <el-button icon="Refresh" :loading="runtimeLoading" :disabled="loading || !gatewayList.length" @click="refreshRuntime">刷新状态</el-button>
       </template>
       <el-table v-loading="loading" :data="gatewayList">
-        <el-table-column label="网关编码" prop="gatewayCode" min-width="130" />
+
         <el-table-column label="网关名称" prop="gatewayName" min-width="150" />
         <el-table-column label="节点" prop="nodeName" min-width="150" />
         <el-table-column label="方向" width="100">
@@ -60,9 +59,16 @@
         <el-table-column label="注册续期" width="100">
           <template #default="{ row }">{{ row.registerEnabled ? `${row.expireSeconds}s` : '-' }}</template>
         </el-table-column>
-        <el-table-column label="状态" width="90">
+        <el-table-column label="配置状态" width="90">
           <template #default="{ row }">
             <el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="运行状态" width="135">
+          <template #default="{ row }">
+            <el-tooltip :content="runtimeTooltip(row)" placement="top">
+              <el-tag :type="runtimePresentation(row).type" effect="light">{{ runtimePresentation(row).label }}</el-tag>
+            </el-tooltip>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="130" align="center" fixed="right">
@@ -89,231 +95,227 @@
         <el-tabs v-model="activeTab" class="gateway-tabs" stretch>
           <el-tab-pane label="基础信息" name="basic">
             <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="所属节点" prop="nodeId">
-              <el-select v-model="form.nodeId" filterable style="width: 100%">
-                <el-option v-for="node in nodeOptions" :key="node.id" :label="node.nodeName" :value="node.id" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="网关编码" prop="gatewayCode">
-              <el-input v-model="form.gatewayCode" placeholder="例如 GW_CARRIER_01" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="网关名称" prop="gatewayName">
-              <el-input v-model="form.gatewayName" placeholder="例如 运营商线路01" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="方向" prop="direction">
-              <el-select v-model="form.direction" style="width: 100%">
-                <el-option v-for="item in directionOptions" :key="item.value" :label="item.label" :value="item.value" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col v-if="form.accessMode !== 'DEVICE_REGISTER'" :span="12">
-            <el-form-item label="SIP服务器" prop="proxy">
-              <el-input v-model="form.proxy" placeholder="例如 sip.example.com:5060" />
-            </el-form-item>
-          </el-col>
-          <el-col v-if="form.accessMode !== 'DEVICE_REGISTER'" :span="12">
-            <el-form-item label="SIP域" prop="realm">
-              <el-input v-model="form.realm" placeholder="为空时由网关配置决定" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="认证用户" prop="username">
-              <el-input v-model="form.username" placeholder="运营商提供的账号" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item :label="form.id ? '新认证密码' : '认证密码'" prop="password">
-              <el-input v-model="form.password" type="password" show-password :placeholder="form.id ? '留空表示不修改' : '运营商提供的密码'" />
-            </el-form-item>
-          </el-col>
-          <el-col v-if="form.accessMode === 'DEVICE_REGISTER'" :span="12">
-            <el-form-item label="注册账号" prop="registeredIdentity">
-              <el-input v-model="form.registeredIdentity" placeholder="对端向 FreeSWITCH 注册的 SIP 账号" />
-            </el-form-item>
-          </el-col>
-          <el-col v-if="form.accessMode === 'DEVICE_REGISTER'" :span="12">
-            <el-form-item label="接收注册 Profile" prop="sipProfile">
-              <el-select v-model="form.sipProfile" style="width: 100%">
-                <el-option label="internal（推荐）" value="internal" />
-                <el-option label="external" value="external" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="传输协议" prop="transport">
-              <el-select v-model="form.transport" style="width: 100%">
-                <el-option label="UDP" value="UDP" />
-                <el-option label="TCP" value="TCP" />
-                <el-option label="TLS" value="TLS" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="主叫号码" prop="callerIdNumber">
-              <el-input v-model="form.callerIdNumber" placeholder="默认外呼主叫号码" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="24">
-            <el-form-item label="接入模式" prop="accessMode">
-              <el-radio-group v-model="form.accessMode" class="gateway-mode-radio" @change="handleAccessModeChange">
-                <el-radio-button value="IP_TRUNK">IP注册</el-radio-button>
-                <el-radio-button value="OUTBOUND_REGISTER">SIP线路注册</el-radio-button>
-                <el-radio-button value="DEVICE_REGISTER">向内注册</el-radio-button>
-              </el-radio-group>
-            </el-form-item>
-          </el-col>
-          <el-col :span="24">
-            <el-alert
-              :title="
-                form.accessMode === 'DEVICE_REGISTER'
-                  ? '接收注册模式：对端 SIP 设备或系统向 FreeSWITCH 发起 REGISTER。平台保存认证信息，呼叫时实时使用当前 Contact，无需固定配置对端 IP 和端口。'
-                  : form.accessMode === 'OUTBOUND_REGISTER'
-                    ? '主动注册模式：FreeSWITCH 使用配置的账号密码向运营商、上级 PBX 或其他 SIP 服务发送 REGISTER，注册成功后状态通常为 REGED。'
-                    : '免注册模式：双方通过固定 SIP 地址和 IP 互信通信，FreeSWITCH 不发送 REGISTER；NOREG + UP 通常是正常状态。'
-              "
-              type="info"
-              :closable="false"
-              show-icon
-              class="mb-3"
-            />
-          </el-col>
-          <el-col v-if="form.id" :span="12">
-            <el-form-item label="状态" prop="enabled">
-              <el-switch v-model="form.enabled" active-text="启用" inactive-text="停用" />
-            </el-form-item>
-          </el-col>
-            </el-row>
-          </el-tab-pane>
-          <el-tab-pane label="注册与保活" name="keepalive">
-            <div class="tab-description">REGISTER 续期、重试与 OPTIONS 探测</div>
-                <el-row :gutter="16">
-                  <el-col :span="12">
-                    <el-form-item label="探测间隔" prop="ping">
-                      <el-input-number v-model="form.ping" :min="0" :max="3600" :step="30" style="width: 100%" />
-                      <div class="text-xs text-gray-400 mt-1">单位秒，0 表示关闭 OPTIONS ping</div>
-                    </el-form-item>
-                  </el-col>
-                  <el-col :span="12">
-                    <el-form-item label="注册续期间隔" prop="expireSeconds">
-                      <el-input-number
-                        v-model="form.expireSeconds"
-                        :disabled="form.accessMode !== 'OUTBOUND_REGISTER'"
-                        :min="10"
-                        :max="86400"
-                        :step="10"
-                        style="width: 100%"
-                      />
-                      <div class="text-xs text-gray-400 mt-1">
-                        {{ form.accessMode === 'OUTBOUND_REGISTER' ? '单位秒，NAT 环境建议 60-120' : '仅 FreeSWITCH 主动注册时生效' }}
-                      </div>
-                    </el-form-item>
-                  </el-col>
-                  <el-col :span="12">
-                    <el-form-item label="注册重试间隔" prop="retrySeconds">
-                      <el-input-number
-                        v-model="form.retrySeconds"
-                        :disabled="form.accessMode !== 'OUTBOUND_REGISTER'"
-                        :min="1"
-                        :max="3600"
-                        :step="5"
-                        style="width: 100%"
-                      />
-                    </el-form-item>
-                  </el-col>
-                  <el-col v-if="form.ping > 0" :span="12">
-                    <el-form-item label="Ping 失败阈值" prop="pingMax">
-                      <el-input-number v-model="form.pingMax" :min="1" :max="100" style="width: 100%" />
-                    </el-form-item>
-                  </el-col>
-                  <el-col v-if="form.ping > 0" :span="12">
-                    <el-form-item label="Ping 恢复阈值" prop="pingMin">
-                      <el-input-number v-model="form.pingMin" :min="1" :max="100" style="width: 100%" />
-                    </el-form-item>
-                  </el-col>
-                </el-row>
-          </el-tab-pane>
-          <el-tab-pane label="拨号规范" name="dialing">
+              <el-col :span="12">
+                <el-form-item label="所属节点" prop="nodeId">
+                  <el-select v-model="form.nodeId" filterable style="width: 100%">
+                    <el-option v-for="node in nodeOptions" :key="node.id" :label="node.nodeName" :value="node.id" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <AutoInternalCode v-model="form.gatewayCode" prefix="gw" />
+              <el-col :span="12">
+                <el-form-item label="网关名称" prop="gatewayName">
+                  <el-input v-model="form.gatewayName" placeholder="例如 运营商线路01" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="方向" prop="direction">
+                  <el-select v-model="form.direction" style="width: 100%">
+                    <el-option v-for="item in directionOptions" :key="item.value" :label="item.label" :value="item.value" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col v-if="form.accessMode !== 'DEVICE_REGISTER'" :span="12">
+                <el-form-item label="SIP服务器" prop="proxy">
+                  <el-input v-model="form.proxy" placeholder="例如 sip.example.com:5060" />
+                </el-form-item>
+              </el-col>
+              <el-col v-if="form.accessMode !== 'DEVICE_REGISTER'" :span="12">
+                <el-form-item label="SIP域" prop="realm">
+                  <el-input v-model="form.realm" placeholder="为空时由网关配置决定" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="认证用户" prop="username">
+                  <el-input v-model="form.username" placeholder="运营商提供的账号" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item :label="form.id ? '新认证密码' : '认证密码'" prop="password">
+                  <el-input v-model="form.password" type="password" show-password :placeholder="form.id ? '留空表示不修改' : '运营商提供的密码'" />
+                </el-form-item>
+              </el-col>
+              <el-col v-if="form.accessMode === 'DEVICE_REGISTER'" :span="12">
+                <el-form-item label="注册账号" prop="registeredIdentity">
+                  <el-input v-model="form.registeredIdentity" placeholder="对端向话务服务注册的 SIP 账号" />
+                </el-form-item>
+              </el-col>
+              <el-col v-if="form.accessMode === 'DEVICE_REGISTER'" :span="12">
+                <el-form-item label="接收注册 Profile" prop="sipProfile">
+                  <el-select v-model="form.sipProfile" style="width: 100%">
+                    <el-option label="internal（推荐）" value="internal" />
+                    <el-option label="external" value="external" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="传输协议" prop="transport">
+                  <el-select v-model="form.transport" style="width: 100%">
+                    <el-option label="UDP" value="UDP" />
+                    <el-option label="TCP" value="TCP" />
+                    <el-option label="TLS" value="TLS" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="主叫号码" prop="callerIdNumber">
+                  <el-input v-model="form.callerIdNumber" placeholder="默认外呼主叫号码" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="24">
+                <el-form-item label="接入模式" prop="accessMode">
+                  <el-radio-group v-model="form.accessMode" class="gateway-mode-radio" @change="handleAccessModeChange">
+                    <el-radio-button value="IP_TRUNK">IP注册</el-radio-button>
+                    <el-radio-button value="OUTBOUND_REGISTER">SIP线路注册</el-radio-button>
+                    <el-radio-button value="DEVICE_REGISTER">向内注册</el-radio-button>
+                  </el-radio-group>
+                </el-form-item>
+              </el-col>
+              <el-col :span="24">
                 <el-alert
-                  title="该规则用于所有经本线路发起的外呼；外呼线路策略单独配置拨号规范时，以策略配置为准。"
+                  :title="
+                    form.accessMode === 'DEVICE_REGISTER'
+                      ? '接收注册模式：对端 SIP 设备或系统向话务服务发起 REGISTER。平台保存认证信息，呼叫时实时使用当前 Contact，无需固定配置对端 IP 和端口。'
+                      : form.accessMode === 'OUTBOUND_REGISTER'
+                        ? '主动注册模式：话务服务使用配置的账号密码向运营商、上级 PBX 或其他 SIP 服务发送 REGISTER，注册成功后状态通常为 REGED。'
+                        : '免注册模式：双方通过固定 SIP 地址和 IP 互信通信，话务服务不发送 REGISTER；NOREG + UP 通常是正常状态。'
+                  "
                   type="info"
                   :closable="false"
                   show-icon
                   class="mb-3"
                 />
-                <el-row :gutter="16">
-                  <el-col :span="12">
-                    <el-form-item label="本地区号" prop="localAreaCode">
-                      <el-input v-model="form.localAreaCode" placeholder="例如 010 或 0451" clearable />
-                    </el-form-item>
-                  </el-col>
-                  <el-col :span="12">
-                    <el-form-item label="出局前缀" prop="outboundPrefix">
-                      <el-input v-model="form.outboundPrefix" placeholder="例如 9，留空不添加" clearable />
-                    </el-form-item>
-                  </el-col>
-                  <el-col :span="12">
-                    <el-form-item label="本地固话补区号" prop="addLocalAreaCode">
-                      <el-switch v-model="form.addLocalAreaCode" />
-                    </el-form-item>
-                  </el-col>
-                  <el-col :span="12">
-                    <el-form-item label="异地区号补0" prop="addMissingAreaCodeZero">
-                      <el-switch v-model="form.addMissingAreaCodeZero" />
-                    </el-form-item>
-                  </el-col>
-                  <el-col :span="12">
-                    <el-form-item label="去除中国国家码" prop="stripChinaCountryCode">
-                      <el-switch v-model="form.stripChinaCountryCode" />
-                    </el-form-item>
-                  </el-col>
-                </el-row>
+              </el-col>
+              <el-col v-if="form.id" :span="12">
+                <el-form-item label="状态" prop="enabled">
+                  <el-switch v-model="form.enabled" active-text="启用" inactive-text="停用" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-tab-pane>
+          <el-tab-pane label="注册与保活" name="keepalive">
+            <div class="tab-description">REGISTER 续期、重试与 OPTIONS 探测</div>
+            <el-row :gutter="16">
+              <el-col :span="12">
+                <el-form-item label="探测间隔" prop="ping">
+                  <el-input-number v-model="form.ping" :min="0" :max="3600" :step="30" style="width: 100%" />
+                  <div class="text-xs text-gray-400 mt-1 app-hint">单位秒，0 表示关闭 OPTIONS ping</div>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="注册续期间隔" prop="expireSeconds">
+                  <el-input-number
+                    v-model="form.expireSeconds"
+                    :disabled="form.accessMode !== 'OUTBOUND_REGISTER'"
+                    :min="10"
+                    :max="86400"
+                    :step="10"
+                    style="width: 100%"
+                  />
+                  <div class="text-xs text-gray-400 mt-1 app-hint">
+                    {{ form.accessMode === 'OUTBOUND_REGISTER' ? '单位秒，NAT 环境建议 60-120' : '仅话务服务主动注册时生效' }}
+                  </div>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="注册重试间隔" prop="retrySeconds">
+                  <el-input-number
+                    v-model="form.retrySeconds"
+                    :disabled="form.accessMode !== 'OUTBOUND_REGISTER'"
+                    :min="1"
+                    :max="3600"
+                    :step="5"
+                    style="width: 100%"
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col v-if="form.ping > 0" :span="12">
+                <el-form-item label="Ping 失败阈值" prop="pingMax">
+                  <el-input-number v-model="form.pingMax" :min="1" :max="100" style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col v-if="form.ping > 0" :span="12">
+                <el-form-item label="Ping 恢复阈值" prop="pingMin">
+                  <el-input-number v-model="form.pingMin" :min="1" :max="100" style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-tab-pane>
+          <el-tab-pane label="拨号规范" name="dialing">
+            <el-alert
+              title="该规则用于所有经本线路发起的外呼；外呼线路策略单独配置拨号规范时，以策略配置为准。"
+              type="info"
+              :closable="false"
+              show-icon
+              class="mb-3"
+            />
+            <el-row :gutter="16">
+              <el-col :span="12">
+                <el-form-item label="本地区号" prop="localAreaCode">
+                  <el-input v-model="form.localAreaCode" placeholder="例如 010 或 0451" clearable />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="出局前缀" prop="outboundPrefix">
+                  <el-input v-model="form.outboundPrefix" placeholder="例如 9，留空不添加" clearable />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="本地固话补区号" prop="addLocalAreaCode">
+                  <el-switch v-model="form.addLocalAreaCode" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="异地区号补0" prop="addMissingAreaCodeZero">
+                  <el-switch v-model="form.addMissingAreaCodeZero" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="去除中国国家码" prop="stripChinaCountryCode">
+                  <el-switch v-model="form.stripChinaCountryCode" />
+                </el-form-item>
+              </el-col>
+            </el-row>
           </el-tab-pane>
           <el-tab-pane label="高级配置" name="advanced">
             <div class="tab-description">SIP From、Contact 与呼入路由参数</div>
-                <el-row :gutter="16">
-                  <el-col :span="12">
-                    <el-form-item label="呼入 Context" prop="dialplanContext">
-                      <el-input v-model="form.dialplanContext" placeholder="public" />
-                    </el-form-item>
-                  </el-col>
-                  <el-col :span="12">
-                    <el-form-item label="呼入 Extension" prop="extension">
-                      <el-input v-model="form.extension" placeholder="auto_to_user" />
-                    </el-form-item>
-                  </el-col>
-                  <el-col :span="12">
-                    <el-form-item label="From 用户" prop="fromUser">
-                      <el-input v-model="form.fromUser" placeholder="为空时使用主叫号码或认证用户" />
-                    </el-form-item>
-                  </el-col>
-                  <el-col :span="12">
-                    <el-form-item label="From 域" prop="fromDomain">
-                      <el-input v-model="form.fromDomain" placeholder="为空时使用 SIP 域" />
-                    </el-form-item>
-                  </el-col>
-                  <el-col :span="12">
-                    <el-form-item label="主叫放入 From" prop="callerIdInFrom">
-                      <el-switch v-model="form.callerIdInFrom" />
-                    </el-form-item>
-                  </el-col>
-                  <el-col :span="12">
-                    <el-form-item label="Contact 参数" prop="contactParams">
-                      <el-input v-model="form.contactParams" placeholder="例如 transport=udp" />
-                    </el-form-item>
-                  </el-col>
-                  <el-col :span="24">
-                    <el-form-item label="备注" prop="description">
-                      <el-input v-model="form.description" type="textarea" :rows="2" maxlength="255" show-word-limit />
-                    </el-form-item>
-                  </el-col>
-                </el-row>
+            <el-row :gutter="16">
+              <el-col :span="12">
+                <el-form-item label="呼入 Context" prop="dialplanContext">
+                  <el-input v-model="form.dialplanContext" placeholder="public" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="呼入 Extension" prop="extension">
+                  <el-input v-model="form.extension" placeholder="auto_to_user" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="From 用户" prop="fromUser">
+                  <el-input v-model="form.fromUser" placeholder="为空时使用主叫号码或认证用户" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="From 域" prop="fromDomain">
+                  <el-input v-model="form.fromDomain" placeholder="为空时使用 SIP 域" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="主叫放入 From" prop="callerIdInFrom">
+                  <el-switch v-model="form.callerIdInFrom" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="Contact 参数" prop="contactParams">
+                  <el-input v-model="form.contactParams" placeholder="例如 transport=udp" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="24">
+                <el-form-item label="备注" prop="description">
+                  <el-input v-model="form.description" type="textarea" :rows="2" maxlength="255" show-word-limit />
+                </el-form-item>
+              </el-col>
+            </el-row>
           </el-tab-pane>
         </el-tabs>
       </el-form>
@@ -326,14 +328,24 @@
 </template>
 
 <script setup name="FreeSwitchGateway" lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+import { userFacingMessage } from '@/utils/userFacingMessage';
+
 import {
   createFreeSwitchGateway,
   deleteFreeSwitchGateway,
   getFreeSwitchGateway,
+  getFreeSwitchGatewayRuntimeStatuses,
   listFreeSwitchGateways,
   updateFreeSwitchGateway
 } from '@/api/callcenter/freeswitch-gateway';
-import { FreeSwitchGatewayForm, FreeSwitchGatewayQuery, FreeSwitchGatewayVO, GatewayDirection } from '@/api/callcenter/freeswitch-gateway/types';
+import {
+  FreeSwitchGatewayForm,
+  FreeSwitchGatewayQuery,
+  FreeSwitchGatewayVO,
+  FreeSwitchGatewayRuntimeVO,
+  GatewayDirection
+} from '@/api/callcenter/freeswitch-gateway/types';
 import { listFreeSwitchNodes } from '@/api/callcenter/freeswitch-node';
 import { FreeSwitchNodeVO } from '@/api/callcenter/freeswitch-node/types';
 
@@ -343,6 +355,58 @@ const submitting = ref(false);
 const activeTab = ref('basic');
 const total = ref(0);
 const gatewayList = ref<FreeSwitchGatewayVO[]>([]);
+const runtimeLoading = ref(false);
+const runtimeStatuses = ref<Record<string, FreeSwitchGatewayRuntimeVO>>({});
+let runtimeRequest = 0;
+let listRequest = 0;
+const runtimeLabels: Record<string, { label: string; type: 'success' | 'info' | 'warning' | 'danger' }> = {
+  DISABLED: { label: '已停用', type: 'info' },
+  REGISTERED: { label: '已注册', type: 'success' },
+  REGISTERING: { label: '注册中', type: 'warning' },
+  REGISTRATION_FAILED: { label: '注册失败', type: 'danger' },
+  UNREGISTERED: { label: '未注册', type: 'danger' },
+  UNREACHABLE: { label: '探测异常', type: 'danger' },
+  UP: { label: '探测正常', type: 'success' },
+  NO_PROBE: { label: '免注册·未探测', type: 'info' },
+  NOT_LOADED: { label: '网关未加载', type: 'warning' },
+  NODE_UNAVAILABLE: { label: '节点不可达', type: 'warning' },
+  QUERY_FAILED: { label: '查询失败', type: 'warning' }
+};
+const runtimePresentation = (row: FreeSwitchGatewayVO) => {
+  if (!row.enabled) return runtimeLabels.DISABLED;
+  const status = runtimeStatuses.value[String(row.id)];
+  return status
+    ? runtimeLabels[status.status] || runtimeLabels.QUERY_FAILED
+    : { label: runtimeLoading.value ? '查询中' : '待查询', type: 'info' as const };
+};
+const runtimeTooltip = (row: FreeSwitchGatewayVO) => {
+  if (!row.enabled) return '线路配置已停用，未查询话务服务运行态';
+  const status = runtimeStatuses.value[String(row.id)];
+  return status
+    ? `${userFacingMessage(status.detail || '')}${status.checkedAt ? `；查询时间：${new Date(status.checkedAt).toLocaleString()}` : ''}`
+    : '运行状态独立查询，不影响线路列表';
+};
+const refreshRuntime = async () => {
+  const request = ++runtimeRequest;
+  const rows = [...gatewayList.value];
+  runtimeStatuses.value = {};
+  runtimeLoading.value = !!rows.length;
+  try {
+    for (let start = 0; start < rows.length; start += 100) {
+      if (request !== runtimeRequest) return;
+      const res = await getFreeSwitchGatewayRuntimeStatuses(rows.slice(start, start + 100).map((row) => row.id));
+      if (request !== runtimeRequest) return;
+      for (const status of res.data) runtimeStatuses.value[String(status.id)] = status;
+    }
+  } catch {
+    if (request !== runtimeRequest) return;
+    for (const row of rows) {
+      runtimeStatuses.value[String(row.id)] ??= { id: row.id, status: 'QUERY_FAILED', detail: '状态查询失败，请重试；线路配置仍可正常查看' };
+    }
+  } finally {
+    if (request === runtimeRequest) runtimeLoading.value = false;
+  }
+};
 const nodeOptions = ref<FreeSwitchNodeVO[]>([]);
 const queryFormRef = ref<ElFormInstance>();
 const formRef = ref<ElFormInstance>();
@@ -458,15 +522,26 @@ const loadNodes = async () => {
   nodeOptions.value = res.rows;
 };
 const getList = async () => {
+  const request = ++listRequest;
+  ++runtimeRequest;
+  runtimeLoading.value = false;
+  runtimeStatuses.value = {};
   loading.value = true;
   try {
     const res = await listFreeSwitchGateways(queryParams.value);
+    if (request !== listRequest) return;
     gatewayList.value = res.rows;
     total.value = res.total;
+    void refreshRuntime();
   } finally {
-    loading.value = false;
+    if (request === listRequest) loading.value = false;
   }
 };
+
+onBeforeUnmount(() => {
+  ++runtimeRequest;
+  ++listRequest;
+});
 const handleQuery = () => {
   queryParams.value.pageNum = 1;
   getList();

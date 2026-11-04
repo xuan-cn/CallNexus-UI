@@ -27,7 +27,7 @@
           <template #default="{ row }">
             <div class="application-cell">
               <strong>{{ row.appName }}</strong>
-              <span>{{ row.appCode }}</span>
+
             </div>
           </template>
         </el-table-column>
@@ -100,11 +100,7 @@
           <el-tab-pane label="基础配置" name="basic">
             <div class="config-panel">
               <el-row :gutter="18">
-                <el-col :span="12">
-                  <el-form-item label="应用编码" prop="appCode">
-                    <el-input v-model="applicationForm.appCode" :disabled="!!editingId" placeholder="例如 CRM_INTEGRATION" />
-                  </el-form-item>
-                </el-col>
+                <AutoInternalCode v-model="applicationForm.appCode" prefix="app" />
                 <el-col :span="12">
                   <el-form-item label="应用名称" prop="appName">
                     <el-input v-model="applicationForm.appName" placeholder="例如 CRM 客户中心" />
@@ -363,6 +359,8 @@
 </template>
 
 <script setup name="OpenApiApplication" lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+
 import {
   createOpenApiApplication,
   createOpenApiCredential,

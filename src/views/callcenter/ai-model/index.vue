@@ -5,7 +5,7 @@
         <el-tab-pane label="模型服务商" name="provider">
           <el-button type="primary" plain icon="Plus" class="mb-3" @click="editProvider()">新增服务商</el-button>
           <el-table v-loading="loading" :data="providers">
-            <el-table-column label="编码" prop="providerCode" min-width="150" /><el-table-column label="名称" prop="providerName" min-width="160" />
+            <el-table-column label="名称" prop="providerName" min-width="160" />
             <el-table-column label="协议" prop="providerType" width="180" /><el-table-column label="服务地址" prop="baseUrl" min-width="260" show-overflow-tooltip />
             <el-table-column label="API Key" width="100"><template #default="{ row }"><el-tag :type="row.apiKeyConfigured ? 'success' : 'danger'">{{ row.apiKeyConfigured ? '已配置' : '未配置' }}</el-tag></template></el-table-column>
             <el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag></template></el-table-column>
@@ -15,7 +15,7 @@
         <el-tab-pane label="Chat / Embedding 模型" name="model">
           <el-button type="primary" plain icon="Plus" class="mb-3" @click="editModel()">新增模型</el-button>
           <el-table v-loading="loading" :data="models">
-            <el-table-column label="模型编码" prop="modelCode" min-width="150" /><el-table-column label="模型名称" prop="modelName" min-width="190" />
+            <el-table-column label="模型名称" prop="modelName" min-width="190" />
             <el-table-column label="服务商" prop="providerName" min-width="150" /><el-table-column label="能力" prop="capability" width="120" />
             <el-table-column label="向量维度" prop="vectorDimension" width="110" /><el-table-column label="默认" width="80"><template #default="{ row }">{{ row.defaultModel ? '是' : '否' }}</template></el-table-column>
             <el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag></template></el-table-column>
@@ -27,7 +27,7 @@
 
     <el-dialog v-model="providerDialog" :title="providerForm.id ? '修改模型服务商' : '新增模型服务商'" width="680px">
       <el-form :model="providerForm" label-width="110px">
-        <el-row :gutter="16"><el-col :span="12"><el-form-item label="服务商编码"><el-input v-model="providerForm.providerCode" /></el-form-item></el-col><el-col :span="12"><el-form-item label="服务商名称"><el-input v-model="providerForm.providerName" /></el-form-item></el-col></el-row>
+        <el-row :gutter="16"><AutoInternalCode v-model="providerForm.providerCode" prefix="prov" /><el-col :span="24"><el-form-item label="服务商名称"><el-input v-model="providerForm.providerName" /></el-form-item></el-col></el-row>
         <el-form-item label="协议类型"><el-select v-model="providerForm.providerType" style="width:100%"><el-option label="OpenAI 兼容" value="OPENAI_COMPATIBLE" /></el-select></el-form-item>
         <el-form-item label="服务地址"><el-input v-model="providerForm.baseUrl" placeholder="http://127.0.0.1:11434/v1" /></el-form-item>
         <el-form-item label="API Key"><el-input v-model="providerForm.apiKey" type="password" show-password placeholder="修改时留空表示不变；Ollama 可填 ollama" /></el-form-item>
@@ -38,7 +38,7 @@
     <el-dialog v-model="modelDialog" :title="modelForm.id ? '修改模型' : '新增模型'" width="680px">
       <el-form :model="modelForm" label-width="110px">
         <el-form-item label="服务商"><el-select v-model="modelForm.providerId" style="width:100%"><el-option v-for="p in providers" :key="p.id" :label="p.providerName" :value="p.id" /></el-select></el-form-item>
-        <el-row :gutter="16"><el-col :span="12"><el-form-item label="模型编码"><el-input v-model="modelForm.modelCode" /></el-form-item></el-col><el-col :span="12"><el-form-item label="模型名称"><el-input v-model="modelForm.modelName" /></el-form-item></el-col></el-row>
+        <el-row :gutter="16"><AutoInternalCode v-model="modelForm.modelCode" prefix="model" /><el-col :span="24"><el-form-item label="模型名称"><el-input v-model="modelForm.modelName" /></el-form-item></el-col></el-row>
         <el-form-item label="模型能力"><el-radio-group v-model="modelForm.capability"><el-radio-button value="CHAT">Chat</el-radio-button><el-radio-button value="EMBEDDING">Embedding</el-radio-button></el-radio-group></el-form-item>
         <el-alert v-if="modelForm.capability==='EMBEDDING'" class="mb-4" type="info" :closable="false" title="向量维度由模型测试自动检测并保存，避免手工填写错误。" />
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="批量大小"><el-input-number v-model="modelForm.maxBatchSize" :min="1" style="width:100%" /></el-form-item></el-col><el-col :span="12"><el-form-item label="最大输入"><el-input-number v-model="modelForm.maxInputTokens" :min="1" style="width:100%" /></el-form-item></el-col></el-row>
@@ -50,6 +50,8 @@
 </template>
 
 <script setup lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+
 import { createAiModel, createModelProvider, deleteAiModel, deleteModelProvider, listAiModels, listModelProviders, testAiModel, testModelProvider, updateAiModel, updateModelProvider } from '@/api/callcenter/ai-knowledge';
 import type { AiModelForm, AiModelProviderForm, AiModelProviderVO, AiModelVO } from '@/api/callcenter/ai-knowledge/types';
 

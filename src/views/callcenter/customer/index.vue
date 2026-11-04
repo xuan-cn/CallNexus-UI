@@ -327,7 +327,7 @@
           <template #header>
             <div class="import-section-title">
               <span>2. 字段映射</span>
-              <span class="muted">左侧是 Excel 表头，右侧选择固定客户字段或表单模板字段</span>
+              <span class="muted app-hint">左侧是 Excel 表头，右侧选择固定客户字段或表单模板字段</span>
             </div>
           </template>
           <el-form class="import-template-selector" label-width="96px">
@@ -342,7 +342,7 @@
               >
                 <el-option v-for="template in customerFormTemplates" :key="template.id" :label="template.templateName" :value="template.id" />
               </el-select>
-              <span class="muted">选择后，可把 Excel 列映射到该客户表单模板的自定义字段。</span>
+              <span class="muted app-hint">选择后，可把 Excel 列映射到该客户表单模板的自定义字段。</span>
             </el-form-item>
           </el-form>
           <el-table :data="importDialog.mappings" max-height="260">

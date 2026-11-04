@@ -24,9 +24,7 @@
           <div v-show="showSearch" class="mb-[10px]">
             <el-card shadow="hover">
               <el-form ref="queryFormRef" :model="queryParams" :inline="true">
-                <el-form-item label="岗位编码" prop="postCode">
-                  <el-input v-model="queryParams.postCode" placeholder="请输入岗位编码" clearable @keyup.enter="handleQuery" />
-                </el-form-item>
+
                 <el-form-item label="类别编码" prop="postCategory">
                   <el-input
                     v-model="queryParams.postCategory"
@@ -87,7 +85,7 @@
           <el-table v-loading="loading" border :data="postList" @selection-change="handleSelectionChange">
             <el-table-column type="selection" width="55" align="center" />
             <el-table-column v-if="false" label="岗位编号" align="center" prop="postId" />
-            <el-table-column label="岗位编码" align="center" prop="postCode" />
+
             <el-table-column label="类别编码" align="center" prop="postCategory" />
             <el-table-column label="岗位名称" align="center" prop="postName" />
             <el-table-column label="部门" align="center" prop="deptName" />
@@ -139,9 +137,7 @@
                 check-strictly
               />
             </el-form-item>
-            <el-form-item label="岗位编码" prop="postCode">
-              <el-input v-model="form.postCode" placeholder="请输入编码名称" />
-            </el-form-item>
+            <AutoInternalCode v-model="form.postCode" prefix="post" />
             <el-form-item label="类别编码" prop="postCategory">
               <el-input v-model="form.postCategory" placeholder="请输入类别编码" />
             </el-form-item>
@@ -170,6 +166,8 @@
 </template>
 
 <script setup name="Post" lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+
 import { listPost, addPost, delPost, getPost, updatePost, deptTreeSelect } from '@/api/system/post';
 import { PostForm, PostQuery, PostVO } from '@/api/system/post/types';
 import { DeptTreeVO, DeptVO } from '@/api/system/dept/types';

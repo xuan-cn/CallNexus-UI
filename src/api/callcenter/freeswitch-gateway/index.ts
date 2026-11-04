@@ -1,6 +1,9 @@
 import request from '@/utils/request';
 import { AxiosPromise } from 'axios';
-import { FreeSwitchGatewayForm, FreeSwitchGatewayQuery, FreeSwitchGatewayVO } from './types';
+import { FreeSwitchGatewayForm, FreeSwitchGatewayQuery, FreeSwitchGatewayVO, FreeSwitchGatewayRuntimeVO } from './types';
+
+export const getFreeSwitchGatewayRuntimeStatuses = (ids: (string | number)[]): AxiosPromise<FreeSwitchGatewayRuntimeVO[]> =>
+  request({ url: '/api/v1/freeswitch-gateways/runtime-status', method: 'get', params: { ids: ids.join(',') } });
 
 export const listFreeSwitchGateways = (query: FreeSwitchGatewayQuery): AxiosPromise<FreeSwitchGatewayVO[]> =>
   request({ url: '/api/v1/freeswitch-gateways', method: 'get', params: query });

@@ -35,9 +35,7 @@
                 <el-form-item label="流程定义名称" label-width="100" prop="flowName">
                   <el-input v-model="queryParams.flowName" placeholder="请输入流程定义名称" @keyup.enter="handleQuery" />
                 </el-form-item>
-                <el-form-item label="流程定义编码" label-width="100" prop="flowCode">
-                  <el-input v-model="queryParams.flowCode" placeholder="请输入流程定义编码" @keyup.enter="handleQuery" />
-                </el-form-item>
+
                 <el-form-item>
                   <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
                   <el-button icon="Refresh" @click="resetQuery">重置</el-button>
@@ -68,7 +66,7 @@
                   <span>{{ scope.row.flowName }}v{{ scope.row.version }}</span>
                 </template>
               </el-table-column>
-              <el-table-column align="center" prop="flowCode" width="120" label="流程定义编码"></el-table-column>
+
               <el-table-column align="center" prop="categoryName" label="流程分类"></el-table-column>
               <el-table-column align="center" prop="nodeName" label="任务名称"></el-table-column>
               <el-table-column align="center" prop="createByName" :show-overflow-tooltip="true" label="申请人"></el-table-column>

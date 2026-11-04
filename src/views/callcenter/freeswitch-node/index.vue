@@ -2,7 +2,7 @@
   <div class="p-2">
     <el-card class="mb-2" shadow="hover">
       <el-form ref="queryFormRef" :model="queryParams" :inline="true">
-        <el-form-item label="节点编码" prop="nodeCode"><el-input v-model="queryParams.nodeCode" clearable @keyup.enter="handleQuery" /></el-form-item>
+
         <el-form-item label="节点名称" prop="nodeName"><el-input v-model="queryParams.nodeName" clearable @keyup.enter="handleQuery" /></el-form-item>
         <el-form-item label="状态" prop="enabled">
           <el-select v-model="queryParams.enabled" clearable style="width: 120px">
@@ -21,7 +21,7 @@
         <el-button v-hasPermi="['callcenter:freeswitch-node:create']" type="primary" plain icon="Plus" @click="handleAdd">新增节点</el-button>
       </template>
       <el-table v-loading="loading" :data="nodeList">
-        <el-table-column label="节点编码" prop="nodeCode" min-width="130" />
+
         <el-table-column label="节点名称" prop="nodeName" min-width="150" />
         <el-table-column label="SIP 域" prop="sipDomain" min-width="170" />
         <el-table-column label="SIP Profile" prop="sipProfileName" width="120" />
@@ -61,13 +61,13 @@
 
     <el-dialog v-model="dialog.visible" :title="dialog.title" width="600px" append-to-body>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
-        <el-form-item label="节点编码" prop="nodeCode"><el-input v-model="form.nodeCode" placeholder="例如 FS_LOCAL_01" /></el-form-item>
-        <el-form-item label="节点名称" prop="nodeName"><el-input v-model="form.nodeName" placeholder="例如 本地FreeSWITCH" /></el-form-item>
-        <el-form-item label="SIP 域" prop="sipDomain"><el-input v-model="form.sipDomain" placeholder="例如 freeswitch.local" /></el-form-item>
+        <AutoInternalCode v-model="form.nodeCode" prefix="node" />
+        <el-form-item label="节点名称" prop="nodeName"><el-input v-model="form.nodeName" placeholder="例如 本地话务服务" /></el-form-item>
+        <el-form-item label="SIP 域" prop="sipDomain"><el-input v-model="form.sipDomain" placeholder="填写节点实际使用的 SIP 域名或 IP" /></el-form-item>
         <el-form-item label="WebSocket 地址" prop="wssUrl">
           <el-input v-model="form.wssUrl" placeholder="开发 ws://节点IP:5066；生产 wss://域名:7443" />
         </el-form-item>
-        <el-form-item label="ESL 主机" prop="eslHost"><el-input v-model="form.eslHost" placeholder="后端可访问的 FreeSWITCH 地址" /></el-form-item>
+        <el-form-item label="ESL 主机" prop="eslHost"><el-input v-model="form.eslHost" placeholder="后端可访问的话务服务地址" /></el-form-item>
         <el-form-item label="ESL 端口" prop="eslPort"
           ><el-input-number v-model="form.eslPort" :min="1" :max="65535" controls-position="right"
         /></el-form-item>
@@ -80,7 +80,7 @@
         <el-form-item v-if="form.id" label="媒体根目录"><el-input v-model="form.mediaRootPath" /></el-form-item>
         <el-divider content-position="left">网络与 SIP Profile</el-divider>
         <el-alert
-          title="这里维护 FreeSWITCH external profile 的 Contact/SDP 对外地址。关闭 Auto NAT 后，网关 Contact 会使用固定对外 SIP IP。"
+          title="这里维护话务服务 external profile 的 Contact/SDP 对外地址。关闭 Auto NAT 后，网关 Contact 会使用固定对外 SIP IP。"
           type="info"
           :closable="false"
           show-icon
@@ -113,7 +113,7 @@
 
     <el-drawer v-model="profilePreview.visible" title="SIP Profile 配置预览" size="560px" append-to-body>
       <el-alert
-        title="把 XML 片段同步到 FreeSWITCH 对应 sip_profiles 文件后，执行下方命令生效。当前版本先提供预览与人工应用。"
+        title="把 XML 片段同步到话务服务对应 sip_profiles 文件后，执行下方命令生效。当前版本先提供预览与人工应用。"
         type="warning"
         :closable="false"
         show-icon
@@ -128,6 +128,8 @@
 </template>
 
 <script setup name="FreeSwitchNode" lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+
 import {
   createFreeSwitchNode,
   deleteFreeSwitchNode,

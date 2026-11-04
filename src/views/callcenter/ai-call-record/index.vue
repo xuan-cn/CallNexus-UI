@@ -39,33 +39,23 @@
             :key="String(record.callSessionId)"
             type="button"
             class="record-item"
+            :title="`主叫：${record.callerNumber || '-'}\n被叫：${record.calledNumber || '-'}\n坐席分机：${record.ownerAgentExtension || record.agentExtension || '未关联坐席'}`"
             :class="{ active: selectedRecord && String(selectedRecord.callSessionId) === String(record.callSessionId) }"
             @click="selectRecord(record)"
           >
             <div class="record-main">
-              <span class="record-avatar" :data-direction="record.direction || 'UNKNOWN'">
-                {{ directionInitial(record.direction) }}
-              </span>
               <div class="record-numbers">
                 <strong>{{ record.callerNumber || '-' }}</strong>
-                <small>
-                  <el-icon><Right /></el-icon>
-                  {{ record.calledNumber || '-' }}
-                </small>
+                <span class="number-arrow">→</span>
+                <span class="called-number">{{ record.calledNumber || '-' }}</span>
               </div>
-              <el-tag size="small" :type="directionType(record.direction)" effect="light" round>
-                {{ directionLabel(record.direction) }}
+              <el-tag size="small" :type="transcriptType(record.transcriptStatus)" effect="light">
+                {{ transcriptLabel(record.transcriptStatus) }}
               </el-tag>
             </div>
             <div class="record-meta">
               <span>{{ record.startedAt || '-' }}</span>
-              <span class="duration-chip">{{ durationLabel(record.durationSeconds) }}</span>
-            </div>
-            <div class="record-foot">
-              <span class="agent-chip">{{ record.ownerAgentExtension || record.agentExtension || '未关联坐席' }}</span>
-              <el-tag size="small" :type="transcriptType(record.transcriptStatus)" effect="light" round>
-                {{ transcriptLabel(record.transcriptStatus) }}
-              </el-tag>
+              <span>{{ durationLabel(record.durationSeconds) }}</span>
             </div>
           </button>
           <el-empty v-if="!records.length && !loading" description="暂无 AI 通话记录" :image-size="72" />
@@ -121,7 +111,6 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
-import { Right } from '@element-plus/icons-vue';
 import { getCallTranscript, listAiCallRecords, streamCallTranscript } from '@/api/callcenter/ai-speech';
 import {
   AiCallRecordQuery,
@@ -162,11 +151,6 @@ const normalizeTranscript = (res: any): AiCallTranscriptVO | undefined => {
   return data || undefined;
 };
 
-const directionLabel = (value?: string) =>
-  ({ INBOUND: '呼入', OUTBOUND: '呼出', INTERNAL: '内部', UNKNOWN: '未知' })[value || 'UNKNOWN'] || value || '-';
-const directionInitial = (value?: string) => ({ INBOUND: '入', OUTBOUND: '出', INTERNAL: '内', UNKNOWN: '通' })[value || 'UNKNOWN'] || '通';
-const directionType = (value?: string) =>
-  ({ INBOUND: 'success', OUTBOUND: 'primary', INTERNAL: 'warning', UNKNOWN: 'info' })[value || 'UNKNOWN'] as any;
 const transcriptLabel = (value?: string) => ({ PROCESSING: '转写中', SUCCESS: '已转写', FAILED: '失败' })[value || ''] || '未转写';
 const transcriptType = (value?: string) => ({ PROCESSING: 'warning', SUCCESS: 'success', FAILED: 'danger' })[value || ''] as any;
 const speakerLabel = (value?: string) =>
@@ -381,7 +365,7 @@ onBeforeUnmount(() => {
 .ai-call-record-layout {
   display: grid;
   flex: 1;
-  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+  grid-template-columns: 280px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   align-items: stretch;
   gap: 12px;
@@ -463,13 +447,13 @@ onBeforeUnmount(() => {
 
 .record-item {
   display: grid;
-  gap: 10px;
+  gap: 6px;
   width: 100%;
-  padding: 12px;
+  padding: 9px 10px;
   text-align: left;
   cursor: pointer;
   border: 1px solid #e4ecf6;
-  border-radius: 12px;
+  border-radius: 6px;
   background: #fff;
   transition:
     border-color 0.16s ease,
@@ -490,80 +474,43 @@ onBeforeUnmount(() => {
 
 .record-main {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) auto;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
   align-items: center;
 }
 
-.record-avatar {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  color: #1d4ed8;
-  font-size: 13px;
-  font-weight: 700;
-  border-radius: 10px;
-  background: #dbeafe;
-
-  &[data-direction='INBOUND'] {
-    color: #047857;
-    background: #d1fae5;
-  }
-
-  &[data-direction='OUTBOUND'] {
-    color: #1d4ed8;
-    background: #dbeafe;
-  }
-
-  &[data-direction='INTERNAL'] {
-    color: #b45309;
-    background: #fef3c7;
-  }
-}
-
 .record-numbers {
-  display: grid;
+  display: flex;
+  align-items: center;
   gap: 4px;
   min-width: 0;
 
-  strong {
+  strong,
+  .called-number {
+    min-width: 0;
+    flex: 1;
     overflow: hidden;
     color: #15233d;
-    font-size: 14px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  small {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    overflow: hidden;
-    color: #7b8798;
     font-size: 12px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
+  .number-arrow {
+    flex: none;
+    color: #7b8798;
+    font-size: 12px;
+  }
 }
 
-.record-meta,
-.record-foot {
+.record-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   color: #7b8798;
-  font-size: 12px;
-}
-
-.duration-chip,
-.agent-chip {
-  padding: 2px 8px;
-  color: #5b6b82;
-  border: 1px solid #e2eaf4;
-  border-radius: 999px;
-  background: #f5f8fc;
+  font-size: 11px;
+  line-height: 16px;
 }
 
 .list-pagination {

@@ -9,7 +9,7 @@
       </template>
 
       <el-table v-loading="loading" :data="groups">
-        <el-table-column label="技能组编码" prop="groupCode" min-width="150" />
+
         <el-table-column label="技能组名称" prop="groupName" min-width="170" />
         <el-table-column label="坐席数量" prop="memberCount" width="100" />
         <el-table-column label="状态" width="90">
@@ -37,9 +37,7 @@
     <el-dialog v-model="dialog.visible" :title="dialog.title" width="620px" append-to-body>
       <el-alert class="mb-4" type="info" :closable="false" title="技能组决定哪些坐席可以接听关联队列的来电，也可以作为外呼线路策略的选择依据。" />
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
-        <el-form-item label="技能组编码" prop="groupCode">
-          <el-input v-model="form.groupCode" placeholder="例如 SALES_SUPPORT" />
-        </el-form-item>
+        <AutoInternalCode v-model="form.groupCode" prefix="group" />
         <el-form-item label="技能组名称" prop="groupName">
           <el-input v-model="form.groupName" />
         </el-form-item>
@@ -57,7 +55,7 @@
         </el-form-item>
         <el-form-item v-if="form.assistEnabled" label="辅助助手" prop="assistAgentId">
           <el-select v-model="form.assistAgentId" filterable clearable style="width: 100%" placeholder="选择已绑定对应知识库的 AI 助手">
-            <el-option v-for="item in aiAgents" :key="item.id" :label="`${item.agentName}（${item.agentCode}）`" :value="item.id" />
+            <el-option v-for="item in aiAgents" :key="item.id" :label="item.agentName" :value="item.id" />
           </el-select>
           <div class="form-tip">客户最终分句会使用该助手绑定的知识库生成坐席建议；未配置时不会自动使用系统助手。</div>
         </el-form-item>
@@ -82,7 +80,7 @@
       <el-form ref="policyFormRef" class="policy-form" :model="policyForm" :rules="policyRules" label-width="132px">
         <el-row :gutter="16">
           <el-col :span="12">
-            <el-form-item label="FreeSWITCH节点" prop="nodeId">
+            <el-form-item label="话务服务节点" prop="nodeId">
               <el-select v-model="policyForm.nodeId" filterable clearable style="width: 100%" @change="onPolicyNodeChange">
                 <el-option v-for="node in nodes" :key="node.id" :label="node.nodeName" :value="node.id" />
               </el-select>
@@ -118,7 +116,7 @@
         <el-table-column label="节点" prop="nodeName" min-width="160" />
         <el-table-column label="外呼策略" min-width="220">
           <template #default="{ row }">
-            {{ row.policyName || row.policyCode || row.outboundLinePolicyId }}
+            {{ row.policyName || '未命名策略' }}
             <el-tag v-if="row.policyType" class="ml-2" effect="plain">{{ policyTypeLabel(row.policyType) }}</el-tag>
           </template>
         </el-table-column>
@@ -140,6 +138,8 @@
 </template>
 
 <script setup name="SkillGroup" lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+
 import { createSkillGroup, deleteSkillGroup, getSkillGroup, listSkillGroups, updateSkillGroup } from '@/api/callcenter/skill-group';
 import type { SkillGroupForm, SkillGroupVO } from '@/api/callcenter/skill-group/types';
 import { listAgents } from '@/api/callcenter/agent';
@@ -208,15 +208,15 @@ const rules = {
 };
 
 const policyRules = {
-  nodeId: [{ required: true, message: '请选择 FreeSWITCH 节点', trigger: 'change' }],
+  nodeId: [{ required: true, message: '请选择话务服务节点', trigger: 'change' }],
   outboundLinePolicyId: [{ required: true, message: '请选择外呼线路策略', trigger: 'change' }]
 };
 
 const normalizeRows = <T,>(res: any): T[] => res?.rows || res?.data || [];
 const policyTypeLabel = (value: OutboundLinePolicyType) => ({ FIXED: '固定', ROUND_ROBIN: '轮询', WEIGHT: '权重' })[value] || value;
-const agentLabel = (agent: AgentVO) => `${agent.agentName || agent.agentCode}（${agent.agentCode}）`;
+const agentLabel = (agent: AgentVO) => `${agent.agentName || '未命名坐席'}`;
 const aiAgentName = (id?: string | number) => aiAgents.value.find((item) => String(item.id) === String(id))?.agentName || '已启用';
-const policyLabel = (policy: OutboundLinePolicyVO) => `${policy.policyName}（${policy.policyCode}，${policyTypeLabel(policy.policyType)}）`;
+const policyLabel = (policy: OutboundLinePolicyVO) => `${policy.policyName}（${policyTypeLabel(policy.policyType)}）`;
 
 const loadNodes = async () => {
   const res = await listFreeSwitchNodes({ pageNum: 1, pageSize: 1000, enabled: true });

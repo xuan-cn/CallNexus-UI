@@ -18,7 +18,7 @@
             <span class="group-icon" :data-code="group.groupCode">{{ groupInitial(group.groupName) }}</span>
             <span class="group-copy">
               <strong>{{ group.groupName }}</strong>
-              <small>{{ group.groupCode }}</small>
+
             </span>
             <span class="group-count">{{ group.items.length }}</span>
           </button>
@@ -41,7 +41,7 @@
 
         <div v-if="activeGroup" class="section-toolbar">
           <div class="section-title">
-            <span class="section-kicker">{{ activeGroup.groupCode }}</span>
+
             <h2>{{ activeGroup.groupName }}</h2>
             <small>{{ filteredItems.length }} 项{{ keyword.trim() ? '匹配' : '配置' }}</small>
           </div>
@@ -199,7 +199,7 @@ const saveActiveGroup = async () => {
     (item) => item.riskLevel === 'HIGH' && formValues[item.configKey] !== originalValues[item.configKey]
   );
   if (changedHighRisk) {
-    await proxy?.$modal.confirm('本次包含高风险配置变更，保存后可能影响录音、媒体或 FreeSWITCH 行为，确认保存吗？');
+    await proxy?.$modal.confirm('本次包含高风险配置变更，保存后可能影响录音、媒体或话务服务行为，确认保存吗？');
   }
   await saveCallCenterConfigGroup(activeGroup.value.groupCode, {
     items: activeGroup.value.items.map((item) => ({

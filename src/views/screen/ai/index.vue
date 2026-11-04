@@ -1,5 +1,6 @@
 <template>
   <ScreenShell
+    :embedded="embedded"
     theme="exhibit"
     :title="text.title"
     subtitle="AI VOICEBOT OPERATIONS DASHBOARD"
@@ -7,6 +8,7 @@
     :badge-tone="liveDataOk ? 'live' : loadFailed ? 'demo' : 'loading'"
   >
     <div
+      ref="pageRef"
       class="screen-page ai-page theme-exhibit"
       :class="{ 'is-bootstrapping': isBootstrapping }"
     >
@@ -164,6 +166,9 @@
 </template>
 
 <script setup lang="ts">
+withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false });
+const pageRef = ref<HTMLElement>();
+let resizeObserver: ResizeObserver | undefined;
 import * as echarts from 'echarts';
 import {
   getAiScreenDashboard,
@@ -461,15 +466,28 @@ const handleResize = () => {
   latencyChart?.resize();
 };
 
-onMounted(() => {
+const startDashboard = () => {
+  if (refreshTimer) return;
+  if (pageRef.value) {
+    resizeObserver ||= new ResizeObserver(handleResize);
+    resizeObserver.observe(pageRef.value);
+  }
   window.addEventListener('resize', handleResize);
   loadDashboard();
   refreshTimer = window.setInterval(loadDashboard, 15000);
-});
+};
 
-onBeforeUnmount(() => {
+const stopDashboard = () => {
+  resizeObserver?.disconnect();
   window.removeEventListener('resize', handleResize);
   if (refreshTimer) window.clearInterval(refreshTimer);
+  refreshTimer = undefined;
+};
+onMounted(startDashboard);
+onActivated(startDashboard);
+onDeactivated(stopDashboard);
+onBeforeUnmount(() => {
+  stopDashboard();
   trafficChart?.dispose();
   latencyChart?.dispose();
 });

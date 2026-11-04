@@ -19,12 +19,12 @@
 
       <div class="toolbar">
         <el-button v-hasPermi="['callcenter:freeswitch-acl:create']" type="primary" plain icon="Plus" @click="openCreate">新增 ACL</el-button>
-        <span class="hint">规则保存后只是草稿，发布成功才会影响 FreeSWITCH。</span>
+        <span class="hint">规则保存后只是草稿，发布成功才会影响话务服务。</span>
       </div>
 
       <el-table v-loading="loading" :data="rows">
         <el-table-column label="名称" prop="aclName" min-width="150" />
-        <el-table-column label="ACL 编码" prop="aclCode" min-width="170" />
+
         <el-table-column label="节点" min-width="160">
           <template #default="{ row }">{{ nodeName(row.nodeId) }}</template>
         </el-table-column>
@@ -82,18 +82,14 @@
       <el-form ref="formRef" :model="form" :rules="rules" label-width="115px">
         <el-row :gutter="18">
           <el-col :span="12">
-            <el-form-item label="FreeSWITCH 节点" prop="nodeId">
+            <el-form-item label="话务服务节点" prop="nodeId">
               <el-select v-model="form.nodeId" filterable style="width: 100%">
                 <el-option v-for="node in nodes" :key="node.id" :label="node.nodeName" :value="node.id" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12"><el-form-item label="ACL 名称" prop="aclName"><el-input v-model="form.aclName" /></el-form-item></el-col>
-          <el-col :span="12">
-            <el-form-item label="ACL 编码" prop="aclCode">
-              <el-input v-model="form.aclCode" placeholder="例如 cnx_sip_endpoint_acl" :disabled="!!form.id" />
-            </el-form-item>
-          </el-col>
+          <AutoInternalCode v-model="form.aclCode" prefix="acl" />
           <el-col :span="12">
             <el-form-item label="用途" prop="purpose">
               <el-select v-model="form.purpose" style="width: 100%">
@@ -159,6 +155,8 @@
 </template>
 
 <script setup name="FreeSwitchAcl" lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+
 import {
   createFreeSwitchAcl,
   deleteFreeSwitchAcl,
@@ -200,7 +198,7 @@ const testDialog = reactive({
 });
 const previewDialog = reactive({ visible: false, xml: '' });
 const rules = {
-  nodeId: [{ required: true, message: '请选择 FreeSWITCH 节点', trigger: 'change' }],
+  nodeId: [{ required: true, message: '请选择话务服务节点', trigger: 'change' }],
   aclName: [{ required: true, message: '请输入 ACL 名称', trigger: 'blur' }],
   aclCode: [
     { required: true, message: '请输入 ACL 编码', trigger: 'blur' },
@@ -212,7 +210,7 @@ const rules = {
 
 function emptyForm(): FreeSwitchAclForm {
   return {
-    aclCode: 'cnx_sip_endpoint_acl',
+    aclCode: '',
     aclName: '',
     purpose: 'SIP_ENDPOINT',
     defaultAction: 'DENY',
@@ -280,7 +278,7 @@ const submit = () =>
     }
   });
 const publish = async (row: FreeSwitchAclVO) => {
-  await proxy?.$modal.confirm(`发布后 ACL ${row.aclCode} 将立即同步到 FreeSWITCH，确认继续吗？`);
+  await proxy?.$modal.confirm(`发布后 ACL ${row.aclName} 将立即同步到话务服务，确认继续吗？`);
   await publishFreeSwitchAcl(row.id);
   proxy?.$modal.msgSuccess('ACL 已发布并同步');
   await load();

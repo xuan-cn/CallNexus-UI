@@ -343,7 +343,14 @@ export interface AiIntentUtterance {
   utteranceType: 'POSITIVE' | 'NEGATIVE';
   utteranceText: string;
 }
+export interface IntentMatchRule {
+  polarity: 'POSITIVE' | 'NEGATIVE';
+  mode: 'EXACT' | 'ANY' | 'ALL' | 'PREFIX' | 'SUFFIX';
+  ignorePunctuation: boolean;
+  groups: string[][];
+}
 export interface AiIntentVO {
+  matchRules?: IntentMatchRule[];
   id: Id;
   groupId?: Id;
   groupName?: string;

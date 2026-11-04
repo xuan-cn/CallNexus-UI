@@ -39,7 +39,7 @@
       </el-form>
 
       <el-table v-loading="loading" :data="rows">
-        <el-table-column label="策略编码" prop="policyCode" min-width="150" />
+
         <el-table-column label="策略名称" prop="policyName" min-width="160" />
         <el-table-column label="节点" prop="nodeName" min-width="160" />
         <el-table-column label="类型" width="120">
@@ -106,9 +106,7 @@
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="12">
-            <el-form-item label="策略编码" prop="policyCode"><el-input v-model="form.policyCode" /></el-form-item>
-          </el-col>
+          <AutoInternalCode v-model="form.policyCode" prefix="policy" />
           <el-col :span="12">
             <el-form-item label="策略名称" prop="policyName"><el-input v-model="form.policyName" /></el-form-item>
           </el-col>
@@ -122,7 +120,7 @@
 
         <div class="form-section">
           <div class="form-section__title">拨号规范</div>
-          <div class="form-section__hint">选中该策略后，在号码送入 FreeSWITCH 前统一处理；未启用的规则不会修改号码。</div>
+          <div class="form-section__hint">选中该策略后，在号码送入话务服务前统一处理；未启用的规则不会修改号码。</div>
           <el-row :gutter="16">
             <el-col :span="12">
               <el-form-item label="本地区号" prop="localAreaCode">
@@ -191,6 +189,8 @@
 </template>
 
 <script setup name="OutboundLinePolicy" lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+
 import {
   createOutboundLinePolicy,
   deleteOutboundLinePolicy,
@@ -231,7 +231,7 @@ const form = reactive<OutboundLinePolicyForm>({
   items: []
 });
 const rules = {
-  nodeId: [{ required: true, message: '请选择 FreeSWITCH 节点' }],
+  nodeId: [{ required: true, message: '请选择话务服务节点' }],
   policyCode: [{ required: true, message: '请输入策略编码' }],
   policyName: [{ required: true, message: '请输入策略名称' }],
   policyType: [{ required: true, message: '请选择策略类型' }],

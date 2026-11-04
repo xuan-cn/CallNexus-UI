@@ -32,7 +32,7 @@
           <template #default="{ row }">
             <div class="queue-name">
               <strong>{{ row.queueName }}</strong>
-              <span>{{ row.queueCode }}</span>
+
             </div>
           </template>
         </el-table-column>
@@ -113,7 +113,7 @@
             <el-table-column label="坐席" min-width="180">
               <template #default="{ row }">
                 <strong>{{ row.agentName }}</strong>
-                <span class="muted">（{{ row.agentCode }}）</span>
+
               </template>
             </el-table-column>
             <el-table-column label="分机" width="110" prop="extension" />

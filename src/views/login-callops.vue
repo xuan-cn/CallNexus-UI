@@ -64,7 +64,7 @@
         <div class="auth-card">
         <div class="auth-head">
           <h2>{{ proxy.$t('login.welcome') }}</h2>
-          <p class="desc">{{ proxy.$t('login.formHint') }}</p>
+          <p class="desc app-hint">{{ proxy.$t('login.formHint') }}</p>
         </div>
 
         <el-form ref="loginRef" :model="loginForm" :rules="loginRules" class="login-form">

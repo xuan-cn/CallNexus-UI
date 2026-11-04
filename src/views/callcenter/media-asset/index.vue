@@ -158,7 +158,7 @@
     </el-dialog>
 
     <el-dialog v-model="publishDialog.visible" title="发布声音媒体" width="620px" append-to-body>
-      <el-alert class="mb-4" type="info" :closable="false" title="发布后节点 Agent 会自动下载并转换为 FreeSWITCH 标准 WAV。" />
+      <el-alert class="mb-4" type="info" :closable="false" title="发布后节点 Agent 会自动下载并转换为话务服务标准 WAV。" />
       <el-form label-width="100px"
         ><el-form-item label="目标节点组">
           <el-select v-model="publishGroupIds" multiple filterable style="width: 100%">

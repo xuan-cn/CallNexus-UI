@@ -1,5 +1,5 @@
 <template>
-  <div ref="shellRef" class="screen-shell" :class="`theme-${theme}`">
+  <div ref="shellRef" class="screen-shell" :class="[`theme-${theme}`, { 'is-embedded': embedded }]">
     <div class="screen-bg">
       <div class="screen-aurora" />
       <div class="screen-nebula" />
@@ -47,9 +47,9 @@
       <div class="screen-header-side screen-header-right">
         <span class="screen-clock">{{ clockText }}</span>
         <button v-if="screenfullEnabled" class="screen-btn" type="button" @click="toggleFullscreen">
-          {{ isFullscreen ? exitFullscreenText : fullscreenText }}
+          {{ isFullscreen ? exitFullscreenText : embedded ? '全屏大屏' : fullscreenText }}
         </button>
-        <button class="screen-btn screen-btn-ghost" type="button" @click="goBack">{{ backText }}</button>
+        <button v-if="!embedded" class="screen-btn screen-btn-ghost" type="button" @click="goBack">{{ backText }}</button>
       </div>
     </header>
 
@@ -71,6 +71,7 @@ import { useRouter } from 'vue-router';
 const props = withDefaults(
   defineProps<{
     title: string;
+    embedded?: boolean;
     subtitle?: string;
     footerText?: string;
     badgeText?: string;
@@ -80,7 +81,8 @@ const props = withDefaults(
     switchLinks?: { label: string; path: string }[];
   }>(),
   {
-    theme: 'ops'
+    theme: 'ops',
+    embedded: false
   }
 );
 
@@ -135,7 +137,7 @@ const toggleFullscreen = async () => {
 };
 
 const onFullscreenChange = () => {
-  isFullscreen.value = screenfull.isEnabled && screenfull.isFullscreen;
+  isFullscreen.value = screenfull.isEnabled && screenfull.element === shellRef.value;
 };
 
 const goSwitch = (path?: string) => {
@@ -152,7 +154,7 @@ onMounted(() => {
   if (screenfull.isEnabled) {
     screenfull.on('change', onFullscreenChange);
   }
-  document.documentElement.classList.add('screen-route-active');
+  if (!props.embedded) document.documentElement.classList.add('screen-route-active');
 });
 
 onBeforeUnmount(() => {
@@ -160,7 +162,7 @@ onBeforeUnmount(() => {
   if (screenfull.isEnabled) {
     screenfull.off('change', onFullscreenChange);
   }
-  document.documentElement.classList.remove('screen-route-active');
+  if (!props.embedded) document.documentElement.classList.remove('screen-route-active');
 });
 </script>
 
@@ -181,6 +183,23 @@ html.screen-route-active #app > * {
 </style>
 
 <style scoped lang="scss">
+.screen-shell.is-embedded {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  width: 100%;
+  height: calc(100vh - 84px);
+  min-height: 520px;
+  max-height: none;
+}
+.screen-shell.is-embedded:fullscreen {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  min-height: 0;
+  max-height: 100dvh;
+}
 .screen-shell {
   position: fixed;
   inset: 0;

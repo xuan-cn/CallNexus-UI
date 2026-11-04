@@ -1,5 +1,9 @@
 import request from '@/utils/request';
+import type { OutboundBlacklistTaskOption } from './types';
 import { OutboundBlacklistForm, OutboundBlacklistImportBatchVO, OutboundBlacklistScope, OutboundBlacklistVO } from './types';
+
+export const listOutboundBlacklistTaskOptions = () =>
+  request<OutboundBlacklistTaskOption[]>({ url: '/api/v1/outbound-blacklists/task-options', method: 'get' });
 
 export const listOutboundBlacklists = () => request<OutboundBlacklistVO[]>({ url: '/api/v1/outbound-blacklists', method: 'get' });
 export const getOutboundBlacklist = (id: string | number) =>

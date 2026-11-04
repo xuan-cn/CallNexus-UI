@@ -2,9 +2,7 @@
   <div class="p-2">
     <el-card class="mb-2" shadow="hover">
       <el-form ref="queryFormRef" :model="queryParams" :inline="true">
-        <el-form-item label="坐席编码" prop="agentCode">
-          <el-input v-model="queryParams.agentCode" clearable @keyup.enter="handleQuery" />
-        </el-form-item>
+
         <el-form-item label="坐席名称" prop="agentName">
           <el-input v-model="queryParams.agentName" clearable @keyup.enter="handleQuery" />
         </el-form-item>
@@ -36,7 +34,7 @@
 
       <el-table v-loading="loading" :data="agentList" @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="48" />
-        <el-table-column label="坐席编码" prop="agentCode" min-width="130" />
+
         <el-table-column label="坐席名称" prop="agentName" min-width="150" />
         <el-table-column label="系统用户" prop="userId" min-width="180">
           <template #default="{ row }">{{ getUserLabel(row.userId) }}</template>
@@ -88,9 +86,7 @@
 
     <el-dialog v-model="dialog.visible" :title="dialog.title" width="520px" append-to-body>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
-        <el-form-item label="坐席编码" prop="agentCode">
-          <el-input v-model="form.agentCode" placeholder="例如 AGENT_1001" />
-        </el-form-item>
+        <AutoInternalCode v-model="form.agentCode" prefix="agent" />
         <el-form-item label="坐席名称" prop="agentName">
           <el-input v-model="form.agentName" />
         </el-form-item>
@@ -152,7 +148,7 @@
               :value="item.id"
             />
           </el-select>
-          <div class="text-xs text-gray-400 mt-1">模板内容支持 {extension}，例如：工号 {extension} 为您服务。</div>
+          <div class="text-xs text-gray-400 mt-1 app-hint">模板内容支持 {extension}，例如：工号 {extension} 为您服务。</div>
         </el-form-item>
         <el-form-item v-if="promptDialog.mode === 'batch'" label="生成范围">
           <el-tag>{{ selectedAgents.length ? `已选 ${selectedAgents.length} 个坐席` : '当前筛选结果' }}</el-tag>
@@ -168,6 +164,8 @@
 </template>
 
 <script setup name="Agent" lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+
 import {
   bindAgentExtension,
   createAgent,

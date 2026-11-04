@@ -11,6 +11,7 @@ export interface FlowLayoutEdge {
 }
 
 export interface FlowLayoutOptions {
+  direction?: 'LR' | 'TB';
   horizontalGap?: number;
   verticalGap?: number;
   originX?: number;
@@ -19,7 +20,7 @@ export interface FlowLayoutOptions {
 }
 
 /**
- * Produces a deterministic left-to-right layout while treating loop edges as
+ * Produces a deterministic layered layout while treating loop edges as
  * back references. Node and edge contents are never changed.
  */
 export const createLayeredFlowLayout = <T extends FlowLayoutNode>(nodes: T[], edges: FlowLayoutEdge[], options: FlowLayoutOptions = {}): T[] => {
@@ -27,6 +28,7 @@ export const createLayeredFlowLayout = <T extends FlowLayoutNode>(nodes: T[], ed
 
   const horizontalGap = options.horizontalGap ?? 250;
   const verticalGap = options.verticalGap ?? 140;
+  const topToBottom = options.direction === 'TB';
   const originX = options.originX ?? 160;
   const originY = options.originY ?? 110;
   const startNodeType = options.startNodeType ?? 'START';
@@ -40,7 +42,8 @@ export const createLayeredFlowLayout = <T extends FlowLayoutNode>(nodes: T[], ed
     incomingCount.set(edge.target, (incomingCount.get(edge.target) || 0) + 1);
   });
 
-  const byCurrentPosition = (left: T, right: T) => left.y - right.y || left.x - right.x || left.id.localeCompare(right.id);
+  const byCurrentPosition = (left: T, right: T) =>
+    (topToBottom ? left.x - right.x || left.y - right.y : left.y - right.y || left.x - right.x) || left.id.localeCompare(right.id);
   const roots = nodes
     .filter((node) => node.type === startNodeType || incomingCount.get(node.id) === 0)
     .sort((left, right) => {
@@ -89,11 +92,11 @@ export const createLayeredFlowLayout = <T extends FlowLayoutNode>(nodes: T[], ed
     .sort(([left], [right]) => left - right)
     .forEach(([layer, entries]) => {
       entries.sort(byCurrentPosition);
-      const layerOffset = ((maximumRows - entries.length) * verticalGap) / 2;
+      const layerOffset = ((maximumRows - entries.length) * (topToBottom ? horizontalGap : verticalGap)) / 2;
       entries.forEach((node, row) => {
         positionById.set(node.id, {
-          x: originX + layer * horizontalGap,
-          y: originY + layerOffset + row * verticalGap
+          x: topToBottom ? originX + layerOffset + row * horizontalGap : originX + layer * horizontalGap,
+          y: topToBottom ? originY + layer * verticalGap : originY + layerOffset + row * verticalGap
         });
       });
     });

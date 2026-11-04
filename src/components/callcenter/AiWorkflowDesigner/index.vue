@@ -2,21 +2,19 @@
   <div class="ai-workflow-designer" :class="{ 'is-tree-view': viewMode === 'tree' }">
     <aside v-show="viewMode === 'canvas'" class="palette">
       <h4>编排节点</h4>
-      <div v-for="item in commonPaletteDefinitions" :key="item.type" class="palette-item" @mousedown="startDrag(item)">
-        <span class="node-dot" :style="{ background: item.color }" />
-        <div>
-          <div class="palette-label">{{ item.label }}</div>
-          <div class="muted">{{ item.description }}</div>
-        </div>
-      </div>
+      <el-tooltip v-for="item in commonPaletteDefinitions" :key="item.type" :content="`${item.label}：${item.description}`" placement="right" :show-after="300">
+        <button type="button" class="palette-item" :aria-label="`${item.label}：${item.description}`" @mousedown.left="startDrag(item)">
+          <span class="node-dot" :style="{ background: item.color }" />
+          <span class="palette-label">{{ item.label }}</span>
+        </button>
+      </el-tooltip>
       <div class="palette-section-title">高级节点</div>
-      <div v-for="item in advancedPaletteDefinitions" :key="item.type" class="palette-item" @mousedown="startDrag(item)">
-        <span class="node-dot" :style="{ background: item.color }" />
-        <div>
-          <div class="palette-label">{{ item.label }}</div>
-          <div class="muted">{{ item.description }}</div>
-        </div>
-      </div>
+      <el-tooltip v-for="item in advancedPaletteDefinitions" :key="item.type" :content="`${item.label}：${item.description}`" placement="right" :show-after="300">
+        <button type="button" class="palette-item" :aria-label="`${item.label}：${item.description}`" @mousedown.left="startDrag(item)">
+          <span class="node-dot" :style="{ background: item.color }" />
+          <span class="palette-label">{{ item.label }}</span>
+        </button>
+      </el-tooltip>
       <el-alert type="info" :closable="false" title="拖入节点并连线。节点和分支均通过中文选项配置，无需填写技术编码。" />
     </aside>
 
@@ -31,7 +29,7 @@
           <el-button icon="ZoomIn" title="放大" @click="lf?.zoom(true)" />
           <el-button icon="ZoomOut" title="缩小" @click="lf?.zoom(false)" />
           <el-button icon="FullScreen" title="适应画布" @click="fitCanvas" />
-          <el-button icon="Rank" title="整理布局" @click="organizeLayout">整理</el-button>
+          <el-button icon="Rank" title="从上到下整理布局" @click="organizeLayout">整理</el-button>
         </el-button-group>
         <el-select v-model="navigationNode" class="node-navigation" filterable clearable placeholder="搜索节点名称 / 类型" @change="navigateToNode">
           <el-option
@@ -510,7 +508,7 @@
             </el-select>
           </el-form-item>
           <el-alert v-else type="info" :closable="false" title="这是顺序连线，不需要配置条件。" />
-          <p v-if="sourceDefinition.branch" class="muted">同一个判断节点的每个分支只能配置一次。</p>
+          <p v-if="sourceDefinition.branch" class="muted app-hint">同一个判断节点的每个分支只能配置一次。</p>
           <el-button class="mt-4" type="danger" plain style="width: 100%" @click="removeSelection">删除连线</el-button>
         </el-form>
       </template>
@@ -746,14 +744,17 @@ const selectedValidationMessages = computed(() => [
 
 class WorkflowCardModel extends RectNodeModel {
   setAttributes() {
-    this.width = 164;
-    this.height = 72;
-    this.radius = 9;
+    this.width = 136;
+    this.height = 48;
+    this.radius = 6;
     this.sourceRules.push({
       message: '终止节点不能连接后续节点',
       validate: () => !getAiWorkflowNodeDefinition(String(this.properties.workflowType)).terminal
     });
     this.targetRules.push({ message: '开始节点不能作为连线目标', validate: () => this.properties.workflowType !== 'START' });
+  }
+  getTextStyle() {
+    return { ...super.getTextStyle(), fontSize: 12, textWidth: 112, overflowMode: 'ellipsis' as const };
   }
   getNodeStyle() {
     const style = super.getNodeStyle();
@@ -1211,8 +1212,24 @@ const fitCanvas = () => {
 const organizeLayout = () => {
   if (!lf) return;
   const graph = readGraph();
-  const nodes = createLayeredFlowLayout(graph.nodes, graph.edges);
+  const nodes = createLayeredFlowLayout(graph.nodes, graph.edges, { direction: 'TB' });
   nodes.forEach((node) => lf?.graphModel.moveNode2Coordinate(node.id, node.x, node.y, true));
+  // Recompute endpoints after rotation instead of retaining horizontal anchors.
+  graph.edges.forEach(({ id }) => {
+    const edge = lf?.getEdgeModelById(id);
+    if (!edge) return;
+    const source = edge.getBeginAnchor(edge.sourceNode, edge.targetNode);
+    if (source) {
+      edge.sourceAnchorId = source.id;
+      edge.updateStartPoint(source);
+    }
+    const target = edge.getEndAnchor(edge.targetNode);
+    if (target) {
+      edge.targetAnchorId = target.id;
+      edge.updateEndPoint(target);
+    }
+    edge.resetTextPosition();
+  });
   syncGraph();
   nextTick(fitCanvas);
 };
@@ -1501,27 +1518,42 @@ onBeforeUnmount(() => lf?.destroy());
 }
 .palette-item {
   display: flex;
-  gap: 10px;
-  padding: 11px;
-  margin-bottom: 9px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 10px;
+  margin-bottom: 6px;
   border: 1px solid #dce3ec;
-  border-radius: 8px;
+  border-radius: 4px;
+  background: #fff;
+  font: inherit;
+  text-align: left;
   cursor: grab;
 }
 .palette-item:hover {
   border-color: #2563eb;
-  box-shadow: 0 3px 10px rgb(37 99 235 / 10%);
+  background: #f8fafc;
+}
+.palette-item:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }
 .node-dot {
   flex: none;
   width: 10px;
   height: 10px;
-  margin-top: 5px;
+  margin-top: 0;
   border-radius: 50%;
 }
 .palette-label {
+  min-width: 0;
+  overflow: hidden;
   color: #1f2937;
-  font-weight: 600;
+  font-size: 13px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .palette-section-title {
   margin: 16px 0 8px;

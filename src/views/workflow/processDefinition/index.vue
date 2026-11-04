@@ -27,9 +27,7 @@
                 <el-form-item label="流程定义名称" prop="flowName">
                   <el-input v-model="queryParams.flowName" placeholder="请输入流程定义名称" clearable @keyup.enter="handleQuery" />
                 </el-form-item>
-                <el-form-item label="流程定义编码" prop="flowCode">
-                  <el-input v-model="queryParams.flowCode" placeholder="请输入流程定义编码" clearable @keyup.enter="handleQuery" />
-                </el-form-item>
+
                 <el-form-item>
                   <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
                   <el-button icon="Refresh" @click="resetQuery">重置</el-button>
@@ -173,9 +171,7 @@
               style="width: 100%"
             />
           </el-form-item>
-          <el-form-item label="流程编码" prop="flowCode">
-            <el-input v-model="form.flowCode" placeholder="请输入流程编码" maxlength="40" show-word-limit />
-          </el-form-item>
+          <AutoInternalCode v-model="form.flowCode" prefix="flow" />
           <el-form-item label="流程名称" prop="flowName">
             <el-input v-model="form.flowName" placeholder="请输入流程名称" maxlength="100" show-word-limit />
           </el-form-item>
@@ -208,6 +204,8 @@
 </template>
 
 <script setup name="processDefinition" lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+
 import { listDefinition, deleteDefinition, active, importDef, unPublishList, publish, add, edit, getInfo, copy } from '@/api/workflow/definition';
 import { categoryTree } from '@/api/workflow/category';
 import { CategoryTreeVO } from '@/api/workflow/category/types';

@@ -3,7 +3,7 @@
     <el-card shadow="never" class="mb-2">
       <el-form :model="query" inline size="small">
         <el-form-item label="关键词">
-          <el-input v-model="query.keyword" clearable placeholder="计划名称/编码" @keyup.enter="search" />
+          <el-input v-model="query.keyword" clearable placeholder="计划名称" @keyup.enter="search" />
         </el-form-item>
         <el-form-item label="抽样方式">
           <el-select v-model="query.samplingMethod" clearable placeholder="全部方式" style="width: 150px">
@@ -41,7 +41,7 @@
         <el-table-column label="计划" min-width="190">
           <template #default="{ row }"
             ><div>{{ row.planName }}</div>
-            <small>{{ row.planCode }}</small></template
+            </template
           >
         </el-table-column>
         <el-table-column label="评分模板" prop="templateName" min-width="150" />
@@ -97,14 +97,11 @@
         <section class="form-section">
           <h4>基础信息</h4>
           <el-row :gutter="16">
-            <el-col :span="8"
-              ><el-form-item label="计划编码" prop="planCode"
-                ><el-input v-model="form.planCode" :disabled="!!form.id" placeholder="如 QA_DAILY" /></el-form-item
-            ></el-col>
-            <el-col :span="8"
+            <AutoInternalCode v-model="form.planCode" prefix="plan" />
+            <el-col :span="12"
               ><el-form-item label="计划名称" prop="planName"><el-input v-model="form.planName" /></el-form-item
             ></el-col>
-            <el-col :span="8"
+            <el-col :span="12"
               ><el-form-item label="评分模板" prop="templateId"
                 ><el-select v-model="form.templateId" filterable style="width: 100%"
                   ><el-option
@@ -304,6 +301,8 @@
 </template>
 
 <script setup name="QualitySamplingPlan" lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+
 import {
   createQualitySamplingPlan,
   deleteQualitySamplingPlan,

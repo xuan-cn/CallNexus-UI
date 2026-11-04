@@ -1,6 +1,12 @@
 export type OutboundBlacklistScope = 'GLOBAL' | 'TASK';
 export type OutboundBlacklistSource = 'MANUAL' | 'EXCEL' | 'CUSTOMER_REQUEST' | 'SYSTEM_RULE';
 
+export interface OutboundBlacklistTaskOption {
+  id: string | number;
+  taskCode: string;
+  taskName: string;
+}
+
 export interface OutboundBlacklistVO {
   id: string | number;
   scopeType: OutboundBlacklistScope;

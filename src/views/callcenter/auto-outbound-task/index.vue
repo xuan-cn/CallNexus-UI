@@ -21,7 +21,7 @@
             ><el-icon><Refresh /></el-icon
           ></el-button>
         </div>
-        <el-input v-model="query.keyword" clearable placeholder="搜索任务名称或编码" @input="handleQueryChange">
+        <el-input v-model="query.keyword" clearable placeholder="搜索任务名称" @input="handleQueryChange">
           <template #prefix
             ><el-icon><Search /></el-icon
           ></template>
@@ -47,7 +47,7 @@
               <strong>{{ task.taskName }}</strong>
               <el-tag size="small" :type="statusType(task.status)">{{ statusLabel(task.status) }}</el-tag>
             </div>
-            <div class="task-code">{{ task.taskCode }}</div>
+
             <el-progress :percentage="progress(task)" :stroke-width="6" :show-text="false" />
             <div class="task-progress">
               <span>{{ dialModeLabel(task.dialMode) }}</span>
@@ -80,7 +80,7 @@
                 <el-tag :type="statusType(selectedTask.status)">{{ statusLabel(selectedTask.status) }}</el-tag>
               </div>
               <div class="task-meta">
-                <span>{{ selectedTask.taskCode }}</span>
+
                 <span>{{ dialModeLabel(selectedTask.dialMode) }}</span>
                 <span>{{ callWindowSummary(selectedTask) }}</span>
               </div>
@@ -264,9 +264,7 @@
         <el-tabs v-model="drawer.tab">
           <el-tab-pane label="基础设置" name="base">
             <el-row :gutter="18">
-              <el-col :span="12"
-                ><el-form-item label="任务编码" prop="taskCode"><el-input v-model="form.taskCode" maxlength="32" /></el-form-item
-              ></el-col>
+              <AutoInternalCode v-model="form.taskCode" prefix="task" />
               <el-col :span="12"
                 ><el-form-item label="任务名称" prop="taskName"><el-input v-model="form.taskName" maxlength="64" /></el-form-item
               ></el-col>
@@ -433,6 +431,8 @@
 </template>
 
 <script setup lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+
 import { computed, getCurrentInstance, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import type { FormInstance, FormRules } from 'element-plus';
 import { ArrowDown, Check, DataAnalysis, Phone, Plus, Refresh, Search, User } from '@element-plus/icons-vue';

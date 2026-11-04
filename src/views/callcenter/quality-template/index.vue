@@ -44,10 +44,7 @@
         <el-card shadow="never" class="mb-3">
           <template #header><span>基础规则</span></template>
           <el-row :gutter="16">
-            <el-col :span="8"
-              ><el-form-item label="模板编码" prop="templateCode"
-                ><el-input v-model="form.templateCode" :disabled="!!form.id" placeholder="如 SERVICE_STANDARD" /></el-form-item
-            ></el-col>
+            <AutoInternalCode v-model="form.templateCode" prefix="tpl" />
             <el-col :span="8"
               ><el-form-item label="模板名称" prop="templateName"><el-input v-model="form.templateName" /></el-form-item
             ></el-col>
@@ -85,7 +82,7 @@
             <el-table-column label="维度" min-width="180"
               ><template #default="{ row }"
                 ><div class="inline-pair">
-                  <el-input v-model="row.dimensionCode" placeholder="编码" /><el-input
+                  <AutoInternalCode v-model="row.dimensionCode" prefix="dim" /><el-input
                     v-model="row.dimensionName"
                     placeholder="名称"
                   /></div></template
@@ -93,7 +90,7 @@
             <el-table-column label="评分项" min-width="230"
               ><template #default="{ row }"
                 ><div class="inline-pair">
-                  <el-input v-model="row.itemCode" placeholder="评分项编码" /><el-input
+                  <AutoInternalCode v-model="row.itemCode" prefix="item" /><el-input
                     v-model="row.itemName"
                     placeholder="评分项名称"
                   /></div></template
@@ -137,6 +134,9 @@
 </template>
 
 <script setup name="QualityTemplate" lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+import { prepareQualityItemCodes } from '@/utils/internalCode';
+
 import {
   createQualityTemplate,
   deleteQualityTemplate,
@@ -219,10 +219,11 @@ const openEdit = async (row: QualityTemplateVO) => {
 const addItem = () => form.items.push(emptyItem());
 const validateItems = () => {
   const invalid = form.items.some((item) => !item.dimensionCode || !item.dimensionName || !item.itemCode || !item.itemName);
-  if (invalid) proxy?.$modal.msgError('请完整填写评分项的维度和评分项编码、名称');
+  if (invalid) proxy?.$modal.msgError('请完整填写维度名称和评分项名称');
   return !invalid;
 };
 const save = async () => {
+  prepareQualityItemCodes(form.items);
   if (!(await formRef.value?.validate()) || !validateItems()) return;
   saving.value = true;
   try {
@@ -288,7 +289,7 @@ onMounted(load);
 }
 .inline-pair {
   display: grid;
-  grid-template-columns: 42% 58%;
+  grid-template-columns: 1fr;
   gap: 6px;
 }
 .template-form :deep(.el-card__header) {

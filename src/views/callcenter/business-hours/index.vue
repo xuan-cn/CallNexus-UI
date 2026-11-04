@@ -8,7 +8,7 @@
         </div>
       </template>
       <el-table v-loading="loading" :data="plans">
-        <el-table-column label="方案编码" prop="planCode" min-width="140" />
+
         <el-table-column label="方案名称" prop="planName" min-width="180" />
         <el-table-column label="时区" prop="timezone" min-width="160" />
         <el-table-column label="周期数" width="90"><template #default="{ row }">{{ row.periods.length }}</template></el-table-column>
@@ -27,7 +27,7 @@
     <el-dialog v-model="visible" :title="form.id ? '修改工作时间' : '新增工作时间'" width="900px" append-to-body>
       <el-form :model="form" label-width="100px">
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="方案编码" required><el-input v-model="form.planCode" /></el-form-item></el-col>
+          <AutoInternalCode v-model="form.planCode" prefix="plan" />
           <el-col :span="12"><el-form-item label="方案名称" required><el-input v-model="form.planName" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="时区" required><el-input v-model="form.timezone" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="状态"><el-switch v-model="form.enabled" active-text="启用" inactive-text="停用" /></el-form-item></el-col>
@@ -57,6 +57,8 @@
 </template>
 
 <script setup name="BusinessHours" lang="ts">
+import AutoInternalCode from '@/components/AutoInternalCode';
+
 import { createBusinessHoursPlan, deleteBusinessHoursPlan, evaluateBusinessHoursPlan, getBusinessHoursPlan, listBusinessHoursPlans, updateBusinessHoursPlan } from '@/api/callcenter/business-hours';
 import type { BusinessHoursPlan } from '@/api/callcenter/business-hours/types';
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
