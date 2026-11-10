@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard">
+  <div class="dashboard" :class="{ 'is-loading': loading }">
     <section class="page-head">
       <div class="page-head-glow" aria-hidden="true" />
       <div class="page-head-copy">
@@ -41,7 +41,7 @@
         v-for="item in metrics"
         :key="item.label"
         class="metric-card"
-        :class="{ 'is-alert': item.alert }"
+        :class="[`tone-${item.tone}`, { 'is-alert': item.alert }]"
         @click="item.onClick && item.onClick()"
       >
         <div class="metric-main">
@@ -52,7 +52,7 @@
           </div>
           <small :class="{ positive: item.positive, warn: item.alert }">{{ item.change }}</small>
         </div>
-        <span class="metric-icon">
+        <span class="metric-icon" :class="item.tone">
           <el-icon><component :is="item.icon" /></el-icon>
         </span>
       </article>
@@ -348,6 +348,7 @@ const metrics = computed(() => [
     change: `总量 ${overview.value?.ticketTotal || 0}`,
     positive: ticketPending.value === 0,
     alert: ticketPending.value > 0,
+    tone: 'orange',
     icon: Tickets,
     onClick: openTicket
   },
@@ -358,6 +359,7 @@ const metrics = computed(() => [
     change: `总量 ${overview.value?.customerTotal || 0}`,
     positive: (overview.value?.customerUnassigned || 0) === 0,
     alert: (overview.value?.customerUnassigned || 0) > 0,
+    tone: 'purple',
     icon: UserFilled,
     onClick: openUnassignedCustomer
   },
@@ -368,6 +370,7 @@ const metrics = computed(() => [
     change: `客户池 ${overview.value?.customerTotal || 0}`,
     positive: (overview.value?.customerPeriodNew || 0) > 0,
     alert: false,
+    tone: 'blue',
     icon: User,
     onClick: openCustomer
   },
@@ -378,6 +381,7 @@ const metrics = computed(() => [
     change: `呼入 ${overview.value?.inboundCount || 0} · 呼出 ${overview.value?.outboundCount || 0}`,
     positive: (overview.value?.answerRate || 0) >= 80,
     alert: false,
+    tone: 'cyan',
     icon: Phone,
     onClick: openCallRecord
   }
@@ -411,16 +415,22 @@ const doughnutOption = (data: Array<{ name: string; value: number; color: string
       subtext: emptyText,
       left: 'center',
       top: '36%',
-      textStyle: { color: '#0f172a', fontSize: 22, fontWeight: 700, lineHeight: 26 },
+      textStyle: {
+        color: '#0f172a',
+        fontSize: 24,
+        fontWeight: 700,
+        lineHeight: 28,
+        letterSpacing: '-0.03em'
+      },
       subtextStyle: { color: '#94a3b8', fontSize: 12, lineHeight: 18 }
     },
     series: [
       {
         type: 'pie',
-        radius: ['58%', '78%'],
+        radius: ['58%', '76%'],
         center: ['50%', '50%'],
         avoidLabelOverlap: true,
-        itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+        itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 3 },
         label: { show: false },
         labelLine: { show: false },
         data: total
@@ -796,7 +806,16 @@ onBeforeUnmount(() => {
   min-height: calc(100vh - 84px);
   padding: 16px 18px 22px;
   color: var(--ink);
-  background: #f5f6f8;
+  background:
+    radial-gradient(ellipse 90% 48% at 12% -8%, rgba(191, 219, 254, 0.42), transparent 55%),
+    radial-gradient(ellipse 70% 40% at 92% 8%, rgba(224, 242, 254, 0.35), transparent 50%),
+    linear-gradient(180deg, #f3f6fb 0%, #f7f8fa 42%, #f5f6f8 100%);
+  transition: opacity 0.22s ease;
+
+  &.is-loading > :not(.page-head) {
+    opacity: 0.72;
+    pointer-events: none;
+  }
 
   > * {
     margin-top: 0 !important;
@@ -813,7 +832,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--card);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 4px 12px rgba(15, 23, 42, 0.035);
 }
 
 .page-head {
@@ -1013,7 +1032,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--line);
   border-radius: 12px;
   background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 8px 18px rgba(15, 23, 42, 0.03);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 6px 14px rgba(15, 23, 42, 0.03);
   transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 
   &::before {
@@ -1027,13 +1046,18 @@ onBeforeUnmount(() => {
     background: #3b82f6;
   }
 
+  &.tone-orange::before { background: #f59e0b; }
+  &.tone-purple::before { background: #8b5cf6; }
+  &.tone-blue::before { background: #3b82f6; }
+  &.tone-cyan::before { background: #06b6d4; }
+
   &.is-alert {
     border-color: #fde68a;
   }
 
   &:hover {
     border-color: #d5e4f7;
-    box-shadow: 0 10px 22px rgba(37, 99, 235, 0.07);
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.06);
     transform: translateY(-1px);
   }
 
@@ -1072,6 +1096,11 @@ onBeforeUnmount(() => {
   color: #2563eb;
   background: #eff6ff;
   font-size: 16px;
+
+  &.orange { color: #d97706; background: #fffbeb; }
+  &.purple { color: #7c3aed; background: #f5f3ff; }
+  &.blue { color: #2563eb; background: #eff6ff; }
+  &.cyan { color: #0891b2; background: #ecfeff; }
 }
 
 .metric-value {
@@ -1201,9 +1230,9 @@ onBeforeUnmount(() => {
   width: 100%;
   min-height: 40px;
   padding: 10px 14px;
-  border: 1px solid var(--cell-line);
+  border: 1px solid transparent;
   border-radius: 10px;
-  background: var(--cell);
+  background: #f8fafc;
   color: inherit;
   font: inherit;
   text-align: left;
@@ -1219,23 +1248,32 @@ onBeforeUnmount(() => {
   }
 
   &:hover {
-    border-color: #d4e0f0;
-    background: var(--hover);
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.05);
+    border-color: #e2e8f0;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
   }
 
   &.is-static {
     cursor: default;
 
     &:hover {
-      border-color: var(--cell-line);
-      background: var(--cell);
+      border-color: transparent;
+      background: #f8fafc;
       box-shadow: none;
     }
   }
 
-  &.is-warn strong {
-    color: #d97706;
+  &.is-warn {
+    background: linear-gradient(90deg, rgba(245, 158, 11, 0.08), #f8fafc 48%);
+
+    strong {
+      color: #d97706;
+    }
+
+    &:hover {
+      border-color: #fde68a;
+      background: linear-gradient(90deg, rgba(245, 158, 11, 0.1), #fff 52%);
+    }
   }
 }
 
@@ -1267,6 +1305,7 @@ onBeforeUnmount(() => {
 }
 
 .traffic-item {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1274,6 +1313,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   min-height: 0;
   padding: 10px 12px;
+  overflow: hidden;
   border: 1px solid var(--cell-line);
   border-radius: 12px;
   background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
@@ -1290,8 +1330,24 @@ onBeforeUnmount(() => {
     transform: translateY(-1px);
   }
 
-  &.is-warn .traffic-value strong {
-    color: #d97706;
+  &.is-warn {
+    border-color: #fde68a;
+    background: linear-gradient(90deg, rgba(245, 158, 11, 0.06), #fff 42%);
+
+    &::before {
+      position: absolute;
+      left: 0;
+      top: 10px;
+      bottom: 10px;
+      width: 3px;
+      content: '';
+      border-radius: 0 3px 3px 0;
+      background: #f59e0b;
+    }
+
+    .traffic-value strong {
+      color: #d97706;
+    }
   }
 }
 
@@ -1306,6 +1362,7 @@ onBeforeUnmount(() => {
     height: 100%;
     border-radius: inherit;
     background: linear-gradient(90deg, #60a5fa, #2563eb);
+    transition: width 0.35s ease;
   }
 }
 
@@ -1370,7 +1427,7 @@ onBeforeUnmount(() => {
   min-height: 48px;
   padding: 8px 10px 8px 14px;
   overflow: hidden;
-  border: 1px solid var(--cell-line);
+  border: 1px solid #eef2f7;
   border-radius: 12px;
   background: linear-gradient(180deg, #fff 0%, #fbfcfe 100%);
 
@@ -1391,7 +1448,8 @@ onBeforeUnmount(() => {
   &.tone-cyan::before { background: #22d3ee; }
 
   &.is-urgent {
-    background: linear-gradient(90deg, rgba(245, 158, 11, 0.05), #fff 46%);
+    border-color: #fde68a;
+    background: linear-gradient(90deg, rgba(245, 158, 11, 0.07), #fff 50%);
   }
 
   &.is-action {
@@ -1400,7 +1458,7 @@ onBeforeUnmount(() => {
   }
 
   &.is-action:hover {
-    border-color: #d4e0f0;
+    border-color: #dbe4f0;
     transform: translateX(2px);
 
     .todo-arrow {
@@ -1464,7 +1522,7 @@ onBeforeUnmount(() => {
     font: inherit;
     text-align: left;
     cursor: pointer;
-    border: 1px solid var(--cell-line);
+    border: 1px solid #eef2f7;
     border-radius: 12px;
     background: linear-gradient(180deg, #fff 0%, #fbfcfe 100%);
     box-sizing: border-box;
@@ -1477,22 +1535,22 @@ onBeforeUnmount(() => {
       height: 72px;
       content: '';
       border-radius: 50%;
-      opacity: 0.55;
+      opacity: 0.45;
       pointer-events: none;
     }
 
-    &.tone-blue::after { background: radial-gradient(circle, rgba(59, 130, 246, 0.16), transparent 68%); }
-    &.tone-orange::after { background: radial-gradient(circle, rgba(245, 158, 11, 0.16), transparent 68%); }
-    &.tone-cyan::after { background: radial-gradient(circle, rgba(6, 182, 212, 0.16), transparent 68%); }
-    &.tone-green::after { background: radial-gradient(circle, rgba(16, 185, 129, 0.16), transparent 68%); }
-    &.tone-purple::after { background: radial-gradient(circle, rgba(139, 92, 246, 0.16), transparent 68%); }
-    &.tone-red::after { background: radial-gradient(circle, rgba(248, 113, 113, 0.16), transparent 68%); }
+    &.tone-blue::after { background: radial-gradient(circle, rgba(59, 130, 246, 0.14), transparent 68%); }
+    &.tone-orange::after { background: radial-gradient(circle, rgba(245, 158, 11, 0.14), transparent 68%); }
+    &.tone-cyan::after { background: radial-gradient(circle, rgba(6, 182, 212, 0.14), transparent 68%); }
+    &.tone-green::after { background: radial-gradient(circle, rgba(16, 185, 129, 0.14), transparent 68%); }
+    &.tone-purple::after { background: radial-gradient(circle, rgba(139, 92, 246, 0.14), transparent 68%); }
+    &.tone-red::after { background: radial-gradient(circle, rgba(248, 113, 113, 0.14), transparent 68%); }
   }
 
   button:hover {
-    border-color: #d4e0f0;
+    border-color: #dbe4f0;
     background: #fff;
-    box-shadow: 0 8px 16px rgba(37, 99, 235, 0.06);
+    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.05);
     transform: translateY(-1px);
 
     .quick-arrow {
