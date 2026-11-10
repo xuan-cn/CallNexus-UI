@@ -1,5 +1,30 @@
 import { describe, expect, it } from 'vitest';
-import { idleAgentCallState, reduceAgentCallState } from './agentCallState';
+import { idleAgentCallState, reduceAgentCallState, resolvePreConnectEventPhase } from './agentCallState';
+
+describe('resolvePreConnectEventPhase', () => {
+  const isCurrentIdentity = (identity: string) => identity === '1002';
+
+  it('uses the target phase even when the display numbers are missing', () => {
+    expect(
+      resolvePreConnectEventPhase({ agentExtension: '1002', callerNumber: '', calledNumber: '', callPhase: 'INCOMING_RINGING' }, isCurrentIdentity)
+    ).toBe('INCOMING_RINGING');
+  });
+
+  it('does not ring the peer just because the peer appears in display numbers', () => {
+    expect(
+      resolvePreConnectEventPhase(
+        { agentExtension: '1001', callerNumber: '1002', calledNumber: '1001', callPhase: 'INCOMING_RINGING' },
+        isCurrentIdentity
+      )
+    ).toBeUndefined();
+  });
+
+  it('preserves outbound phase and supports older events without a phase', () => {
+    const event = { agentExtension: '1002', callerNumber: '1001', calledNumber: '1002' };
+    expect(resolvePreConnectEventPhase({ ...event, callPhase: 'OUTBOUND_DIALING' }, isCurrentIdentity)).toBe('OUTBOUND_DIALING');
+    expect(resolvePreConnectEventPhase({ ...event, callPhase: undefined }, isCurrentIdentity)).toBe('INCOMING_RINGING');
+  });
+});
 
 describe('reduceAgentCallState', () => {
   it('does not regress a connected call to a delayed ringing event', () => {

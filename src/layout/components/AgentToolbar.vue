@@ -148,6 +148,9 @@
           <span class="soft-tag agent" :title="currentAgent.agentName || currentAgent.agentCode">
             {{ currentAgent.agentCode || currentAgent.agentName || '坐席' }}
           </span>
+          <span v-if="currentAgent.extension" class="soft-tag extension" :title="extensionSummary">
+            {{ extensionSummary }}
+          </span>
           <button type="button" class="soft-more" :class="{ active: panelOpen }" title="打开拨号盘" @click="togglePanel">
             <el-icon><Operation /></el-icon>
           </button>
@@ -373,7 +376,13 @@ import DynamicBusinessFormDialog from './DynamicBusinessFormDialog.vue';
 import { useAgentDialBus, type AgentDialRequest } from '@/composables/useAgentDial';
 import { listIvrFlows } from '@/api/callcenter/ivr-flow';
 import type { IvrFlowVO } from '@/api/callcenter/ivr-flow/types';
-import { idleAgentCallState, reduceAgentCallState, type AgentCallState, type AgentCallTransition } from './agentCallState';
+import {
+  idleAgentCallState,
+  reduceAgentCallState,
+  resolvePreConnectEventPhase,
+  type AgentCallState,
+  type AgentCallTransition
+} from './agentCallState';
 
 type AgentStatus = 'idle' | 'notReady' | 'busy' | 'afterCall';
 type ControllableAgentStatus = 'idle' | 'notReady' | 'afterCall';
@@ -1677,11 +1686,11 @@ const handleCallEvent = (event: Record<string, unknown>) => {
     if (callConnected.value) {
       return;
     }
-    const isIncomingToCurrentAgent = isCurrentAgentIdentity(agentExtension) && !isCurrentAgentIdentity(callerNumber) && calledNumber !== '';
-    if (isIncomingToCurrentAgent) {
-      showIncomingCall(event);
-    } else {
-      showActiveCall(event, 'OUTBOUND_DIALING');
+    const phase = resolvePreConnectEventPhase({ agentExtension, callerNumber, calledNumber, callPhase: event.callPhase }, isCurrentAgentIdentity);
+    if (phase === 'INCOMING_RINGING') {
+      showIncomingCall({ ...event, callPhase: phase });
+    } else if (phase === 'OUTBOUND_DIALING') {
+      showActiveCall({ ...event, callPhase: phase }, phase);
     }
   }
 };
@@ -2381,6 +2390,13 @@ button {
   background: #eef4ff;
   border: 1px solid #c5d8ff;
   color: #245dcc;
+}
+
+.soft-tag.extension {
+  display: block;
+  background: #f4f6f9;
+  color: #526179;
+  font-weight: 500;
 }
 
 .soft-more {

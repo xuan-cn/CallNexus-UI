@@ -40,6 +40,9 @@
           <el-col :span="1.5">
             <el-button v-hasPermi="['system:config:add']" type="primary" plain icon="Plus" @click="handleAdd">新增</el-button>
           </el-col>
+          <el-col v-if="checkPermi(['system:config:add', 'system:config:edit'])" :span="1.5">
+            <el-button plain @click="openHoldMusic">坐席保持提示音</el-button>
+          </el-col>
           <el-col :span="1.5">
             <el-button v-hasPermi="['system:config:edit']" type="success" plain icon="Edit" :disabled="single" @click="handleUpdate()">
               修改
@@ -98,10 +101,21 @@
           <el-input v-model="form.configName" placeholder="请输入参数名称" />
         </el-form-item>
         <el-form-item label="参数键名" prop="configKey">
-          <el-input v-model="form.configKey" placeholder="请输入参数键名" />
+          <el-input v-model="form.configKey" :disabled="form.configKey === holdMediaKey" placeholder="请输入参数键名" />
         </el-form-item>
         <el-form-item label="参数键值" prop="configValue">
-          <el-input v-model="form.configValue" type="textarea" placeholder="请输入参数键值" />
+          <template v-if="form.configKey === holdMediaKey">
+            <el-select v-model="form.configValue" filterable class="w-full" @change="holdPreviewUrl = ''">
+              <el-option label="使用话务节点默认音" value="default" />
+              <el-option v-for="media in holdMediaOptions" :key="media.id" :label="media.assetName" :value="String(media.id)" />
+            </el-select>
+            <el-button v-if="holdMediaOptions.some((media) => String(media.id) === form.configValue)" link type="primary" @click="previewHoldMusic">
+              试听
+            </el-button>
+            <audio v-if="holdPreviewUrl && dialog.visible" :src="holdPreviewUrl" controls class="w-full"></audio>
+            <div class="text-xs text-gray-500">本租户所有坐席共用。音频未同步到当前节点时使用默认音。</div>
+          </template>
+          <el-input v-else v-model="form.configValue" type="textarea" placeholder="请输入参数键值" />
         </el-form-item>
         <el-form-item label="系统内置" prop="configType">
           <el-radio-group v-model="form.configType">
@@ -125,6 +139,9 @@
 <script setup name="Config" lang="ts">
 import { listConfig, getConfig, delConfig, addConfig, updateConfig, refreshCache } from '@/api/system/config';
 import { ConfigForm, ConfigQuery, ConfigVO } from '@/api/system/config/types';
+import { getMediaAsset, listMediaAssets } from '@/api/callcenter/media-asset';
+import type { MediaAssetVO } from '@/api/callcenter/media-asset/types';
+import { checkPermi } from '@/utils/permission';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const { sys_yes_no } = toRefs<any>(proxy?.useDict('sys_yes_no'));
@@ -169,6 +186,42 @@ const data = reactive<PageData<ConfigForm, ConfigQuery>>({
 });
 
 const { queryParams, form, rules } = toRefs(data);
+const holdMediaKey = 'callcenter.agent.holdMediaId';
+const holdMediaOptions = ref<MediaAssetVO[]>([]);
+const holdPreviewUrl = ref('');
+
+const loadHoldMedia = async () => {
+  holdPreviewUrl.value = '';
+  const response = await listMediaAssets({ pageNum: 1, pageSize: 1000, enabled: true });
+  holdMediaOptions.value = (response.rows || []).filter(
+    (media) => !['CALL_RECORDING', 'VOICEMAIL_RECORDING'].includes(media.category) && ['PUBLISHED', 'PARTIAL'].includes(media.publishStatus || '')
+  );
+};
+
+const openHoldMusic = async () => {
+  const response = await listConfig({ pageNum: 1, pageSize: 20, configKey: holdMediaKey, configName: '', configType: '' });
+  const existing = response.rows.find((item) => item.configKey === holdMediaKey);
+  if (!checkPermi([existing ? 'system:config:edit' : 'system:config:add'])) {
+    proxy?.$modal.msgWarning('没有保存坐席保持提示音的参数权限');
+    return;
+  }
+  await loadHoldMedia();
+  reset();
+  form.value = existing
+    ? { ...existing, configValue: existing.configValue || 'default' }
+    : { ...initFormData, configName: '坐席保持提示音', configKey: holdMediaKey, configValue: 'default', remark: '租户坐席保持时客户听到的声音媒体' };
+  dialog.title = '坐席保持提示音';
+  dialog.visible = true;
+};
+
+const previewHoldMusic = async () => {
+  const selectedId = form.value.configValue;
+  const response = await getMediaAsset(selectedId);
+  if (dialog.visible && selectedId === form.value.configValue) {
+    holdPreviewUrl.value = response.data.playbackUrl || '';
+    if (!holdPreviewUrl.value) proxy?.$modal.msgWarning('该音频暂无可试听文件');
+  }
+};
 
 /** 查询参数列表 */
 const getList = async () => {
@@ -217,6 +270,7 @@ const handleUpdate = async (row?: ConfigVO) => {
   const configId = row?.configId || ids.value[0];
   const res = await getConfig(configId);
   Object.assign(form.value, res.data);
+  if (form.value.configKey === holdMediaKey) await loadHoldMedia();
   dialog.visible = true;
   dialog.title = '修改参数';
 };

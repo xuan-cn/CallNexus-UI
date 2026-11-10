@@ -9,6 +9,7 @@ export type AiWorkflowPropertyType =
   | 'FLOW_VALUE'
   | 'OPERATOR_SELECT'
   | 'INTENT_MULTI_SELECT'
+  | 'IVR_SELECT'
   | 'SLOT_TARGET_MULTI_SELECT'
   | 'CUSTOMER_FIELD_MULTI_SELECT'
   | 'QUEUE_SELECT'
@@ -308,7 +309,7 @@ export const aiWorkflowNodeDefinitions: AiWorkflowNodeDefinition[] = [
     color: '#3f6212',
     description: '将当前客户通话转入指定 IVR 流程',
     terminal: true,
-    properties: [{ key: 'ivrFlowId', label: 'IVR 流程 ID', type: 'INPUT', placeholder: '请输入已发布的 IVR 流程 ID' }]
+    properties: [{ key: 'ivrFlowId', label: 'IVR 流程', type: 'IVR_SELECT', placeholder: '请选择已发布的 IVR 流程' }]
   },
   { type: 'HANGUP', label: '挂断', color: '#dc2626', description: '结束当前通话', terminal: true, properties: [] },
   { type: 'END', label: '结束', color: '#64748b', description: '正常结束当前编排', terminal: true, properties: [] }

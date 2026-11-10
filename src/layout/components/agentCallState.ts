@@ -26,6 +26,21 @@ export const idleAgentCallState = (): AgentCallState => ({
 
 const isPreConnectPhase = (phase: AgentCallPhase) => phase === 'INCOMING_RINGING' || phase === 'OUTBOUND_DIALING';
 
+export const resolvePreConnectEventPhase = (
+  event: { agentExtension: string; callerNumber: string; calledNumber: string; callPhase: unknown },
+  isCurrentIdentity: (identity: string) => boolean
+): AgentCallPhase | undefined => {
+  if (event.agentExtension && !isCurrentIdentity(event.agentExtension)) return;
+  if (!event.agentExtension && !isCurrentIdentity(event.callerNumber) && !isCurrentIdentity(event.calledNumber)) return;
+  if (event.callPhase) {
+    return event.callPhase === 'INCOMING_RINGING' || event.callPhase === 'OUTBOUND_DIALING' ? event.callPhase : undefined;
+  }
+  // Older events may not carry a phase or a recipient.
+  return !isCurrentIdentity(event.callerNumber) && !!event.calledNumber && (event.agentExtension || isCurrentIdentity(event.calledNumber))
+    ? 'INCOMING_RINGING'
+    : 'OUTBOUND_DIALING';
+};
+
 export const reduceAgentCallState = (current: AgentCallState, transition: AgentCallTransition): AgentCallState => {
   const businessCallId = String(transition.businessCallId || '');
   const agentLegUuid = String(transition.agentLegUuid || '');

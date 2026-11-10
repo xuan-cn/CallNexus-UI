@@ -2,14 +2,26 @@
   <div class="ai-workflow-designer" :class="{ 'is-tree-view': viewMode === 'tree' }">
     <aside v-show="viewMode === 'canvas'" class="palette">
       <h4>编排节点</h4>
-      <el-tooltip v-for="item in commonPaletteDefinitions" :key="item.type" :content="`${item.label}：${item.description}`" placement="right" :show-after="300">
+      <el-tooltip
+        v-for="item in commonPaletteDefinitions"
+        :key="item.type"
+        :content="`${item.label}：${item.description}`"
+        placement="right"
+        :show-after="300"
+      >
         <button type="button" class="palette-item" :aria-label="`${item.label}：${item.description}`" @mousedown.left="startDrag(item)">
           <span class="node-dot" :style="{ background: item.color }" />
           <span class="palette-label">{{ item.label }}</span>
         </button>
       </el-tooltip>
       <div class="palette-section-title">高级节点</div>
-      <el-tooltip v-for="item in advancedPaletteDefinitions" :key="item.type" :content="`${item.label}：${item.description}`" placement="right" :show-after="300">
+      <el-tooltip
+        v-for="item in advancedPaletteDefinitions"
+        :key="item.type"
+        :content="`${item.label}：${item.description}`"
+        placement="right"
+        :show-after="300"
+      >
         <button type="button" class="palette-item" :aria-label="`${item.label}：${item.description}`" @mousedown.left="startDrag(item)">
           <span class="node-dot" :style="{ background: item.color }" />
           <span class="palette-label">{{ item.label }}</span>
@@ -436,6 +448,25 @@
               </el-option>
             </el-select>
             <el-select
+              v-else-if="property.type === 'IVR_SELECT'"
+              :model-value="String(selectedNode.config[property.key] ?? '')"
+              :loading="ivrOptionsLoading"
+              :placeholder="property.placeholder"
+              :no-data-text="ivrOptionsFailed ? 'IVR 列表加载失败，请重新打开下拉重试' : '没有已启用且已发布的 IVR'"
+              filterable
+              class="w-full"
+              @visible-change="(visible: boolean) => visible && loadIvrOptions()"
+              @update:model-value="updateNodeProperty(property.key, $event)"
+            >
+              <el-option
+                v-if="selectedIvrUnavailable"
+                :label="ivrOptionsLoading ? '正在加载当前 IVR' : ivrOptionsFailed ? '当前 IVR 未能核实' : '原 IVR 不可用，请重新选择'"
+                :value="String(selectedNode.config[property.key])"
+                disabled
+              />
+              <el-option v-for="item in publishedIvrOptions" :key="item.id" :label="item.flowName" :value="String(item.id)" />
+            </el-select>
+            <el-select
               v-else-if="property.type === 'MEDIA_SELECT'"
               :model-value="selectedNode.config[property.key]"
               filterable
@@ -523,6 +554,8 @@ import '@logicflow/core/lib/index.css';
 import type { AiIntentVO } from '@/api/callcenter/ai-knowledge/types';
 import type { CallQueueVO } from '@/api/callcenter/call-queue/types';
 import type { FormTemplate } from '@/api/callcenter/form-template/types';
+import { listIvrFlows } from '@/api/callcenter/ivr-flow';
+import type { IvrFlowVO } from '@/api/callcenter/ivr-flow/types';
 import type { AiWorkflowMediaOptionVO } from '@/api/callcenter/ai-workflow/types';
 import type { AiWorkflowDefinition, AiWorkflowEdge, AiWorkflowNode } from '@/api/callcenter/ai-workflow/types';
 import { createLayeredFlowLayout } from '@/utils/logicflowLayout';
@@ -557,6 +590,33 @@ const emit = defineEmits<{
 }>();
 const containerRef = ref<HTMLElement>();
 const selectedNode = ref<AiWorkflowNode>();
+const publishedIvrOptions = ref<IvrFlowVO[]>([]);
+const ivrOptionsLoading = ref(false);
+const ivrOptionsFailed = ref(false);
+const selectedIvrUnavailable = computed(() => {
+  const id = String(selectedNode.value?.config.ivrFlowId ?? '');
+  return !!id && !publishedIvrOptions.value.some((item) => String(item.id) === id);
+});
+const loadIvrOptions = async () => {
+  if (ivrOptionsLoading.value) return;
+  ivrOptionsLoading.value = true;
+  ivrOptionsFailed.value = false;
+  try {
+    const response = await listIvrFlows();
+    publishedIvrOptions.value = (response.data || []).filter((flow) => flow.enabled && flow.publishStatus === 'PUBLISHED');
+  } catch {
+    publishedIvrOptions.value = [];
+    ivrOptionsFailed.value = true;
+  } finally {
+    ivrOptionsLoading.value = false;
+  }
+};
+watch(
+  () => selectedNode.value?.type,
+  (type) => {
+    if (type === 'TRANSFER_IVR') void loadIvrOptions();
+  }
+);
 const activeNodeSection = ref('basic');
 const navigationNode = ref<string>();
 const treeAddVisible = ref(false);

@@ -151,7 +151,15 @@
             <el-tag effect="plain">表单：{{ templateName(selectedTask?.formTemplateId) }}</el-tag>
             <el-tag effect="plain">客户类型：{{ selectedTask?.defaultCustomerType || '未设置' }}</el-tag>
           </div>
-          <el-button link type="primary" :icon="Download" @click="downloadTemplate">下载标准模板</el-button>
+          <el-dropdown v-if="selectedTask?.formTemplateId" split-button type="primary" @click="downloadTaskTemplate">
+            下载任务模板
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item @click="downloadTemplate">下载标准模板</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <el-button v-else link type="primary" :icon="Download" @click="downloadTemplate">下载标准模板</el-button>
         </div>
         <template v-if="!analysis">
           <el-upload
@@ -452,7 +460,11 @@ const handleTaskCommand = async (command: string, task: CustomerImportTaskVO) =>
     await loadTasks();
     return;
   }
-  await ElMessageBox.confirm('仅没有上传批次的任务可以删除，确定继续吗？', '删除任务', { type: 'warning' });
+  await ElMessageBox.confirm(
+    '删除后将移除任务及导入批次，并删除仅由本任务新建的客户资料。已有客户、手工关联客户及其他任务共用的客户将保留。确定删除吗？',
+    '删除任务及导入资料',
+    { type: 'warning', confirmButtonText: '确认删除' }
+  );
   await deleteImportTask(task.id);
   if (`${selectedTaskId.value}` === `${task.id}`) selectedTaskId.value = undefined;
   await loadTasks();
@@ -482,6 +494,8 @@ const retryBatch = async (batch: CustomerImportResultVO) => {
 };
 const downloadTemplate = () =>
   proxy?.download('api/v1/customer-import-tasks/template', {}, `客户资料导入模板_${Date.now()}.xlsx`, { method: 'post' });
+const downloadTaskTemplate = () =>
+  proxy?.download(`api/v1/customer-import-tasks/${selectedTaskId.value}/template`, {}, `任务资料导入模板_${Date.now()}.xlsx`, { method: 'post' });
 const downloadErrors = (batch: CustomerImportResultVO) =>
   proxy?.download(`api/v1/customer-import-tasks/${selectedTaskId.value}/batches/${batch.batchId}/errors`, {}, `导入失败明细_${Date.now()}.xlsx`);
 const templateName = (id?: string | number) => formTemplates.value.find((item) => `${item.id}` === `${id}`)?.templateName || '未设置';
