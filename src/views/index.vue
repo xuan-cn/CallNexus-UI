@@ -24,6 +24,7 @@
             class="period-range-picker"
             type="daterange"
             size="small"
+            style="width: 200px"
             value-format="YYYY-MM-DD"
             start-placeholder="开始"
             end-placeholder="结束"
@@ -35,61 +36,94 @@
     </section>
 
     <section class="metric-grid">
-      <el-card
+      <article
         v-for="item in metrics"
         :key="item.label"
         class="metric-card"
         :class="{ 'is-alert': item.alert }"
-        shadow="never"
         @click="item.onClick && item.onClick()"
       >
-        <el-statistic class="metric-statistic" :title="item.label" :value="item.value" :suffix="item.suffix" />
+        <div class="metric-top">
+          <span class="metric-label">{{ item.label }}</span>
+          <span class="metric-icon">
+            <el-icon><component :is="item.icon" /></el-icon>
+          </span>
+        </div>
+        <div class="metric-value">
+          <strong>{{ item.value }}</strong>
+          <em v-if="item.suffix">{{ item.suffix }}</em>
+        </div>
         <small :class="{ positive: item.positive, warn: item.alert }">{{ item.change }}</small>
-      </el-card>
+      </article>
     </section>
 
     <section class="main-grid">
-      <article class="panel">
+      <article class="panel overview-panel">
         <div class="panel-header">
           <div class="panel-title">
             <h2>工单概况</h2>
           </div>
           <el-button text type="primary" @click="openTicket">查看工单</el-button>
         </div>
-        <div class="stat-grid">
-          <div v-for="item in ticketBars" :key="item.label" class="stat-cell">
-            <span class="stat-label">
-              <i class="stat-dot" :style="{ background: item.color }" />
-              {{ item.label }}
-            </span>
-            <el-statistic class="panel-statistic" :value="item.value" />
+        <div class="overview-body">
+          <div ref="ticketChartRef" class="overview-chart" />
+          <div class="overview-legend">
+            <button
+              v-for="item in ticketBars"
+              :key="item.label"
+              type="button"
+              class="legend-row"
+              @click="openTicket"
+            >
+              <span class="legend-label">
+                <i class="stat-dot" :style="{ background: item.color }" />
+                {{ item.label }}
+              </span>
+              <strong>{{ item.value }}</strong>
+            </button>
+            <div class="legend-foot">合计 {{ ticketTotalCount }}</div>
           </div>
         </div>
       </article>
 
-      <article class="panel">
+      <article class="panel overview-panel">
         <div class="panel-header">
           <div class="panel-title">
             <h2>客户概况</h2>
           </div>
           <el-button text type="primary" @click="openCustomer">查看客户</el-button>
         </div>
-        <div class="stat-grid">
-          <div
-            v-for="item in customerStats"
-            :key="item.label"
-            class="stat-cell"
-            :class="{ 'is-click': item.clickable }"
-            :role="item.clickable ? 'button' : undefined"
-            :tabindex="item.clickable ? 0 : undefined"
-            @click="item.clickable && openUnassignedCustomer()"
-            @keydown.enter="item.clickable && openUnassignedCustomer()"
-          >
-            <span class="stat-label">
-              <i class="stat-dot" :style="{ background: item.color }" />
-              {{ item.label }}
-            </span>
-            <el-statistic class="panel-statistic" :class="{ 'is-warn': item.warn }" :value="item.value" />
+        <div class="overview-body">
+          <div ref="customerChartRef" class="overview-chart" />
+          <div class="overview-legend">
+            <div class="legend-row is-static">
+              <span class="legend-label">
+                <i class="stat-dot" style="background: #64748b" />
+                客户总量
+              </span>
+              <strong>{{ overview?.customerTotal || 0 }}</strong>
+            </div>
+            <div class="legend-row is-static">
+              <span class="legend-label">
+                <i class="stat-dot" style="background: #3b82f6" />
+                {{ periodPrefix }}新增
+              </span>
+              <strong>{{ overview?.customerPeriodNew || 0 }}</strong>
+            </div>
+            <button type="button" class="legend-row is-warn" @click="openUnassignedCustomer">
+              <span class="legend-label">
+                <i class="stat-dot" style="background: #f59e0b" />
+                未分配
+              </span>
+              <strong>{{ overview?.customerUnassigned || 0 }}</strong>
+            </button>
+            <div class="legend-row is-static">
+              <span class="legend-label">
+                <i class="stat-dot" style="background: #10b981" />
+                已分配
+              </span>
+              <strong>{{ customerAssigned }}</strong>
+            </div>
           </div>
         </div>
       </article>
@@ -107,16 +141,22 @@
           v-for="item in trafficStats"
           :key="item.label"
           class="traffic-item"
-          :class="{ 'is-click': item.clickable }"
+          :class="{ 'is-click': item.clickable, 'is-warn': item.warn }"
           @click="item.clickable && openVoicemail()"
         >
-          <span>{{ item.label }}</span>
-          <el-statistic
-            class="panel-statistic"
-            :class="{ 'is-warn': item.warn }"
-            :value="item.value"
-            :suffix="item.suffix"
-          />
+          <div class="traffic-top">
+            <span>{{ item.label }}</span>
+            <span class="traffic-icon">
+              <el-icon><component :is="item.icon" /></el-icon>
+            </span>
+          </div>
+          <div class="traffic-value">
+            <strong>{{ item.value }}</strong>
+            <em v-if="item.suffix">{{ item.suffix }}</em>
+          </div>
+          <div v-if="item.suffix === '%'" class="traffic-rate">
+            <span :style="{ width: `${Math.min(100, Number(item.value) || 0)}%` }" />
+          </div>
         </div>
       </div>
     </section>
@@ -170,9 +210,11 @@
 import {
   ArrowRight,
   Bell,
+  CircleCheck,
   DataAnalysis,
   Document,
   Phone,
+  PhoneFilled,
   Refresh,
   Tickets,
   User,
@@ -180,7 +222,8 @@ import {
 } from '@element-plus/icons-vue';
 import { getHomeBusinessOverview, type HomeBusinessOverview } from '@/api/callcenter/home-overview';
 import { ElMessage } from 'element-plus';
-import { computed, onMounted, ref, type Component } from 'vue';
+import * as echarts from 'echarts';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue';
 import type { RouteRecordNormalized } from 'vue-router';
 
 type PeriodMode = 'day' | 'week' | 'month';
@@ -295,6 +338,7 @@ const metrics = computed(() => [
     change: `总量 ${overview.value?.ticketTotal || 0}`,
     positive: ticketPending.value === 0,
     alert: ticketPending.value > 0,
+    icon: Tickets,
     onClick: openTicket
   },
   {
@@ -304,6 +348,7 @@ const metrics = computed(() => [
     change: `总量 ${overview.value?.customerTotal || 0}`,
     positive: (overview.value?.customerUnassigned || 0) === 0,
     alert: (overview.value?.customerUnassigned || 0) > 0,
+    icon: UserFilled,
     onClick: openUnassignedCustomer
   },
   {
@@ -313,6 +358,7 @@ const metrics = computed(() => [
     change: `客户池 ${overview.value?.customerTotal || 0}`,
     positive: (overview.value?.customerPeriodNew || 0) > 0,
     alert: false,
+    icon: User,
     onClick: openCustomer
   },
   {
@@ -322,6 +368,7 @@ const metrics = computed(() => [
     change: `呼入 ${overview.value?.inboundCount || 0} · 呼出 ${overview.value?.outboundCount || 0}`,
     positive: (overview.value?.answerRate || 0) >= 80,
     alert: false,
+    icon: Phone,
     onClick: openCallRecord
   }
 ]);
@@ -333,55 +380,135 @@ const ticketBars = computed(() => [
   { label: '已关闭', value: Number(overview.value?.ticketClosed || 0), color: '#94a3b8' }
 ]);
 
-const customerStats = computed(() => [
-  {
-    label: '客户总量',
-    value: Number(overview.value?.customerTotal || 0),
-    color: '#64748b',
-    warn: false,
-    clickable: false
-  },
-  {
-    label: `${periodPrefix.value}新增`,
-    value: Number(overview.value?.customerPeriodNew || 0),
-    color: '#3b82f6',
-    warn: false,
-    clickable: false
-  },
-  {
-    label: '未分配',
-    value: Number(overview.value?.customerUnassigned || 0),
-    color: '#f59e0b',
-    warn: Number(overview.value?.customerUnassigned || 0) > 0,
-    clickable: true
-  },
-  {
-    label: '已分配',
-    value: customerAssigned.value,
-    color: '#10b981',
-    warn: false,
-    clickable: false
-  }
-]);
+const ticketTotalCount = computed(() => ticketBars.value.reduce((sum, item) => sum + item.value, 0));
+
+const ticketChartRef = ref<HTMLDivElement>();
+const customerChartRef = ref<HTMLDivElement>();
+let ticketChart: echarts.ECharts | undefined;
+let customerChart: echarts.ECharts | undefined;
+
+const doughnutOption = (data: Array<{ name: string; value: number; color: string }>, emptyText: string) => {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  return {
+    color: data.map((item) => item.color),
+    tooltip: {
+      trigger: 'item',
+      backgroundColor: 'rgba(15, 23, 42, 0.92)',
+      borderWidth: 0,
+      textStyle: { color: '#fff', fontSize: 12 },
+      formatter: '{b}: {c} ({d}%)'
+    },
+    title: {
+      text: String(total),
+      subtext: emptyText,
+      left: 'center',
+      top: '36%',
+      textStyle: { color: '#0f172a', fontSize: 22, fontWeight: 700, lineHeight: 26 },
+      subtextStyle: { color: '#94a3b8', fontSize: 12, lineHeight: 18 }
+    },
+    series: [
+      {
+        type: 'pie',
+        radius: ['58%', '78%'],
+        center: ['50%', '50%'],
+        avoidLabelOverlap: true,
+        itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+        label: { show: false },
+        labelLine: { show: false },
+        data: total
+          ? data
+          : [{ name: emptyText, value: 1, itemStyle: { color: '#e2e8f0' }, tooltip: { show: false } }]
+      }
+    ]
+  };
+};
+
+const renderTicketChart = () => {
+  if (!ticketChartRef.value) return;
+  ticketChart ||= echarts.init(ticketChartRef.value);
+  ticketChart.setOption(
+    doughnutOption(
+      ticketBars.value.map((item) => ({ name: item.label, value: item.value, color: item.color })),
+      '工单'
+    ),
+    true
+  );
+};
+
+const renderCustomerChart = () => {
+  if (!customerChartRef.value) return;
+  customerChart ||= echarts.init(customerChartRef.value);
+  customerChart.setOption(
+    doughnutOption(
+      [
+        { name: '未分配', value: Number(overview.value?.customerUnassigned || 0), color: '#f59e0b' },
+        { name: '已分配', value: customerAssigned.value, color: '#10b981' }
+      ],
+      '客户'
+    ),
+    true
+  );
+};
+
+const renderOverviewCharts = async () => {
+  await nextTick();
+  renderTicketChart();
+  renderCustomerChart();
+};
+
+const resizeOverviewCharts = () => {
+  ticketChart?.resize();
+  customerChart?.resize();
+};
 
 const trafficStats = computed(() => [
-  { label: `${periodPrefix.value}呼入`, value: overview.value?.inboundCount || 0, suffix: '', warn: false, clickable: false },
-  { label: `${periodPrefix.value}呼出`, value: overview.value?.outboundCount || 0, suffix: '', warn: false, clickable: false },
-  { label: `${periodPrefix.value}接通`, value: overview.value?.answeredCount || 0, suffix: '', warn: false, clickable: false },
-  { label: '接通率', value: overview.value?.answerRate || 0, suffix: '%', warn: false, clickable: false },
+  {
+    label: `${periodPrefix.value}呼入`,
+    value: overview.value?.inboundCount || 0,
+    suffix: '',
+    warn: false,
+    clickable: false,
+    icon: PhoneFilled
+  },
+  {
+    label: `${periodPrefix.value}呼出`,
+    value: overview.value?.outboundCount || 0,
+    suffix: '',
+    warn: false,
+    clickable: false,
+    icon: Phone
+  },
+  {
+    label: `${periodPrefix.value}接通`,
+    value: overview.value?.answeredCount || 0,
+    suffix: '',
+    warn: false,
+    clickable: false,
+    icon: CircleCheck
+  },
+  {
+    label: '接通率',
+    value: overview.value?.answerRate || 0,
+    suffix: '%',
+    warn: false,
+    clickable: false,
+    icon: DataAnalysis
+  },
   {
     label: '外呼完成率',
     value: overview.value?.outboundCompletionRate || 0,
     suffix: '%',
     warn: false,
-    clickable: false
+    clickable: false,
+    icon: Document
   },
   {
     label: '未处理留言',
     value: overview.value?.voicemailPending || 0,
     suffix: '',
     warn: Number(overview.value?.voicemailPending || 0) > 0,
-    clickable: true
+    clickable: true,
+    icon: Bell
   }
 ]);
 
@@ -614,8 +741,25 @@ const handleQuickAction = (action: QuickAction) => {
   navigateDashboard(action.routeKey);
 };
 
+watch(
+  () => overview.value,
+  () => {
+    renderOverviewCharts();
+  },
+  { deep: true }
+);
+
 onMounted(() => {
   loadDashboard();
+  window.addEventListener('resize', resizeOverviewCharts);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', resizeOverviewCharts);
+  ticketChart?.dispose();
+  customerChart?.dispose();
+  ticketChart = undefined;
+  customerChart = undefined;
 });
 </script>
 
@@ -743,10 +887,10 @@ onMounted(() => {
 
 .period-filter {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 8px;
 
   :deep(.el-radio-group) {
     --el-border-radius-base: 999px;
@@ -795,8 +939,13 @@ onMounted(() => {
   }
 }
 
+.period-filter :deep(.period-range-picker.el-date-editor) {
+  flex: 0 0 auto;
+  width: 200px !important;
+}
+
 .period-range-picker {
-  width: 210px;
+  width: 200px;
 }
 
 .metric-grid {
@@ -807,53 +956,97 @@ onMounted(() => {
 }
 
 .metric-card {
+  position: relative;
   min-width: 0;
+  padding: 16px 16px 14px;
+  overflow: hidden;
   cursor: pointer;
-  border-radius: 14px;
-  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 10px 24px rgba(15, 23, 42, 0.03);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 
-  :deep(.el-card__body) {
-    padding: 22px 24px 20px;
+  &::before {
+    position: absolute;
+    left: 0;
+    top: 14px;
+    bottom: 14px;
+    width: 3px;
+    content: '';
+    border-radius: 0 3px 3px 0;
+    background: #3b82f6;
+  }
+
+  &.is-alert {
+    border-color: #dbeafe;
   }
 
   &:hover {
     border-color: #d5e4f7;
-    background: #fafcff;
-    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.06);
+    box-shadow: 0 12px 28px rgba(37, 99, 235, 0.08);
     transform: translateY(-1px);
   }
 
   small {
     display: block;
-    margin-top: 18px;
+    margin-top: 10px;
     color: #94a3b8;
     font-size: 12px;
+    line-height: 1.4;
   }
 
-  small.positive { color: #059669; }
-  small.warn { color: #d97706; }
+  small.positive,
+  small.warn {
+    color: #64748b;
+  }
 }
 
-.metric-statistic {
-  --el-statistic-content-font-size: 30px;
+.metric-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
 
-  :deep(.el-statistic__head) {
-    margin-bottom: 12px;
-    color: var(--muted);
-    font-size: 13px;
-  }
+.metric-label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
 
-  :deep(.el-statistic__content) {
+.metric-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: #2563eb;
+  background: #eff6ff;
+  font-size: 16px;
+}
+
+.metric-value {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  min-height: 34px;
+
+  strong {
     color: var(--ink);
-    font-weight: 500;
-    line-height: 1.1;
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
     font-variant-numeric: tabular-nums;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.03em;
   }
 
-  :deep(.el-statistic__suffix) {
-    margin-left: 1px;
+  em {
+    color: var(--muted);
     font-size: 14px;
+    font-style: normal;
+    font-weight: 600;
   }
 }
 
@@ -921,44 +1114,89 @@ onMounted(() => {
   }
 }
 
-.stat-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  flex: 1;
+.overview-panel {
+  min-height: 236px;
 }
 
-.stat-cell {
+.overview-body {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.95fr) minmax(0, 1.05fr);
+  gap: 8px 12px;
+  align-items: center;
+  flex: 1;
+  min-height: 168px;
+}
+
+.overview-chart {
+  width: 100%;
+  height: 168px;
+  min-width: 0;
+}
+
+.overview-legend {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
+  gap: 8px;
   min-width: 0;
-  min-height: 84px;
-  padding: 14px;
-  border: 1px solid var(--cell-line);
-  border-radius: 12px;
-  background: var(--cell);
-  box-sizing: border-box;
 }
 
-.stat-cell.is-click {
+.legend-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--cell-line);
+  border-radius: 10px;
+  background: var(--cell);
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
-  transition: background 0.18s ease, border-color 0.18s ease;
+  transition: border-color 0.18s ease, background 0.18s ease;
+
+  strong {
+    color: var(--ink);
+    font-size: 18px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
 
   &:hover {
     border-color: #d4e0f0;
     background: var(--hover);
   }
+
+  &.is-static {
+    cursor: default;
+
+    &:hover {
+      border-color: var(--cell-line);
+      background: var(--cell);
+    }
+  }
+
+  &.is-warn strong {
+    color: #d97706;
+  }
 }
 
-.stat-label {
+.legend-label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   color: var(--muted);
   font-size: 12px;
+  font-weight: 600;
+}
+
+.legend-foot {
+  padding: 0 4px;
+  color: #94a3b8;
+  font-size: 12px;
+  text-align: right;
 }
 
 .stat-dot {
@@ -966,27 +1204,6 @@ onMounted(() => {
   height: 6px;
   border-radius: 50%;
   flex: 0 0 auto;
-}
-
-.panel-statistic {
-  --el-statistic-content-font-size: 24px;
-
-  :deep(.el-statistic__content) {
-    color: var(--ink);
-    font-weight: 600;
-    line-height: 1;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: -0.02em;
-  }
-
-  :deep(.el-statistic__suffix) {
-    margin-left: 1px;
-    font-size: 14px;
-  }
-
-  &.is-warn :deep(.el-statistic__content) {
-    color: #d97706;
-  }
 }
 
 .traffic-panel {
@@ -1003,29 +1220,89 @@ onMounted(() => {
 .traffic-item {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
   min-width: 0;
-  min-height: 76px;
+  min-height: 88px;
   padding: 14px;
   border: 1px solid var(--cell-line);
-  border-radius: 12px;
-  background: var(--cell);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
   box-sizing: border-box;
-
-  span {
-    color: var(--muted);
-    font-size: 12px;
-  }
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
 
   &.is-click {
     cursor: pointer;
-    transition: background 0.18s ease, border-color 0.18s ease;
+  }
 
-    &:hover {
-      border-color: #d4e0f0;
-      background: var(--hover);
-    }
+  &:hover {
+    border-color: #d4e0f0;
+    background: #fff;
+    transform: translateY(-1px);
+  }
+
+  &.is-warn .traffic-value strong {
+    color: #d97706;
+  }
+}
+
+.traffic-rate {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+
+  span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #60a5fa, #2563eb);
+  }
+}
+
+.traffic-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  > span:first-child {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+  }
+}
+
+.traffic-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: #2563eb;
+  background: #eff6ff;
+  font-size: 14px;
+}
+
+.traffic-value {
+  display: flex;
+  align-items: baseline;
+  gap: 1px;
+
+  strong {
+    color: var(--ink);
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  em {
+    color: var(--muted);
+    font-size: 13px;
+    font-style: normal;
+    font-weight: 600;
   }
 }
 
@@ -1161,6 +1438,16 @@ onMounted(() => {
   .main-grid,
   .bottom-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .overview-body {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-chart {
+    height: 150px;
   }
 }
 
