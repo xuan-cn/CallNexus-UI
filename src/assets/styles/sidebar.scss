@@ -26,8 +26,7 @@
     left: 0;
     z-index: 1001;
     overflow: hidden;
-    -webkit-box-shadow: 2px 0 6px rgba(0, 21, 41, 0.35);
-    box-shadow: 0 0 8px 0 rgba(0, 0, 0, 0.1);
+    box-shadow: 1px 0 0 rgba(15, 23, 42, 0.12);
 
     // reset element-ui css
     .horizontal-collapse-transition {
@@ -127,10 +126,11 @@
     // menu hover
     .theme-dark .sub-menu-title-noDropdown,
     .theme-dark .el-sub-menu__title {
-      border-radius: var(--app-radius-md);
-      margin: 1px 5px 1px 5px;
+      border-radius: 10px;
+      margin: 2px 8px;
+      transition: background-color 0.18s ease;
       &:hover {
-        background-color: $base-sub-menu-title-hover !important;
+        background-color: rgba(255, 255, 255, 0.06) !important;
       }
     }
     .sub-menu-title-noDropdown,
@@ -149,8 +149,8 @@
 
     .theme-dark {
       .el-sub-menu.is-opened > .el-sub-menu__title {
-        color: #dbeafe;
-        background-color: rgba(59, 130, 246, 0.1) !important;
+        color: #e2e8f0;
+        background-color: rgba(255, 255, 255, 0.04) !important;
       }
     }
 
@@ -169,36 +169,43 @@
       }
     }
 
+    /* 现代选中：浅透底 + 左侧色条，避免拟物高光/斜角 */
+    $menu-active-modern: inset 3px 0 0 #60a5fa;
+
     & .theme-dark .nest-menu .el-sub-menu > .el-sub-menu__title,
     & .theme-dark .el-sub-menu .el-menu-item {
       background-color: $base-sub-menu-background !important;
-      border-radius: var(--app-radius-md);
+      border-radius: 10px;
       height: 40px;
-      margin: 1px 5px 1px 5px;
+      margin: 2px 8px;
+      transition: background-color 0.18s ease, color 0.18s ease;
 
       &.is-active {
-        background-color: var(--el-menu-active-color) !important;
-        color: #fff;
+        color: #eff6ff !important;
+        background-color: rgba(59, 130, 246, 0.22) !important;
+        background-image: none !important;
+        box-shadow: $menu-active-modern !important;
       }
       &:not(.is-active):hover {
-        // you can use $sub-menuHover
-        background-color: $base-sub-menu-hover !important;
+        background-color: rgba(255, 255, 255, 0.06) !important;
       }
     }
 
     & .theme-dark .nest-menu .el-sub-menu > .el-sub-menu__title,
     & .theme-dark .el-menu-item {
-      border-radius: var(--app-radius-md);
-      height: 45px;
-      margin: 1px 5px 1px 5px;
+      border-radius: 10px;
+      height: 44px;
+      margin: 2px 8px;
+      transition: background-color 0.18s ease, color 0.18s ease;
 
       &.is-active {
-        background-color: var(--el-menu-active-color) !important;
-        color: #fff;
+        color: #eff6ff !important;
+        background-color: rgba(59, 130, 246, 0.22) !important;
+        background-image: none !important;
+        box-shadow: $menu-active-modern !important;
       }
       &:not(.is-active):hover {
-        // you can use $sub-menuHover
-        background-color: $base-menu-hover !important;
+        background-color: rgba(255, 255, 255, 0.06) !important;
       }
     }
 
@@ -208,16 +215,18 @@
 
     & .nest-menu .el-sub-menu > .el-sub-menu__title,
     & .el-menu-item {
-      border-radius: var(--app-radius-md);
-      height: 45px;
-      margin: 1px 5px 1px 5px;
+      border-radius: 10px;
+      height: 44px;
+      margin: 2px 8px;
+      transition: background-color 0.18s ease, color 0.18s ease;
 
       &.is-active {
-        background-color: var(--el-menu-active-color) !important;
-        color: #fff;
+        color: var(--el-color-primary) !important;
+        background-color: var(--el-color-primary-light-9) !important;
+        background-image: none !important;
+        box-shadow: inset 3px 0 0 var(--el-color-primary) !important;
       }
       &:not(.is-active):hover {
-        // you can use $sub-menuHover
         background-color: rgba(0, 0, 0, 0.04) !important;
       }
     }
@@ -244,8 +253,10 @@
       height: 45px;
       // 选中状态的菜单
       &.is-active {
-        background-color: var(--el-menu-active-color) !important;
-        color: #fff !important;
+        color: #eff6ff !important;
+        background-color: rgba(59, 130, 246, 0.22) !important;
+        background-image: none !important;
+        box-shadow: inset 3px 0 0 #60a5fa !important;
       }
 
       .el-tooltip {
@@ -256,15 +267,18 @@
 
     & .el-sub-menu {
       overflow: hidden;
-      border-radius: var(--app-radius-md);
+      border-radius: 10px;
       .el-sub-menu__title.el-tooltip__trigger {
-        border-radius: var(--app-radius-md);
-        height: 45px;
+        border-radius: 10px;
+        height: 44px;
       }
 
       // 选中状态的菜单
       &.is-active .el-sub-menu__title.el-tooltip__trigger {
-        background-color: var(--el-menu-active-color) !important;
+        color: #eff6ff !important;
+        background-color: rgba(59, 130, 246, 0.22) !important;
+        background-image: none !important;
+        box-shadow: inset 3px 0 0 #60a5fa !important;
       }
 
 
