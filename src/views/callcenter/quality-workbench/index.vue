@@ -1,17 +1,20 @@
 <template>
   <div class="quality-workbench">
     <aside class="task-panel">
-      <div class="panel-title">
-        <div>
-          <strong>质检工作台</strong><span>{{ taskTotal }} 个任务</span>
+      <div class="task-panel-top">
+        <div class="panel-title">
+          <div>
+            <strong>质检工作台</strong><span>{{ taskTotal }} 个任务</span>
+          </div>
+          <el-button circle text icon="Refresh" @click="loadTasks" />
         </div>
-        <el-button circle text icon="Refresh" @click="loadTasks" />
+        <el-input v-model="taskQuery.keyword" clearable size="small" placeholder="搜索任务或通话" @keyup.enter="loadTasks" />
+        <el-radio-group v-model="taskQuery.status" size="small" class="status-filter" @change="loadTasks">
+          <el-radio-button label="">全部</el-radio-button>
+          <el-radio-button label="PENDING">待领取</el-radio-button>
+          <el-radio-button label="ASSIGNED">待评分</el-radio-button>
+        </el-radio-group>
       </div>
-      <el-input v-model="taskQuery.keyword" clearable size="small" placeholder="搜索任务或通话" @keyup.enter="loadTasks" />
-      <el-radio-group v-model="taskQuery.status" size="small" class="status-filter" @change="loadTasks"
-        ><el-radio-button label="">全部</el-radio-button><el-radio-button label="PENDING">待领取</el-radio-button
-        ><el-radio-button label="ASSIGNED">待评分</el-radio-button></el-radio-group
-      >
       <el-scrollbar class="task-scroll">
         <button
           v-for="task in tasks"
@@ -20,25 +23,27 @@
           :class="{ active: String(task.id) === String(selectedId) }"
           @click="selectTask(task.id)"
         >
-          <div>
-            <strong>{{ task.taskCode }}</strong
-            ><el-tag size="small" :type="task.status === 'PENDING' ? 'warning' : 'primary'">{{ statusLabel(task.status) }}</el-tag>
+          <div class="task-card-head">
+            <strong>{{ task.taskCode }}</strong>
+            <el-tag size="small" :type="task.status === 'PENDING' ? 'warning' : 'primary'">{{ statusLabel(task.status) }}</el-tag>
           </div>
-          <span>{{ task.queueName || '未关联队列' }} · 分机 {{ task.agentExtension || '-' }}</span>
-          <small>{{ task.templateName }} · {{ task.createTime || '-' }}</small>
+          <span class="task-card-meta">{{ task.queueName || '未关联队列' }} · 分机 {{ task.agentExtension || '-' }}</span>
+          <small class="task-card-meta">{{ task.templateName }} · {{ task.createTime || '-' }}</small>
         </button>
         <el-empty v-if="!taskLoading && !tasks.length" description="暂无待质检任务" :image-size="56" />
       </el-scrollbar>
-      <pagination
-        v-show="taskTotal > taskQuery.pageSize"
-        v-model:page="taskQuery.pageNum"
-        v-model:limit="taskQuery.pageSize"
-        small
-        layout="prev, pager, next"
-        :total="taskTotal"
-        :auto-scroll="false"
-        @pagination="loadTasks"
-      />
+      <div class="task-panel-foot">
+        <pagination
+          v-show="taskTotal > taskQuery.pageSize"
+          v-model:page="taskQuery.pageNum"
+          v-model:limit="taskQuery.pageSize"
+          small
+          layout="prev, pager, next"
+          :total="taskTotal"
+          :auto-scroll="false"
+          @pagination="loadTasks"
+        />
+      </div>
     </aside>
 
     <main v-loading="detailLoading" class="call-panel">
@@ -460,26 +465,36 @@ onMounted(async () => {
 <style scoped lang="scss">
 .quality-workbench {
   display: grid;
-  grid-template-columns: 260px minmax(420px, 1fr) 430px;
-  gap: 10px;
+  grid-template-columns: 280px minmax(0, 1fr) 400px;
+  align-items: stretch;
+  gap: 14px;
   height: calc(100vh - 94px);
-  padding: 8px;
-  background: var(--el-bg-color-page);
+  padding: 14px 16px;
+  background: #f4f7fc;
   font-size: 12px;
+  box-sizing: border-box;
 }
 .task-panel,
 .call-panel,
 .score-panel {
+  height: 100%;
   min-height: 0;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 10px;
-  background: var(--el-bg-color);
+  border: 1px solid #e7edf5;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
   overflow: hidden;
-}
-.task-panel {
   display: flex;
   flex-direction: column;
-  padding: 12px;
+}
+.task-panel {
+  padding: 0;
+}
+.task-panel-top {
+  flex: none;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid #eef2f7;
+  background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
 }
 .panel-title,
 .call-header,
@@ -492,88 +507,147 @@ onMounted(async () => {
   gap: 10px;
 }
 .panel-title {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 .panel-title div {
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
 .panel-title strong {
+  color: #15233d;
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 600;
 }
 .panel-title span,
 .call-header span,
 .section-title span,
-.task-card span,
-.task-card small {
-  color: var(--el-text-color-secondary);
-  font-size: 10px;
+.task-card-meta {
+  color: #8b97aa;
+  font-size: 11px;
 }
 .status-filter {
-  margin: 10px 0;
+  display: flex;
+  margin: 10px 0 0;
+  width: 100%;
+
+  :deep(.el-radio-button) {
+    flex: 1;
+  }
+
+  :deep(.el-radio-button__inner) {
+    width: 100%;
+    padding: 6px 8px;
+  }
 }
 .task-scroll {
   flex: 1;
   min-height: 0;
+  padding: 10px 12px;
+}
+.task-panel-foot {
+  flex: none;
+  min-height: 8px;
+  padding: 0 8px 8px;
 }
 .task-card {
+  position: relative;
   display: block;
   width: 100%;
-  margin-bottom: 7px;
-  padding: 10px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
-  background: transparent;
+  margin-bottom: 8px;
+  padding: 12px 12px 12px 14px;
+  border: 1px solid #eef2f7;
+  border-radius: 10px;
+  background: #fff;
   text-align: left;
   cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.task-card:hover {
+  border-color: #dbe7f5;
+  background: #fafcff;
 }
 .task-card.active {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  box-shadow: inset 3px 0 0 #3b82f6;
 }
-.task-card > div {
+.task-card-head {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
 }
-.task-card strong,
-.task-card span,
-.task-card small {
+.task-card-head strong {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-card-head :deep(.el-tag) {
+  flex: none;
+  height: 20px;
+  margin: 0;
+  line-height: 18px;
+}
+.task-card-meta {
   display: block;
-  margin-bottom: 5px;
+  margin: 0 0 4px;
+  line-height: 1.4;
+}
+.task-card-meta:last-child {
+  margin-bottom: 0;
 }
 .call-panel {
   display: flex;
   flex-direction: column;
-  padding: 14px;
+  padding: 0;
 }
 .call-header {
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  padding: 14px 16px;
+  border-bottom: 1px solid #eef2f7;
+  background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
 }
 .call-header div {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 .call-header strong {
-  font-size: 16px;
-  font-weight: 500;
+  color: #15233d;
+  font-size: 15px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .recording-section {
-  padding: 10px 0;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  padding: 12px 16px;
+  border-bottom: 1px solid #eef2f7;
+  background: #fff;
 }
 .section-title {
   margin-bottom: 10px;
+}
+.section-title strong {
+  color: #1e293b;
+  font-weight: 600;
 }
 .transcript-section {
   display: flex;
   flex: 1;
   min-height: 0;
   flex-direction: column;
-  padding-top: 14px;
+  padding: 14px 16px 16px;
+  background: #fafbfd;
 }
 .transcript-scroll {
   flex: 1;
@@ -581,38 +655,44 @@ onMounted(async () => {
 .transcript-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 2px 6px;
+  gap: 10px;
+  padding: 2px 4px;
 }
 .message {
   max-width: 78%;
-  padding: 9px 11px;
-  border-radius: 8px;
-  background: var(--el-fill-color-light);
+  padding: 10px 12px;
+  border: 1px solid #eef2f7;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
 }
 .message.is-agent,
 .message.is-ai {
   align-self: flex-end;
-  background: var(--el-color-primary-light-9);
+  border-color: #dbeafe;
+  background: #eff6ff;
+  box-shadow: none;
 }
 .message span,
 .message small {
   font-size: 10px;
-  color: var(--el-text-color-secondary);
+  color: #94a3b8;
 }
 .message p {
   margin: 4px 0;
+  color: #1e293b;
   line-height: 1.55;
 }
 .score-panel {
   display: flex;
   flex-direction: column;
-  padding: 12px;
+  padding: 0;
   font-size: 11px;
 }
 .score-summary {
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  padding: 14px 16px;
+  border-bottom: 1px solid #dbeafe;
+  background: linear-gradient(135deg, #eff6ff 0%, #f8fbff 55%, #fff 100%);
 }
 .score-summary > div {
   display: flex;
@@ -620,14 +700,15 @@ onMounted(async () => {
   gap: 4px;
 }
 .score-summary strong {
-  font-size: 22px;
-  font-weight: 500;
-  color: var(--el-color-primary);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #2563eb;
 }
 .score-summary span,
 .score-summary small {
   font-size: 11px;
-  color: var(--el-text-color-secondary);
+  color: #64748b;
 }
 .score-summary-actions {
   display: flex;
@@ -635,16 +716,20 @@ onMounted(async () => {
   gap: 8px;
 }
 .ai-review-alert {
-  margin-top: 10px;
+  margin: 10px 14px 0;
 }
 .score-scroll {
   flex: 1;
   min-height: 0;
-  margin-top: 8px;
+  margin-top: 0;
+  padding: 12px 14px 0;
 }
 .score-item {
-  padding: 9px 4px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  margin-bottom: 8px;
+  padding: 12px;
+  border: 1px solid #eef2f7;
+  border-radius: 10px;
+  background: #fff;
 }
 .score-item-head > div:first-child {
   display: flex;
@@ -654,11 +739,12 @@ onMounted(async () => {
 .score-item-head span,
 .score-item p {
   font-size: 10px;
-  color: var(--el-text-color-secondary);
+  color: #8b97aa;
 }
 .score-item-head strong {
+  color: #1e293b;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
 }
 .score-item-head em {
   margin-left: 6px;
@@ -670,11 +756,11 @@ onMounted(async () => {
   margin: 6px 0;
 }
 .ai-suggestion {
-  margin: 7px 0;
-  padding: 7px 9px;
-  border: 1px solid var(--el-color-primary-light-7);
-  border-radius: 7px;
-  background: var(--el-color-primary-light-9);
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #f8fbff;
 }
 .ai-suggestion > div:first-child {
   display: flex;
@@ -686,11 +772,11 @@ onMounted(async () => {
 }
 .ai-suggestion small {
   font-size: 10px;
-  color: var(--el-text-color-secondary);
+  color: #8b97aa;
 }
 .ai-suggestion p {
   font-size: 11px;
-  color: var(--el-text-color-regular);
+  color: #475569;
 }
 .evidence-list {
   display: flex;
@@ -727,18 +813,20 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 2px;
+  padding: 12px 2px 4px;
 }
 .score-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  padding-top: 12px;
-  border-top: 1px solid var(--el-border-color-lighter);
+  margin-top: auto;
+  padding: 12px 16px 14px;
+  border-top: 1px solid #eef2f7;
+  background: #fff;
 }
 @media (max-width: 1280px) {
   .quality-workbench {
-    grid-template-columns: 220px minmax(360px, 1fr) 370px;
+    grid-template-columns: 240px minmax(0, 1fr) 360px;
   }
 }
 </style>
