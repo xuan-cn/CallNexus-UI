@@ -73,12 +73,12 @@ const getLogoTextColor = computed(() => {
 
 .sidebar-logo-container {
   position: relative;
-  height: 50px;
-  line-height: 50px;
+  height: 52px;
+  line-height: 52px;
   background: v-bind(getLogoBackground);
   text-align: center;
   overflow: hidden;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
 
   & .sidebar-logo-link {
     height: 100%;
@@ -89,17 +89,18 @@ const getLogoTextColor = computed(() => {
       height: 30px;
       vertical-align: middle;
       margin-right: 10px;
-      border-radius: 8px;
+      border-radius: 9px;
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
     }
 
     & .sidebar-title {
       display: inline-block;
       margin: 0;
       color: v-bind(getLogoTextColor);
-      font-weight: 700;
-      line-height: 50px;
+      font-weight: 600;
+      line-height: 52px;
       font-size: 14px;
-      letter-spacing: 0.2px;
+      letter-spacing: 0.3px;
       font-family:
         'MiSans',
         'PingFang SC',
