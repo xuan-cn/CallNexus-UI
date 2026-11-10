@@ -1,6 +1,7 @@
 <template>
   <div class="dashboard">
     <section class="page-head">
+      <div class="page-head-glow" aria-hidden="true" />
       <div class="page-head-copy">
         <div class="eyebrow"><span class="live-dot"></span>{{ periodKicker }}</div>
         <h1>呼叫中心业务看板</h1>
@@ -43,17 +44,17 @@
         :class="{ 'is-alert': item.alert }"
         @click="item.onClick && item.onClick()"
       >
-        <div class="metric-top">
+        <div class="metric-main">
           <span class="metric-label">{{ item.label }}</span>
-          <span class="metric-icon">
-            <el-icon><component :is="item.icon" /></el-icon>
-          </span>
+          <div class="metric-value">
+            <strong>{{ item.value }}</strong>
+            <em v-if="item.suffix">{{ item.suffix }}</em>
+          </div>
+          <small :class="{ positive: item.positive, warn: item.alert }">{{ item.change }}</small>
         </div>
-        <div class="metric-value">
-          <strong>{{ item.value }}</strong>
-          <em v-if="item.suffix">{{ item.suffix }}</em>
-        </div>
-        <small :class="{ positive: item.positive, warn: item.alert }">{{ item.change }}</small>
+        <span class="metric-icon">
+          <el-icon><component :is="item.icon" /></el-icon>
+        </span>
       </article>
     </section>
 
@@ -81,7 +82,6 @@
               </span>
               <strong>{{ item.value }}</strong>
             </button>
-            <div class="legend-foot">合计 {{ ticketTotalCount }}</div>
           </div>
         </div>
       </article>
@@ -167,12 +167,14 @@
           <div class="panel-title">
             <h2>待办提醒</h2>
           </div>
+          <span class="panel-meta">{{ activeTodoCount ? `${activeTodoCount} 项待处理` : '状态良好' }}</span>
         </div>
         <div class="todo-list">
           <div
             v-for="todo in todos"
             :key="todo.title"
             class="todo-item is-action"
+            :class="[`tone-${todo.tone}`, { 'is-urgent': todo.urgent }]"
             @click="handleTodo(todo)"
           >
             <span class="todo-icon" :class="todo.tone"><el-icon><component :is="todo.icon" /></el-icon></span>
@@ -181,6 +183,7 @@
               <small>{{ todo.description }}</small>
             </div>
             <el-tag size="small" :type="todo.tagType" effect="plain" round>{{ todo.count }}</el-tag>
+            <el-icon class="todo-arrow"><ArrowRight /></el-icon>
           </div>
         </div>
       </article>
@@ -190,9 +193,16 @@
           <div class="panel-title">
             <h2>快捷入口</h2>
           </div>
+          <span class="panel-meta">常用功能</span>
         </div>
         <div class="quick-grid">
-          <button v-for="action in quickActions" :key="action.label" type="button" @click="handleQuickAction(action)">
+          <button
+            v-for="action in quickActions"
+            :key="action.label"
+            type="button"
+            :class="`tone-${action.tone}`"
+            @click="handleQuickAction(action)"
+          >
             <span class="quick-icon" :class="action.tone"><el-icon><component :is="action.icon" /></el-icon></span>
             <div class="quick-copy">
               <strong>{{ action.label }}</strong>
@@ -380,8 +390,6 @@ const ticketBars = computed(() => [
   { label: '已关闭', value: Number(overview.value?.ticketClosed || 0), color: '#94a3b8' }
 ]);
 
-const ticketTotalCount = computed(() => ticketBars.value.reduce((sum, item) => sum + item.value, 0));
-
 const ticketChartRef = ref<HTMLDivElement>();
 const customerChartRef = ref<HTMLDivElement>();
 let ticketChart: echarts.ECharts | undefined;
@@ -520,6 +528,7 @@ type TodoItem = {
   tone: string;
   tagType: 'success' | 'warning' | 'info' | 'primary' | 'danger';
   icon: Component;
+  urgent: boolean;
   action?: TodoAction;
 };
 
@@ -531,6 +540,7 @@ const todos = computed<TodoItem[]>(() => [
     tone: 'orange',
     tagType: ticketPending.value > 0 ? 'warning' : 'info',
     icon: Tickets,
+    urgent: ticketPending.value > 0,
     action: 'TICKET'
   },
   {
@@ -540,6 +550,7 @@ const todos = computed<TodoItem[]>(() => [
     tone: 'purple',
     tagType: (overview.value?.customerUnassigned || 0) > 0 ? 'warning' : 'info',
     icon: UserFilled,
+    urgent: (overview.value?.customerUnassigned || 0) > 0,
     action: 'CUSTOMER'
   },
   {
@@ -549,6 +560,7 @@ const todos = computed<TodoItem[]>(() => [
     tone: 'red',
     tagType: (overview.value?.voicemailPending || 0) > 0 ? 'danger' : 'info',
     icon: Bell,
+    urgent: (overview.value?.voicemailPending || 0) > 0,
     action: 'VOICEMAIL'
   },
   {
@@ -558,9 +570,12 @@ const todos = computed<TodoItem[]>(() => [
     tone: 'cyan',
     tagType: 'info',
     icon: Phone,
+    urgent: false,
     action: 'CALL'
   }
 ]);
+
+const activeTodoCount = computed(() => todos.value.filter((item) => item.urgent).length);
 
 type DashboardLinkKey = 'customer' | 'ticket' | 'callRecord' | 'outboundTask' | 'screenHome' | 'voicemail';
 type QuickAction = {
@@ -774,17 +789,31 @@ onBeforeUnmount(() => {
   --card: #ffffff;
   --accent: #2563eb;
   --hover: #f5f8fc;
+  --section-gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--section-gap);
   min-height: calc(100vh - 84px);
   padding: 16px 18px 22px;
   color: var(--ink);
   background: #f5f6f8;
+
+  > * {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* 覆盖全局 .panel { margin-bottom: 12px }，避免区块间距叠加 */
+  .panel {
+    margin-bottom: 0 !important;
+  }
 }
 
 .panel {
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--card);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 8px 24px rgba(15, 23, 42, 0.03);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04);
 }
 
 .page-head {
@@ -793,8 +822,8 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 16px 18px;
-  margin-bottom: 12px;
+  padding: 16px 20px;
+  margin-bottom: 0;
   overflow: hidden;
   color: #fff;
   border: 1px solid rgba(147, 197, 253, 0.45);
@@ -805,38 +834,54 @@ onBeforeUnmount(() => {
   box-shadow: 0 6px 16px rgba(59, 130, 246, 0.12);
 }
 
+.page-head-glow {
+  position: absolute;
+  right: -40px;
+  top: -56px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.18), transparent 68%);
+  pointer-events: none;
+}
+
 .page-head-copy {
+  position: relative;
+  z-index: 1;
   min-width: 0;
   flex: 1;
 
   h1 {
     margin: 4px 0 2px;
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 700;
     letter-spacing: -0.02em;
+    line-height: 1.2;
   }
 
   p {
     margin: 0;
     max-width: 480px;
-    color: rgba(226, 239, 255, 0.72);
+    color: rgba(226, 239, 255, 0.75);
     font-size: 13px;
-    line-height: 1.45;
+    line-height: 1.4;
   }
 }
 
 .page-head-aside {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 10px;
+  gap: 12px;
   flex-shrink: 0;
 }
 
 .page-head-meta {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 
   :deep(.el-button--primary) {
     height: 30px;
@@ -890,7 +935,7 @@ onBeforeUnmount(() => {
   flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 12px;
 
   :deep(.el-radio-group) {
     --el-border-radius-base: 999px;
@@ -951,27 +996,31 @@ onBeforeUnmount(() => {
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 10px;
+  margin-bottom: 0;
 }
 
 .metric-card {
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   min-width: 0;
-  padding: 16px 16px 14px;
+  padding: 14px 16px 14px 16px;
   overflow: hidden;
   cursor: pointer;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 12px;
   background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 10px 24px rgba(15, 23, 42, 0.03);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 8px 18px rgba(15, 23, 42, 0.03);
   transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 
   &::before {
     position: absolute;
     left: 0;
-    top: 14px;
-    bottom: 14px;
+    top: 10px;
+    bottom: 10px;
     width: 3px;
     content: '';
     border-radius: 0 3px 3px 0;
@@ -979,21 +1028,19 @@ onBeforeUnmount(() => {
   }
 
   &.is-alert {
-    border-color: #dbeafe;
+    border-color: #fde68a;
   }
 
   &:hover {
     border-color: #d5e4f7;
-    box-shadow: 0 12px 28px rgba(37, 99, 235, 0.08);
+    box-shadow: 0 10px 22px rgba(37, 99, 235, 0.07);
     transform: translateY(-1px);
   }
 
   small {
-    display: block;
-    margin-top: 10px;
     color: #94a3b8;
     font-size: 12px;
-    line-height: 1.4;
+    line-height: 1.3;
   }
 
   small.positive,
@@ -1002,25 +1049,25 @@ onBeforeUnmount(() => {
   }
 }
 
-.metric-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
+.metric-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
 }
 
 .metric-label {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
 }
 
 .metric-icon {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
   border-radius: 10px;
   color: #2563eb;
   background: #eff6ff;
@@ -1031,11 +1078,11 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: baseline;
   gap: 2px;
-  min-height: 34px;
+  min-height: 0;
 
   strong {
     color: var(--ink);
-    font-size: 28px;
+    font-size: 26px;
     font-weight: 700;
     line-height: 1;
     font-variant-numeric: tabular-nums;
@@ -1044,7 +1091,7 @@ onBeforeUnmount(() => {
 
   em {
     color: var(--muted);
-    font-size: 14px;
+    font-size: 13px;
     font-style: normal;
     font-weight: 600;
   }
@@ -1061,7 +1108,7 @@ onBeforeUnmount(() => {
 .bottom-grid {
   display: grid;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 0;
 }
 
 .main-grid {
@@ -1071,13 +1118,12 @@ onBeforeUnmount(() => {
 .bottom-grid {
   grid-template-columns: 1.1fr 1fr;
   align-items: stretch;
-  margin-bottom: 0;
 }
 
 .panel {
   display: flex;
   flex-direction: column;
-  padding: 16px 18px;
+  padding: 14px 16px;
   min-height: 0;
 }
 
@@ -1090,7 +1136,14 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
+}
+
+.panel-meta {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .panel-title {
@@ -1115,16 +1168,16 @@ onBeforeUnmount(() => {
 }
 
 .overview-panel {
-  min-height: 236px;
+  min-height: 0;
 }
 
 .overview-body {
   display: grid;
-  grid-template-columns: minmax(140px, 0.95fr) minmax(0, 1.05fr);
-  gap: 8px 12px;
+  grid-template-columns: minmax(150px, 1fr) minmax(180px, 1.1fr);
+  gap: 10px 14px;
   align-items: center;
-  flex: 1;
-  min-height: 168px;
+  flex: 0 0 auto;
+  min-height: 0;
 }
 
 .overview-chart {
@@ -1146,7 +1199,8 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 10px;
   width: 100%;
-  padding: 10px 12px;
+  min-height: 40px;
+  padding: 10px 14px;
   border: 1px solid var(--cell-line);
   border-radius: 10px;
   background: var(--cell);
@@ -1154,7 +1208,7 @@ onBeforeUnmount(() => {
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.18s ease, background 0.18s ease;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
 
   strong {
     color: var(--ink);
@@ -1167,6 +1221,7 @@ onBeforeUnmount(() => {
   &:hover {
     border-color: #d4e0f0;
     background: var(--hover);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.05);
   }
 
   &.is-static {
@@ -1175,6 +1230,7 @@ onBeforeUnmount(() => {
     &:hover {
       border-color: var(--cell-line);
       background: var(--cell);
+      box-shadow: none;
     }
   }
 
@@ -1186,17 +1242,10 @@ onBeforeUnmount(() => {
 .legend-label {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-}
-
-.legend-foot {
-  padding: 0 4px;
-  color: #94a3b8;
-  font-size: 12px;
-  text-align: right;
 }
 
 .stat-dot {
@@ -1207,26 +1256,26 @@ onBeforeUnmount(() => {
 }
 
 .traffic-panel {
-  margin-bottom: 12px;
+  margin-bottom: 0;
 }
 
 .traffic-strip {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
   width: 100%;
 }
 
 .traffic-item {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   width: 100%;
   min-width: 0;
-  min-height: 88px;
-  padding: 14px;
+  min-height: 0;
+  padding: 10px 12px;
   border: 1px solid var(--cell-line);
-  border-radius: 14px;
+  border-radius: 12px;
   background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
   box-sizing: border-box;
   transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
@@ -1276,12 +1325,12 @@ onBeforeUnmount(() => {
 .traffic-icon {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
   color: #2563eb;
   background: #eff6ff;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .traffic-value {
@@ -1291,7 +1340,7 @@ onBeforeUnmount(() => {
 
   strong {
     color: var(--ink);
-    font-size: 22px;
+    font-size: 20px;
     font-weight: 700;
     line-height: 1;
     font-variant-numeric: tabular-nums;
@@ -1300,7 +1349,7 @@ onBeforeUnmount(() => {
 
   em {
     color: var(--muted);
-    font-size: 13px;
+    font-size: 12px;
     font-style: normal;
     font-weight: 600;
   }
@@ -1310,28 +1359,54 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 8px;
   flex: 1;
-  grid-auto-rows: 1fr;
-  align-content: stretch;
+  align-content: start;
 }
 
 .todo-item {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 54px;
-  padding: 10px 12px;
+  gap: 10px;
+  min-height: 48px;
+  padding: 8px 10px 8px 14px;
+  overflow: hidden;
   border: 1px solid var(--cell-line);
   border-radius: 12px;
-  background: var(--cell);
+  background: linear-gradient(180deg, #fff 0%, #fbfcfe 100%);
+
+  &::before {
+    position: absolute;
+    left: 0;
+    top: 10px;
+    bottom: 10px;
+    width: 3px;
+    content: '';
+    border-radius: 0 3px 3px 0;
+    background: #cbd5e1;
+  }
+
+  &.tone-orange::before { background: #f59e0b; }
+  &.tone-purple::before { background: #8b5cf6; }
+  &.tone-red::before { background: #f87171; }
+  &.tone-cyan::before { background: #22d3ee; }
+
+  &.is-urgent {
+    background: linear-gradient(90deg, rgba(245, 158, 11, 0.05), #fff 46%);
+  }
 
   &.is-action {
     cursor: pointer;
-    transition: background 0.18s ease, border-color 0.18s ease;
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
   }
 
   &.is-action:hover {
     border-color: #d4e0f0;
-    background: var(--hover);
+    transform: translateX(2px);
+
+    .todo-arrow {
+      color: #64748b;
+      transform: translateX(2px);
+    }
   }
 
   > div {
@@ -1355,10 +1430,17 @@ onBeforeUnmount(() => {
 .todo-icon {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  font-size: 15px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.todo-arrow {
+  flex: 0 0 auto;
+  color: #dbe3ee;
+  font-size: 13px;
+  transition: color 0.18s ease, transform 0.18s ease;
 }
 
 .quick-grid {
@@ -1366,32 +1448,57 @@ onBeforeUnmount(() => {
   flex: 1;
   grid-template-columns: 1fr 1fr;
   grid-auto-rows: 1fr;
-  gap: 10px;
+  gap: 8px;
   min-height: 0;
 
   button {
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     width: 100%;
-    min-height: 64px;
-    padding: 12px 14px;
+    min-height: 54px;
+    padding: 10px 12px;
+    overflow: hidden;
     color: inherit;
     font: inherit;
     text-align: left;
     cursor: pointer;
     border: 1px solid var(--cell-line);
     border-radius: 12px;
-    background: var(--cell);
+    background: linear-gradient(180deg, #fff 0%, #fbfcfe 100%);
     box-sizing: border-box;
     transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+
+    &::after {
+      position: absolute;
+      inset: auto -24px -28px auto;
+      width: 72px;
+      height: 72px;
+      content: '';
+      border-radius: 50%;
+      opacity: 0.55;
+      pointer-events: none;
+    }
+
+    &.tone-blue::after { background: radial-gradient(circle, rgba(59, 130, 246, 0.16), transparent 68%); }
+    &.tone-orange::after { background: radial-gradient(circle, rgba(245, 158, 11, 0.16), transparent 68%); }
+    &.tone-cyan::after { background: radial-gradient(circle, rgba(6, 182, 212, 0.16), transparent 68%); }
+    &.tone-green::after { background: radial-gradient(circle, rgba(16, 185, 129, 0.16), transparent 68%); }
+    &.tone-purple::after { background: radial-gradient(circle, rgba(139, 92, 246, 0.16), transparent 68%); }
+    &.tone-red::after { background: radial-gradient(circle, rgba(248, 113, 113, 0.16), transparent 68%); }
   }
 
   button:hover {
     border-color: #d4e0f0;
-    background: #f8fbff;
+    background: #fff;
     box-shadow: 0 8px 16px rgba(37, 99, 235, 0.06);
     transform: translateY(-1px);
+
+    .quick-arrow {
+      color: #64748b;
+      transform: translateX(3px);
+    }
   }
 }
 
@@ -1399,13 +1506,15 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  font-size: 18px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 16px;
 }
 
 .quick-copy {
+  position: relative;
+  z-index: 1;
   display: grid;
   flex: 1;
   gap: 2px;
@@ -1424,9 +1533,12 @@ onBeforeUnmount(() => {
 }
 
 .quick-arrow {
+  position: relative;
+  z-index: 1;
   flex: 0 0 auto;
   color: #cbd5e1;
   font-size: 14px;
+  transition: color 0.18s ease, transform 0.18s ease;
 }
 
 @media (max-width: 1200px) {
