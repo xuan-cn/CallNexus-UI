@@ -119,6 +119,10 @@
       <template #footer="{ detail }">
         <div class="ticket-detail-actions">
           <el-button @click="detailVisible = false">关闭窗口</el-button>
+          <el-button
+            v-if="detail?.id && 'ticketStatus' in detail"
+            @click="callbackDrawer?.open(detail.id, ['RESOLVED', 'CLOSED'].includes(detail.ticketStatus))"
+          >工单回访</el-button>
           <el-button v-if="canEditDeadline(detail)" v-hasPermi="['callcenter:ticket:create']" @click="openDeadlineDialog(detail)">设置时限</el-button>
           <el-button v-if="detail?.flowInstanceId" @click="showProgress(detail)">流程进度</el-button>
           <el-button v-if="canSubmit(detail)" type="primary" @click="submit(detail)">提交工单</el-button>
@@ -127,6 +131,7 @@
         </div>
       </template>
     </CallCenterBusinessDetail>
+    <TicketCallbackDrawer ref="callbackDrawer" />
     <ApprovalRecord ref="approvalRecordRef" />
     <DynamicBusinessFormDialog v-model="createVisible" business-type="TICKET" @saved="handleCreated" />
     <el-dialog v-model="deadlineDialogVisible" title="设置工单办结时限" width="500px" append-to-body destroy-on-close>
@@ -190,6 +195,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import AiTicketDraftReview from './AiTicketDraftReview.vue';
 import FileSaver from 'file-saver';
 import TicketUrgencyManager from './TicketUrgencyManager.vue';
+import TicketCallbackDrawer from './TicketCallbackDrawer.vue';
 import { checkPermi } from '@/utils/permission';
 
 const route = useRoute();
@@ -202,6 +208,7 @@ const urgencyManagerVisible = ref(false);
 const urgencyLevels = ref<TicketUrgencyLevelVO[]>([]);
 const canChangeUrgency = checkPermi(['callcenter:ticket:update-urgency']);
 const detailVisible = ref(false);
+const callbackDrawer = ref<InstanceType<typeof TicketCallbackDrawer>>();
 const detailId = ref<string | number>();
 const detailRef = ref<{ reload: () => Promise<void> }>();
 const submitVerifyRef = ref<InstanceType<typeof SubmitVerify>>();

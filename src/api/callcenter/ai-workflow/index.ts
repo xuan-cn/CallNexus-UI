@@ -23,6 +23,15 @@ export const updateAiWorkflow = (id: Id, data: AiWorkflowForm) => request({ url:
 export const deleteAiWorkflow = (id: Id) => request({ url: `${root}/${id}`, method: 'delete' });
 export const setAiWorkflowEnabled = (id: Id, enabled: boolean) => request({ url: `${root}/${id}/${enabled ? 'enable' : 'disable'}`, method: 'put' });
 export const listAiWorkflowVersions = (id: Id): AxiosPromise<AiWorkflowVersionVO[]> => request({ url: `${root}/${id}/versions`, method: 'get' });
+export const restoreAiWorkflowDraft = (id: Id, versionNo: number, data: { expectedDraftId?: Id; expectedDraftHash?: string }): AxiosPromise<Id> =>
+  request({ url: `${root}/${id}/versions/${versionNo}/restore-draft`, method: 'post', data });
+export const listAiWorkflowBindings = (id: Id): AxiosPromise<AiAgentWorkflowBindingVO[]> =>
+  request({ url: `${root}/${id}/bindings`, method: 'get' });
+export const rollbackAiWorkflow = (
+  id: Id,
+  versionNo: number,
+  bindings: Pick<AiAgentWorkflowBindingVO, 'id' | 'workflowVersionId'>[]
+): AxiosPromise<AiWorkflowVersionVO> => request({ url: `${root}/${id}/versions/${versionNo}/rollback`, method: 'post', data: { bindings } });
 export const getAiWorkflowDraft = (id: Id): AxiosPromise<AiWorkflowVersionVO> => request({ url: `${root}/${id}/draft`, method: 'get' });
 export const saveAiWorkflowDraft = (id: Id, data: { versionName?: string; definitionJson: string }): AxiosPromise<Id> =>
   request({ url: `${root}/${id}/draft`, method: 'put', data });

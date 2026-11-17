@@ -52,8 +52,8 @@
             v-model="inputText"
             type="textarea"
             :rows="2"
-            :disabled="!['WAITING_INPUT', 'WAITING_TTS'].includes(execution?.status || '')"
-            placeholder="工作流等待输入时，在这里模拟客户回答"
+            :disabled="!['WAITING_INPUT', 'WAITING_TTS', 'WAITING_DTMF'].includes(execution?.status || '')"
+            :placeholder="execution?.status === 'WAITING_DTMF' ? '输入完整数字串，保留前导零' : '工作流等待输入时，在这里模拟客户回答'"
             @keydown.ctrl.enter.prevent="operations.send && sendInput()"
           />
           <el-button type="primary" :loading="sending" :disabled="!operations.send" @click="sendInput"> 发送输入 </el-button>
@@ -63,7 +63,9 @@
           <div class="simulation-actions">
             <el-button :disabled="!operations.interrupt" @click="sendInput">模拟打断</el-button>
             <el-button :disabled="!operations.playbackCompleted" @click="sendSignal('PLAYBACK_COMPLETED')">模拟播报完成</el-button>
-            <el-button :disabled="!operations.silence" @click="sendSignal('SILENCE')">模拟沉默超时</el-button>
+            <el-button :disabled="!operations.silence" @click="sendSignal('SILENCE')">
+              {{ execution?.status === 'WAITING_DTMF' ? '模拟按键超时' : '模拟沉默超时' }}
+            </el-button>
             <el-button type="danger" plain :loading="stopping" :disabled="!operations.stop" @click="stopTest">结束测试</el-button>
           </div>
           <p class="simulation-hint">播报中可模拟完成或打断；打断使用上方输入框的文字。等待回答时可模拟沉默超时。</p>
@@ -95,6 +97,7 @@
               </div>
               <p v-if="item.inputSummary">输入：{{ item.inputSummary }}</p>
               <p v-if="item.outputSummary">输出：{{ item.outputSummary }}</p>
+              <el-button v-if="item.ticketPreview" link type="primary" @click="previewTrace = item">预览工单</el-button>
               <p v-if="item.branchValue">选中出口：{{ item.dialogueDetails?.branchLabel || branchText(item.branchValue) }}</p>
               <p v-if="nextExecutedNode(execution.traces, index)">后续已执行：{{ nextExecutedNode(execution.traces, index) }}</p>
               <p v-else-if="item.status === 'CONTINUE' && item.branchValue">后续节点尚无执行记录，请检查后续轨迹或执行状态。</p>
@@ -196,6 +199,34 @@
         <el-empty v-else description="暂无执行轨迹" />
       </aside>
     </div>
+    <el-dialog
+      :model-value="Boolean(previewTrace)"
+      title="模拟工单预览"
+      width="min(680px, 94vw)"
+      append-to-body
+      @update:model-value="(visible) => { if (!visible) previewTrace = undefined; }"
+    >
+      <template v-if="previewTrace?.ticketPreview">
+        <p class="ticket-preview-empty">仅展示本次测试传入的字段，不创建正式工单。</p>
+        <p>模板：{{ previewTrace.ticketPreview.templateName || previewTrace.ticketPreview.templateId }}</p>
+        <p v-if="previewTrace.outputSummary">校验结果：{{ previewTrace.outputSummary }}</p>
+        <el-table :data="previewTrace.ticketPreview.fields" size="small" empty-text="此模板没有可展示的字段">
+          <el-table-column label="字段" min-width="145">
+            <template #default="{ row }">{{ row.label || row.code }}<span v-if="row.required">（必填）</span></template>
+          </el-table-column>
+          <el-table-column label="模拟填写值" min-width="240">
+            <template #default="{ row }">
+              <span v-if="!row.mapped" class="ticket-preview-empty">未映射</span>
+              <span v-else-if="emptyTicketValue(row.value)" class="ticket-preview-empty">已映射，值为空</span>
+              <span v-else class="ticket-preview-value">{{ formatTicketValue(row.value) }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </template>
+      <template #footer>
+        <el-button @click="previewTrace = undefined">关闭</el-button>
+      </template>
+    </el-dialog>
   </el-drawer>
 </template>
 
@@ -218,6 +249,11 @@ import { testOperationState } from './testOperationState';
 const props = defineProps<{ modelValue: boolean; workflowId?: Id; workflowName?: string; agents: AiAgentVO[] }>();
 const emit = defineEmits<{ (event: 'update:modelValue', value: boolean): void }>();
 const execution = ref<AiWorkflowTestExecutionVO>();
+const previewTrace = ref<AiWorkflowNodeTraceVO>();
+const emptyTicketValue = (value: unknown) =>
+  value == null || (typeof value === 'string' && !value.trim()) || (Array.isArray(value) && value.length === 0);
+const formatTicketValue = (value: unknown) => (typeof value === 'object' ? JSON.stringify(value) : String(value));
+watch(() => execution.value?.executionId, () => (previewTrace.value = undefined));
 const starting = ref(false);
 const sending = ref(false);
 const stopping = ref(false);
@@ -235,6 +271,7 @@ const statusLabel = computed(
   () =>
     ({
       WAITING_INPUT: '等待客户输入',
+      WAITING_DTMF: '等待客户按键',
       WAITING_TTS: '等待模拟播报完成',
       WAITING_ASYNC: '等待异步结果',
       COMPLETED: '执行完成',
@@ -407,6 +444,7 @@ const reasonText = (value: string) =>
 watch(
   () => props.modelValue,
   (visible) => {
+    previewTrace.value = undefined;
     if (!visible) return;
     execution.value = undefined;
     messages.value = [];
@@ -605,6 +643,13 @@ watch(
   color: #66758a;
   font-size: 12px;
   line-height: 1.5;
+}
+.ticket-preview-empty {
+  color: var(--el-text-color-secondary);
+}
+.ticket-preview-value {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 @media (max-width: 1280px) {
   .test-layout {

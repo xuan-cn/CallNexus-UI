@@ -77,6 +77,7 @@
         :intent-options="intentOptions"
         :queue-options="queueOptions"
         :customer-templates="customerTemplates"
+        :ticket-templates="ticketTemplates"
         :media-options="mediaOptions"
         @manage-variables="openVariables(true)"
       />
@@ -226,7 +227,7 @@
       </el-result>
     </el-dialog>
 
-    <el-drawer v-model="versionsVisible" title="版本记录" size="620px">
+    <el-drawer v-model="versionsVisible" title="版本记录" size="min(840px, 100%)">
       <el-table :data="versions"
         ><el-table-column label="版本" width="85"
           ><template #default="{ row }">v{{ row.versionNo }}</template></el-table-column
@@ -234,9 +235,69 @@
           ><template #default="{ row }"
             ><el-tag :type="versionTag(row.status)">{{ versionLabel(row.status) }}</el-tag></template
           ></el-table-column
-        ><el-table-column label="发布时间" prop="publishedAt" min-width="170"
-      /></el-table>
+        ><el-table-column label="发布时间" prop="publishedAt" min-width="170" />
+        <el-table-column label="操作" min-width="245">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="previewVersion(row)">查看编排</el-button>
+            <el-button
+              v-if="row.status !== 'DRAFT'"
+              v-hasPermi="['callcenter:ai-workflow:edit']"
+              link
+              type="primary"
+              :disabled="versionBusy"
+              @click="restoreVersion(row)"
+            >恢复为草稿</el-button>
+            <el-button
+              v-if="row.status === 'ARCHIVED' && versionWorkflow?.enabled && canRollback"
+              link
+              type="warning"
+              :disabled="versionBusy"
+              @click="openRollback(row)"
+            >回滚上线</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
     </el-drawer>
+
+    <el-drawer
+      v-model="previewVisible"
+      :title="`${versionWorkflow?.workflowName || ''} · v${previewSnapshot?.versionNo} · 只读预览`"
+      size="100%"
+      append-to-body
+      destroy-on-close
+    >
+      <AiWorkflowDesigner v-if="previewGraph" :model-value="previewGraph" :key="previewSnapshot?.id" read-only />
+      <el-collapse v-if="previewGraph">
+        <el-collapse-item title="流程全局配置与变量" name="settings">
+          <pre style="white-space: pre-wrap; overflow-wrap: anywhere">{{ JSON.stringify({ settings: previewGraph.settings, variables: previewGraph.variables }, null, 2) }}</pre>
+        </el-collapse-item>
+      </el-collapse>
+    </el-drawer>
+
+    <el-dialog v-model="rollbackVisible" :title="`回滚到 v${rollbackSnapshot?.versionNo}`" width="min(720px, 95vw)" append-to-body destroy-on-close>
+      <el-alert
+        type="warning"
+        :closable="false"
+        title="将复制历史编排并发布为新版本。仅勾选的助手绑定会切换，进行中的会话和现有草稿不受影响。"
+      />
+      <p>请勾选需要切换的助手及场景。不勾选时只发布新版本，不切换任何助手。</p>
+      <el-table :data="rollbackBindings" row-key="id" @selection-change="setRollbackSelection">
+        <el-table-column type="selection" width="50" />
+        <el-table-column label="AI 助手">
+          <template #default="{ row }">{{ row.agentName || row.aiAgentId }}</template>
+        </el-table-column>
+        <el-table-column label="场景">
+          <template #default="{ row }">{{ rollbackSceneLabels[row.sceneType] || row.sceneType }}</template>
+        </el-table-column>
+        <el-table-column label="当前版本">
+          <template #default="{ row }">v{{ row.workflowVersionNo }}{{ row.enabled ? '' : '（停用）' }}</template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button :disabled="versionBusy" @click="rollbackVisible = false">取消</el-button>
+        <el-button type="warning" :loading="versionBusy" @click="confirmRollback">确认发布（切换 {{ rollbackSelection.length }} 项绑定）</el-button>
+      </template>
+    </el-dialog>
 
     <AiWorkflowTestDrawer
       v-model="testVisible"
@@ -258,21 +319,26 @@ import type { AiAgentVO, AiIntentVO } from '@/api/callcenter/ai-knowledge/types'
 import { listCallQueues } from '@/api/callcenter/call-queue';
 import type { CallQueueVO } from '@/api/callcenter/call-queue/types';
 import { listFormTemplates } from '@/api/callcenter/form-template';
+import { useUserStore } from '@/store/modules/user';
 import type { FormTemplate } from '@/api/callcenter/form-template/types';
 import {
   createAiWorkflow,
   deleteAiWorkflow,
   getAiWorkflowDraft,
+  listAiWorkflowBindings,
   listAiWorkflows,
   listAiWorkflowVersions,
   listAiWorkflowMediaOptions,
   publishAiWorkflow,
+  restoreAiWorkflowDraft,
+  rollbackAiWorkflow,
   saveAiWorkflowDraft,
   setAiWorkflowEnabled,
   updateAiWorkflow,
   validateAiWorkflowDraft
 } from '@/api/callcenter/ai-workflow';
 import type {
+  AiAgentWorkflowBindingVO,
   AiWorkflowDefinition,
   AiWorkflowForm,
   AiWorkflowIntentFallbackPolicy,
@@ -309,6 +375,23 @@ const validationVisible = ref(false);
 const rulesVisible = ref(false);
 const versionsVisible = ref(false);
 const versions = ref<AiWorkflowVersionVO[]>([]);
+const versionWorkflow = ref<AiWorkflowVO>();
+const versionBusy = ref(false);
+const previewVisible = ref(false);
+const previewSnapshot = ref<AiWorkflowVersionVO>();
+const previewGraph = ref<AiWorkflowDefinition>();
+const rollbackVisible = ref(false);
+const rollbackSnapshot = ref<AiWorkflowVersionVO>();
+const rollbackBindings = ref<AiAgentWorkflowBindingVO[]>([]);
+const rollbackSelection = ref<AiAgentWorkflowBindingVO[]>([]);
+const rollbackSceneLabels: Record<string, string> = { VOICE_INBOUND: '呼入语音', VOICE_OUTBOUND: '外呼语音', ONLINE_CHAT: '在线会话' };
+const setRollbackSelection = (rows: AiAgentWorkflowBindingVO[]) => (rollbackSelection.value = rows);
+const userStore = useUserStore();
+const canRollback = computed(() =>
+  ['callcenter:ai-workflow:publish', 'callcenter:ai-agent:update'].every(
+    (permission) => userStore.permissions.includes('*:*:*') || userStore.permissions.includes(permission)
+  )
+);
 const validation = ref<AiWorkflowValidationVO>({ valid: false, errors: [], warnings: [] });
 const designerRef = ref<InstanceType<typeof AiWorkflowDesigner>>();
 const validationErrors = computed(() => validationIssues(validation.value.errors || [], graph.value.nodes, validation.value.issues));
@@ -326,6 +409,7 @@ const locateValidationEdge = async (id: string) => {
 const intentOptions = ref<AiIntentVO[]>([]);
 const queueOptions = ref<CallQueueVO[]>([]);
 const customerTemplates = ref<FormTemplate[]>([]);
+const ticketTemplates = ref<FormTemplate[]>([]);
 const mediaOptions = ref<AiWorkflowMediaOptionVO[]>([]);
 const agentOptions = ref<AiAgentVO[]>([]);
 const sceneOptions: Array<{ label: string; value: AiWorkflowScene }> = [
@@ -373,18 +457,20 @@ const load = async () => {
   }
 };
 const loadDesignerOptions = async () => {
-  const [intentResult, queueResult, agentResult, customerTemplateResult, mediaResult] = await Promise.all([
+  const [intentResult, queueResult, agentResult, customerTemplateResult, mediaResult, ticketTemplateResult] = await Promise.all([
     listAiIntents(),
     listCallQueues(),
     listAiAgents(),
     listFormTemplates('CUSTOMER'),
-    listAiWorkflowMediaOptions()
+    listAiWorkflowMediaOptions(),
+    listFormTemplates('TICKET')
   ]);
   intentOptions.value = intentResult.data || [];
   queueOptions.value = queueResult.data || [];
   agentOptions.value = (agentResult.data || []).filter((item) => item.enabled !== false);
   customerTemplates.value = (customerTemplateResult.data || []).filter((item) => item.enabled !== false);
   mediaOptions.value = mediaResult.data || [];
+  ticketTemplates.value = (ticketTemplateResult.data || []).filter((item) => item.enabled !== false);
 };
 const openForm = (row?: AiWorkflowVO) => {
   formId.value = row?.id;
@@ -500,7 +586,66 @@ const openTest = async () => {
 };
 const openVersions = async (row: AiWorkflowVO) => {
   versions.value = (await listAiWorkflowVersions(row.id)).data || [];
+  versionWorkflow.value = row;
   versionsVisible.value = true;
+};
+const previewVersion = (version: AiWorkflowVersionVO) => {
+  const definition: AiWorkflowDefinition = JSON.parse(version.definitionJson);
+  definition.settings ||= {};
+  definition.variables ||= [];
+  previewGraph.value = definition;
+  previewSnapshot.value = version;
+  previewVisible.value = true;
+};
+const restoreVersion = async (version: AiWorkflowVersionVO) => {
+  const workflow = versionWorkflow.value;
+  if (!workflow || versionBusy.value) return;
+  const existingDraft = versions.value.find((item) => item.status === 'DRAFT');
+  versionBusy.value = true;
+  try {
+    await proxy?.$modal.confirm(
+      existingDraft
+        ? `用 v${version.versionNo} 的编排替换现有草稿 v${existingDraft.versionNo}？已发布版本和线上助手不会改变。`
+        : `将 v${version.versionNo} 复制为草稿？已发布版本和线上助手不会改变。`
+    );
+    await restoreAiWorkflowDraft(workflow.id, version.versionNo, {
+      expectedDraftId: existingDraft?.id,
+      expectedDraftHash: existingDraft?.definitionHash
+    });
+    proxy?.$modal.msgSuccess('已恢复为草稿');
+    await openVersions(workflow);
+    await load();
+  } finally {
+    versionBusy.value = false;
+  }
+};
+const openRollback = async (version: AiWorkflowVersionVO) => {
+  if (!versionWorkflow.value || versionBusy.value) return;
+  versionBusy.value = true;
+  try {
+    rollbackBindings.value = (await listAiWorkflowBindings(version.workflowId)).data || [];
+    rollbackSelection.value = [];
+    rollbackSnapshot.value = version;
+    rollbackVisible.value = true;
+  } finally {
+    versionBusy.value = false;
+  }
+};
+const confirmRollback = async () => {
+  const version = rollbackSnapshot.value;
+  const workflow = versionWorkflow.value;
+  if (!version || !workflow || versionBusy.value) return;
+  versionBusy.value = true;
+  try {
+    const selected = rollbackSelection.value.map(({ id, workflowVersionId }) => ({ id, workflowVersionId }));
+    const result = await rollbackAiWorkflow(workflow.id, version.versionNo, selected);
+    rollbackVisible.value = false;
+    proxy?.$modal.msgSuccess(`已发布 v${result.data.versionNo}，切换 ${selected.length} 项助手绑定`);
+    await openVersions(workflow);
+    await load();
+  } finally {
+    versionBusy.value = false;
+  }
 };
 const addVariable = () => {
   const usedKeys = new Set(graph.value.variables.map((item) => String(item.key || '').trim()).filter(Boolean));

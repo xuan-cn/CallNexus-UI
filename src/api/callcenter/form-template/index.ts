@@ -1,6 +1,6 @@
 import request from '@/utils/request';
 import { AxiosPromise } from 'axios';
-import { FormBusinessType, FormQuerySchema, FormTemplate } from './types';
+import { FormBusinessType, FormQuerySchema, FormTemplate, TicketCallbackPolicy, TicketCallbackPolicyInput } from './types';
 
 export const listFormTemplates = (businessType?: FormBusinessType): AxiosPromise<FormTemplate[]> =>
   request({ url: '/api/v1/form-templates', method: 'get', params: { businessType } });
@@ -15,3 +15,11 @@ export const createFormTemplate = (data: FormTemplate) => request({ url: '/api/v
 export const updateFormTemplate = (data: FormTemplate) => request({ url: `/api/v1/form-templates/${data.id}`, method: 'put', data });
 
 export const deleteFormTemplate = (id: string | number) => request({ url: `/api/v1/form-templates/${id}`, method: 'delete' });
+
+const callbackPolicyUrl = (templateId: string | number) => `/api/v1/form-templates/${templateId}/callback-policy`;
+
+export const getTicketCallbackPolicy = (templateId: string | number): AxiosPromise<TicketCallbackPolicy> =>
+  request({ url: callbackPolicyUrl(templateId), method: 'get' });
+
+export const updateTicketCallbackPolicy = (templateId: string | number, data: TicketCallbackPolicyInput) =>
+  request({ url: callbackPolicyUrl(templateId), method: 'put', data });

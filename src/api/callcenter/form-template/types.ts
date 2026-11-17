@@ -81,3 +81,17 @@ export interface FormTemplate {
   version?: number;
   fields: FormField[];
 }
+
+export type TicketCallbackMode = 'OFF' | 'MANUAL' | 'AUTO';
+
+export interface TicketCallbackPolicyInput {
+  mode: TicketCallbackMode;
+  taskId?: string;
+  delayMinutes: number;
+  expiryMinutes: number;
+  allowInboundCaller: boolean;
+}
+
+export interface TicketCallbackPolicy extends TicketCallbackPolicyInput {
+  tasks: { id: string; name: string; status: string }[];
+}

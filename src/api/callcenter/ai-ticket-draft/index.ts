@@ -9,6 +9,7 @@ export interface AiTicketDraftVO {
   callerNumber?: string;
   ticketTemplateId: string | number;
   status: AiTicketDraftStatus;
+  workflowDraft?: boolean;
   confidence?: number;
   title?: string;
   summary?: string;

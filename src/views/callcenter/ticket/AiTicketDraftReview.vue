@@ -36,7 +36,7 @@
 
     <el-drawer v-model="visible" title="AI 工单草稿审核" size="92%" destroy-on-close @closed="releaseRecordingUrl">
       <div v-if="current" v-loading="detailLoading" class="draft-detail">
-        <el-alert v-if="current.missingFields?.length" type="warning" :closable="false" :title="`缺少必填字段：${current.missingFields.join('、')}`" />
+        <el-alert v-if="missingFieldLabels.length" type="warning" :closable="false" :title="`缺少必填字段：${missingFieldLabels.join('、')}`" />
         <div class="review-layout">
           <div class="review-left">
             <section class="review-panel recording-section">
@@ -57,7 +57,7 @@
             </section>
           </div>
           <div class="review-right">
-            <section class="review-panel"><h4>模型提取</h4><el-form label-position="top">
+            <section class="review-panel"><h4>{{ current.workflowDraft ? '流程留存' : '模型提取' }}</h4><el-form label-position="top">
               <el-form-item label="草稿标题"><el-input v-model="current.title" maxlength="256" /></el-form-item>
               <el-form-item label="问题摘要"><el-input v-model="current.summary" type="textarea" :rows="4" maxlength="4000" show-word-limit /></el-form-item>
             </el-form></section>
@@ -138,7 +138,17 @@ const playbackRateOptions = [
   { label: '2.0x', value: 2 }
 ];
 const reviewable = computed(() => ['PENDING_REVIEW','LOW_CONFIDENCE'].includes(current.value?.status || ''));
-const canRegenerate = computed(() => [...['PENDING_REVIEW','LOW_CONFIDENCE'], 'FAILED'].includes(current.value?.status || ''));
+const canRegenerate = computed(() => !current.value?.workflowDraft && ['PENDING_REVIEW', 'LOW_CONFIDENCE', 'FAILED'].includes(current.value?.status || ''));
+const missingFieldLabels = computed(() => {
+  if (current.value?.workflowDraft && template.value) {
+    return template.value.fields.filter((field) => {
+      const value = current.value?.formData[field.fieldCode];
+      return field.enabled !== false && field.required
+        && (value == null || (typeof value === 'string' && !value.trim()) || (Array.isArray(value) && !value.length));
+    }).map((field) => field.fieldName);
+  }
+  return (current.value?.missingFields || []).map((code) => template.value?.fields.find((field) => field.fieldCode === code)?.fieldName || code);
+});
 const isRowReviewable = (row: AiTicketDraftVO) => ['PENDING_REVIEW', 'LOW_CONFIDENCE'].includes(row.status);
 const handleSelectionChange = (selection: AiTicketDraftVO[]) => { selectedRows.value = selection; };
 const selectedBatchItems = () => selectedRows.value.map(({ id, version }) => ({ id, version }));

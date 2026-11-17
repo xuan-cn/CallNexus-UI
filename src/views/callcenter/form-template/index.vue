@@ -129,6 +129,12 @@
             </div>
             <div class="workflow-tip">仅统计工单办结时限，不改变工作流节点和流转规则；进入“已解决”即停止计时。</div>
           </el-form-item>
+          <el-form-item v-if="canConfigureCallback" label="回访策略">
+            <el-button v-if="savedTicketTemplate" size="small" @click="openCallbackPolicy">配置回访策略</el-button>
+            <div class="workflow-tip">
+              {{ savedTicketTemplate ? '对使用本模板、之后办结的工单生效。' : '请先保存工单模板，再配置回访策略。' }}
+            </div>
+          </el-form-item>
         </el-form>
 
         <div class="editor-grid">
@@ -430,12 +436,14 @@
         <el-button type="primary" @click="submit">保存</el-button>
       </template>
     </el-drawer>
+    <TicketCallbackPolicyDialog ref="callbackPolicyDialog" />
   </div>
 </template>
 
 <script setup name="FormTemplateManagement" lang="ts">
 import AutoInternalCode from '@/components/AutoInternalCode';
 import { createInternalCode, ensureInternalCode } from '@/utils/internalCode';
+import { checkPermi } from '@/utils/permission';
 
 import { Plus, Rank, Refresh } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
@@ -443,6 +451,7 @@ import { createFormTemplate, deleteFormTemplate, listFormTemplates, updateFormTe
 import { FormField, FormFieldOption, FormFieldType, FormQueryMode, FormTemplate } from '@/api/callcenter/form-template/types';
 import { listDefinitionOptions } from '@/api/workflow/definition';
 import { FlowDefinitionVo } from '@/api/workflow/definition/types';
+import TicketCallbackPolicyDialog from './TicketCallbackPolicyDialog.vue';
 
 type EditableOption = FormFieldOption & { localId: string };
 type EditableField = Omit<FormField, 'options'> & { localId: string; options: EditableOption[] };
@@ -478,6 +487,15 @@ const emptyForm = (): EditableTemplate => ({
   fields: []
 });
 const form = ref<EditableTemplate>(emptyForm());
+const callbackPolicyDialog = ref<InstanceType<typeof TicketCallbackPolicyDialog>>();
+const canConfigureCallback = computed(() => checkPermi(['callcenter:auto-outbound-task:update']));
+const savedTicketTemplate = computed(() =>
+  templates.value.find((template) => template.id === form.value.id && template.businessType === 'TICKET')
+);
+const openCallbackPolicy = () => {
+  const template = savedTicketTemplate.value;
+  if (template?.id != null) return callbackPolicyDialog.value?.open(template.id, template.templateName);
+};
 const draggedFieldIndex = ref<number>();
 const dragOverFieldIndex = ref<number>();
 const selectedFieldId = ref<string>();

@@ -119,6 +119,7 @@ export interface AiWorkflowMediaOptionVO {
 export interface AiAgentWorkflowBindingVO {
   id: Id;
   aiAgentId: Id;
+  agentName?: string;
   sceneType: Exclude<AiWorkflowScene, 'COMMON'>;
   workflowId: Id;
   workflowName: string;
@@ -145,6 +146,11 @@ export interface AiWorkflowNodeTraceVO {
   branchValue?: string;
   inputSummary?: string;
   outputSummary?: string;
+  ticketPreview?: {
+    templateId: string;
+    templateName: string;
+    fields: { code: string; label: string; required: boolean; mapped: boolean; value?: unknown }[];
+  };
   dialogueDetails?: {
     aiCalled?: boolean;
     decision?: string;

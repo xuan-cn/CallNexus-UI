@@ -137,6 +137,18 @@ export const aiWorkflowNodeDefinitions: AiWorkflowNodeDefinition[] = [
     properties: [{ key: 'timeoutSeconds', label: '超时秒数', type: 'NUMBER', defaultValue: 15 }]
   },
   {
+    type: 'DTMF_CAPTURE',
+    label: '按键采集',
+    color: '#0e7490',
+    description: '等待固定长度的数字按键，写入文本变量。提示语请使用前置播报节点。',
+    branch: true,
+    properties: [
+      { key: 'digitCount', label: '采集位数', type: 'NUMBER', defaultValue: 10, min: 1, max: 32 },
+      { key: 'timeoutSeconds', label: '等待时间（秒）', type: 'NUMBER', defaultValue: 15, min: 3, max: 60 },
+      { key: 'outputVariable', label: '保存到文本变量', type: 'CUSTOM_VARIABLE_SELECT' }
+    ]
+  },
+  {
     type: 'PLAY_MEDIA',
     label: '播放声音媒体',
     color: '#b45309',
@@ -276,6 +288,20 @@ export const aiWorkflowNodeDefinitions: AiWorkflowNodeDefinition[] = [
     color: '#9333ea',
     description: '调用现有 AI 工单草稿能力',
     properties: [{ key: 'waitResult', label: '等待生成结果', type: 'SWITCH', defaultValue: false }]
+  },
+  {
+    type: 'TICKET_CREATE',
+    label: '生成工单',
+    color: '#9333ea',
+    description: '按指定工单模板填入已采集变量，校验通过后登记待处理工单',
+    properties: []
+  },
+  {
+    type: 'TICKET_DRAFT_PREPARE',
+    label: '准备工单草稿',
+    color: '#9333ea',
+    description: '在采集前指定工单模板与字段，未完成建单时保留已采集内容',
+    properties: []
   },
   {
     type: 'AUTO_OUTBOUND_WRITEBACK',

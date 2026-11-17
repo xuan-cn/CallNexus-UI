@@ -1,6 +1,6 @@
 <template>
-  <div class="ai-workflow-designer" :class="{ 'is-tree-view': viewMode === 'tree' }">
-    <aside v-show="viewMode === 'canvas'" class="palette">
+  <div class="ai-workflow-designer" :class="{ 'is-tree-view': viewMode === 'tree' || readOnly }">
+    <aside v-if="!readOnly" v-show="viewMode === 'canvas'" class="palette">
       <h4>编排节点</h4>
       <el-tooltip
         v-for="item in commonPaletteDefinitions"
@@ -36,12 +36,12 @@
           ><el-radio-button value="canvas">连线</el-radio-button><el-radio-button value="tree">树状</el-radio-button></el-radio-group
         >
         <el-button-group v-show="viewMode === 'canvas'">
-          <el-button icon="Back" title="撤销" @click="lf?.undo()" />
-          <el-button icon="Right" title="重做" @click="lf?.redo()" />
+          <el-button v-if="!readOnly" icon="Back" title="撤销" @click="lf?.undo()" />
+          <el-button v-if="!readOnly" icon="Right" title="重做" @click="lf?.redo()" />
           <el-button icon="ZoomIn" title="放大" @click="lf?.zoom(true)" />
           <el-button icon="ZoomOut" title="缩小" @click="lf?.zoom(false)" />
           <el-button icon="FullScreen" title="适应画布" @click="fitCanvas" />
-          <el-button icon="Rank" title="从上到下整理布局" @click="organizeLayout">整理</el-button>
+          <el-button v-if="!readOnly" icon="Rank" title="从上到下整理布局" @click="organizeLayout">整理</el-button>
         </el-button-group>
         <el-select v-model="navigationNode" class="node-navigation" filterable clearable placeholder="搜索节点名称 / 类型" @change="navigateToNode">
           <el-option
@@ -87,7 +87,7 @@
               <span v-if="validationMarks.some((mark) => mark.nodeId === data.nodeId)" class="tree-error">校验错误</span>
               <span class="tree-actions"
                 ><el-button
-                  v-if="!data.reference && canAddTreeStep(data.nodeId)"
+                  v-if="!readOnly && !data.reference && canAddTreeStep(data.nodeId)"
                   size="small"
                   text
                   aria-label="添加下一步"
@@ -208,7 +208,7 @@
           :closable="false"
           title="这里只显示已发布的声音媒体。实际通话节点未同步成功时，流程会停止并记录失败原因。"
         />
-        <el-form label-position="top" class="node-identity">
+        <el-form label-position="top" class="node-identity" :disabled="readOnly">
           <el-form-item label="节点名称"><el-input v-model="selectedNode.name" @input="updateSelectedNode" /></el-form-item>
         </el-form>
         <el-tabs v-model="activeNodeSection" class="node-section-tabs">
@@ -222,7 +222,36 @@
           :queue-options="queueOptions"
           @update:model-value="updateNodeProperty('conversationRules', $event)"
         />
-        <el-form label-position="top">
+        <el-form label-position="top" :disabled="readOnly">
+          <template v-if="['TICKET_CREATE', 'TICKET_DRAFT_PREPARE'].includes(selectedNode.type)">
+            <el-form-item label="工单模板" required>
+              <el-select
+                :model-value="selectedNode.config.templateId"
+                filterable
+                @change="selectTicketTemplate"
+              >
+                <el-option v-for="item in ticketTemplates" :key="item.id" :value="String(item.id)" :label="item.templateName" />
+              </el-select>
+            </el-form-item>
+            <template v-if="readOnly && !ticketFields.length">
+              <p v-for="(variable, field) in selectedNode.config.fieldMappings || {}" :key="field">{{ field }} ← {{ variable }}</p>
+            </template>
+            <el-form-item v-for="field in ticketFields" :key="field.fieldCode" :label="field.fieldName" :required="field.required">
+              <el-select
+                :model-value="selectedNode.config.fieldMappings?.[field.fieldCode]"
+                placeholder="选择写入该字段的流程变量"
+                clearable
+                filterable
+                @change="(value) => setTicketFieldMapping(field.fieldCode, value)"
+              >
+                <el-option v-for="item in variableOptions" :key="item.value" :value="item.value" :label="item.label" />
+              </el-select>
+            </el-form-item>
+            <p v-if="selectedNode.type === 'TICKET_DRAFT_PREPARE'" class="app-hint">
+              放在确定业务类型之后、采集之前。真实通话结束时，如果已采到映射字段但没有正式工单，则保留为待审核草稿。
+            </p>
+            <p v-else class="app-hint">校验通过才登记，不自动提交。失败可补问或转人工，通话结束后保留已采到的字段。</p>
+          </template>
           <template v-if="selectedNode.type === 'DIALOGUE_STEP'">
             <div v-show="activeNodeSection === 'answers'">
               <el-form-item label="业务答案选项（可选，配置后替代确认完成出口）">
@@ -234,7 +263,7 @@
                       :intent-options="enabledIntentOptions"
                       @change="(key, value) => updateDialogueMatch(option, key, value)"
                     />
-                    <el-button class="remove-answer-option" text type="danger" @click="removeDialogueOption(index)">删除选项</el-button>
+                    <el-button class="remove-answer-option" text type="danger" @click="removeDialogueOption(Number(index))">删除选项</el-button>
                   </div>
                   <el-button :disabled="(selectedNode.config.answerOptions || []).length >= 10" @click="addDialogueOption">添加业务选项</el-button>
                 </div>
@@ -344,12 +373,12 @@
             <template v-else-if="property.type === 'CUSTOM_VARIABLE_SELECT'">
               <el-select
                 :model-value="selectedNode.config[property.key]"
-                :disabled="!customVariableOptions.length"
+                :disabled="!customOptionsFor(property.key).length"
                 placeholder="请选择已创建的流程信息"
                 style="width: 100%"
                 @update:model-value="updateNodeProperty(property.key, $event)"
               >
-                <el-option v-for="item in customVariableOptions" :key="item.value" :label="item.label" :value="item.value">
+                <el-option v-for="item in customOptionsFor(property.key)" :key="item.value" :label="item.label" :value="item.value">
                   <span>{{ item.label }}</span
                   ><span v-if="item.description" class="option-extra">{{ item.description }}</span>
                 </el-option>
@@ -502,12 +531,12 @@
               @update:model-value="updateNodeProperty(property.key, $event)"
             />
           </el-form-item>
-          <el-button v-if="selectedNode.type !== 'START'" type="danger" plain style="width: 100%" @click="removeSelection">删除节点</el-button>
+          <el-button v-if="!readOnly && selectedNode.type !== 'START'" type="danger" plain style="width: 100%" @click="removeSelection">删除节点</el-button>
         </el-form>
       </template>
       <template v-else-if="selectedEdge">
         <div class="property-title">连线配置</div>
-        <el-form label-position="top">
+        <el-form label-position="top" :disabled="readOnly">
           <el-form-item v-if="sourceDefinition.type === 'DIALOGUE_STEP'" label="步骤结果" required>
             <el-select v-model="selectedEdge.condition" style="width: 100%" @change="updateSelectedEdge">
               <el-option v-for="outlet in dialogueOutletsFor(sourceNode)" :key="outlet.value" :label="outlet.label" :value="outlet.value" />
@@ -517,6 +546,11 @@
             <el-select v-model="selectedEdge.condition" style="width: 100%" placeholder="请选择分支" @change="updateSelectedEdge">
               <el-option label="条件成立" value="TRUE" />
               <el-option label="条件不成立" value="FALSE" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-else-if="sourceDefinition.type === 'DTMF_CAPTURE'" label="采集结果" required>
+            <el-select v-model="selectedEdge.condition" style="width: 100%" @change="updateSelectedEdge">
+              <el-option v-for="item in digitOutlets" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
           </el-form-item>
           <el-form-item v-else-if="sourceDefinition.type === 'LOOP_LIMIT'" label="次数结果" required>
@@ -540,7 +574,7 @@
           </el-form-item>
           <el-alert v-else type="info" :closable="false" title="这是顺序连线，不需要配置条件。" />
           <p v-if="sourceDefinition.branch" class="muted app-hint">同一个判断节点的每个分支只能配置一次。</p>
-          <el-button class="mt-4" type="danger" plain style="width: 100%" @click="removeSelection">删除连线</el-button>
+          <el-button v-if="!readOnly" class="mt-4" type="danger" plain style="width: 100%" @click="removeSelection">删除连线</el-button>
         </el-form>
       </template>
       <el-empty v-else description="请选择节点或连线" />
@@ -572,15 +606,18 @@ import { connectTreeStep } from './treeEditing';
 const props = withDefaults(
   defineProps<{
     modelValue: AiWorkflowDefinition;
+    readOnly?: boolean;
     intentOptions?: AiIntentVO[];
     queueOptions?: CallQueueVO[];
     customerTemplates?: FormTemplate[];
+    ticketTemplates?: FormTemplate[];
     mediaOptions?: AiWorkflowMediaOptionVO[];
   }>(),
   {
     intentOptions: () => [],
     queueOptions: () => [],
     customerTemplates: () => [],
+    ticketTemplates: () => [],
     mediaOptions: () => []
   }
 );
@@ -626,7 +663,12 @@ const canAddTreeStep = (id: string) => {
   const node = props.modelValue.nodes.find((node) => node.id === id);
   return node && !getAiWorkflowNodeDefinition(node.type).terminal;
 };
+const digitOutlets = [
+  { value: 'SUCCESS', label: '采集成功' },
+  { value: 'TIMEOUT', label: '采集超时' }
+];
 const treeOutlets = (node?: AiWorkflowNode): Array<{ value: string; label: string }> => {
+  if (node?.type === 'DTMF_CAPTURE') return digitOutlets;
   if (!node) return [];
   if (node.type === 'DIALOGUE_STEP') return dialogueOutletsFor(node);
   if (node.type === 'CONDITION')
@@ -854,6 +896,22 @@ class WorkflowBezierModel extends BezierEdgeModel {
 }
 
 const selectedDefinition = computed(() => getAiWorkflowNodeDefinition(selectedNode.value?.type || 'START'));
+const ticketFields = computed(() =>
+  (props.ticketTemplates.find((item) => String(item.id) === String(selectedNode.value?.config.templateId))?.fields || [])
+    .filter((field) => field.enabled !== false && field.aiFillEnabled === true && field.fieldType !== 'FILE')
+);
+const selectTicketTemplate = (templateId: string) => {
+  if (!selectedNode.value) return;
+  selectedNode.value.config.templateId = templateId;
+  selectedNode.value.config.fieldMappings = {};
+  updateSelectedNode();
+};
+const setTicketFieldMapping = (field: string, variable?: string) => {
+  const mappings = { ...selectedNode.value?.config.fieldMappings };
+  if (variable) mappings[field] = variable;
+  else delete mappings[field];
+  updateNodeProperty('fieldMappings', mappings);
+};
 const builtInVariableOptions = [
   { label: '客户姓名', value: 'customer.name' },
   { label: '客户称呼（自动生成张先生/女士）', value: 'customer.salutation' },
@@ -863,6 +921,9 @@ const builtInVariableOptions = [
   { label: '是否提取到信息', value: 'slot.extracted' },
   { label: '本次提取字段数', value: 'slot.extractedCount' },
   { label: '是否已更新客户', value: 'customer.updated' },
+  { label: '是否已生成工单', value: 'ticket.created' },
+  { label: '工单 ID', value: 'ticket.id' },
+  { label: '工单登记失败原因', value: 'ticket.error' },
   { label: '当前客户回答', value: 'conversation.currentInput' },
   { label: '当前识别意图', value: 'conversation.intentCode' },
   { label: '外呼任务名称', value: 'task.name' },
@@ -901,7 +962,13 @@ const outboundResultOptions = [
   { label: '无法识别', value: 'ASR_UNRECOGNIZED' },
   { label: '拒绝联系', value: 'DO_NOT_CALL' },
   { label: '待人工确认', value: 'PENDING_REVIEW' },
-  { label: '编排执行失败', value: 'WORKFLOW_FAILED' }
+  { label: '编排执行失败', value: 'WORKFLOW_FAILED' },
+  { label: '工单回访：已解决、满意', value: 'TICKET_SATISFIED' },
+  { label: '工单回访：已解决、基本满意', value: 'TICKET_ACCEPTABLE' },
+  { label: '工单回访：已解决、不满意', value: 'TICKET_DISSATISFIED' },
+  { label: '工单回访：未解决', value: 'TICKET_UNRESOLVED' },
+  { label: '工单回访：待确认', value: 'TICKET_UNCLEAR' },
+  { label: '工单回访：拒绝评价', value: 'TICKET_DECLINED' }
 ];
 const mediaOptionExtra = (item: AiWorkflowMediaOptionVO) => {
   const duration = item.durationMs ? `${Math.ceil(item.durationMs / 1000)}秒` : '时长未知';
@@ -957,7 +1024,7 @@ const comparisonOptions = computed(() => {
   const customVariable = customVariableOptions.value.find((item) => item.value === variable);
   if (
     customVariable?.type === 'BOOLEAN' ||
-    ['knowledge.hit', 'knowledge.fallback', 'customer.found', 'slot.extracted', 'customer.updated'].includes(String(variable))
+    ['knowledge.hit', 'knowledge.fallback', 'customer.found', 'slot.extracted', 'customer.updated', 'ticket.created'].includes(String(variable))
   ) {
     return [
       { label: '是', value: 'true' },
@@ -1035,6 +1102,8 @@ const updateStructuredFields = (key: string, values: string[], options: Structur
     })
   );
 };
+const customOptionsFor = (key: string) =>
+  key === 'outputVariable' ? customVariableOptions.value.filter((item) => item.type === 'STRING') : customVariableOptions.value;
 const fieldOptions = (key: string) =>
   key === 'collectedFields'
     ? customVariableOptions.value.filter((item) => item.value.startsWith('workflow.custom_') && item.type === 'STRING')
@@ -1043,6 +1112,7 @@ const branchLabel = (sourceId: string, condition?: string) => {
   if (!condition) return '';
   const source = props.modelValue.nodes.find((node) => node.id === sourceId) || readGraph().nodes.find((node) => node.id === sourceId);
   if (source?.type === 'DIALOGUE_STEP') return dialogueOutletsFor(source).find((item) => item.value === condition)?.label || condition;
+  if (source?.type === 'DTMF_CAPTURE') return digitOutlets.find((item) => item.value === condition)?.label || condition;
   if (source?.type === 'CONDITION') return condition === 'TRUE' ? '条件成立' : condition === 'FALSE' ? '条件不成立' : condition;
   if (source?.type === 'LOOP_LIMIT') return condition === 'CONTINUE' ? '继续循环' : condition === 'LIMIT' ? '达到上限' : condition;
   if (source?.type === 'INTENT_ROUTE') {
@@ -1094,7 +1164,9 @@ const readGraph = (): AiWorkflowDefinition => {
     }))
   );
 };
-const syncGraph = () => emit('update:modelValue', readGraph());
+const syncGraph = () => {
+  if (!props.readOnly) emit('update:modelValue', readGraph());
+};
 const selectNode = (id: string) => {
   if (selectedNode.value?.id !== id) activeNodeSection.value = 'basic';
   const node = readGraph().nodes.find((item) => item.id === id);
@@ -1299,9 +1371,10 @@ const initialize = async () => {
   lf = new LogicFlow({
     container: containerRef.value,
     grid: { size: 18, visible: true },
-    keyboard: { enabled: true },
+    keyboard: { enabled: !props.readOnly },
+    ...(props.readOnly ? { adjustEdge: false, adjustNodePosition: false, hideAnchors: true, allowRotate: false, allowResize: false } : {}),
     snapline: true,
-    history: true,
+    history: !props.readOnly,
     textEdit: false,
     edgeType: 'bezier'
   });
