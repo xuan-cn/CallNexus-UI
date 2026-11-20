@@ -1,0 +1,51 @@
+<main class="layout">
+  <header class="masthead">
+    <div><span class="brand">CALLNEXUS / 签发端</span><h1>离线授权制作</h1></div>
+    <span class="badge">仅在本机运行</span>
+  </header>
+  <p class="lead">读取客户的授权申请，设置授权内容，签名后下载 <code>.lic</code> 文件。</p>
+  <div v-if="!ready" class="message error" role="alert">当前环境不支持本地签名。请用较新的 Edge 或 Chrome 双击打开此文件。</div>
+  <section class="card" aria-labelledby="application-title">
+    <div class="step"><span>01</span><h2 id="application-title">部署申请</h2></div>
+    <label for="application">选择系统导出的申请 JSON</label>
+    <input id="application" type="file" accept=".json,application/json" :disabled="!ready || busy" @change="loadRequest">
+    <dl v-if="request" class="details"><dt>已验证申请</dt><dd>{{ requestName }}</dd><dt>部署 ID</dt><dd><code>{{ request.deploymentId }}</code></dd>
+      <dt>公钥指纹</dt><dd><code>{{ request.publicKeyFingerprint }}</code></dd></dl>
+  </section>
+  <section class="card" aria-labelledby="issuer-title">
+    <div class="step"><span>02</span><h2 id="issuer-title">发行方签发密钥</h2></div>
+    <p class="hint">选择已有的 Ed25519 签发私钥（PKCS#8 PEM）。私钥只留在签发机，不上传、不写入浏览器存储。</p>
+    <label for="issuer">读取签发私钥</label>
+    <div class="row"><input id="issuer" type="file" accept=".pem" :disabled="!ready || busy" @change="loadIssuer">
+      <button type="button" :disabled="!ready || busy || Boolean(issuer)" @click="generateTestKey">生成测试签发密钥</button>
+      <button v-if="issuer" type="button" :disabled="busy" @click="clearIssuer">移除已加载密钥</button></div>
+    <div v-if="issuer" class="key-details">
+      <p>当前密钥：{{ issuerName }}</p>
+      <label for="public-key">发行方公钥（Base64 SPKI，仅首次发行构建使用）</label>
+      <div class="row"><input id="public-key" ref="publicInput" type="text" readonly :value="issuer.publicKey">
+        <button type="button" @click="copyPublic">复制公钥</button></div>
+      <p class="hint">后端必须已内置此公钥才承认签发结果。续期继续使用同一把密钥，不需要重新打包。</p>
+    </div>
+  </section>
+  <section class="card" aria-labelledby="terms-title">
+    <div class="step"><span>03</span><h2 id="terms-title">授权内容</h2><button class="preset" type="button" :disabled="busy" @click="trial">填入 30 天测试额度</button></div>
+    <fieldset :disabled="busy">
+      <div class="row expiry"><label for="expiry">有效期至（本机时间）</label><input id="expiry" v-model="expires" type="datetime-local" :disabled="permanent">
+        <label class="check"><input v-model="permanent" type="checkbox">永久</label></div>
+      <div class="grid">
+        <div><h3>功能开关</h3><label v-for="[code, name] in featureOptions" :key="code" class="setting">{{ name }}
+          <select v-model="features[code]"><option value="">不设置</option><option value="on">启用</option><option value="off">禁用</option></select>
+        </label></div>
+        <div><h3>容量额度</h3><p class="hint">留空不签发该项；-1 为不限。</p><label v-for="[code, name] in limitOptions" :key="code" class="setting">{{ name }}
+          <input v-model="limits[code]" type="text" inputmode="numeric" placeholder="未设置">
+        </label></div>
+      </div>
+    </fieldset>
+  </section>
+  <div class="actions">
+    <div v-if="error" class="message error" role="alert">{{ error }}</div>
+    <div v-if="notice" class="message notice" role="status">{{ notice }}</div>
+    <button class="primary" type="button" :disabled="!ready || !request || !issuer || busy" @click="signRequest">签发并下载授权</button>
+    <span class="hint">新版本会执行自动外呼、AI 语音机器人的功能授权；数量和并发额度暂不执行。</span>
+  </div>
+</main>
